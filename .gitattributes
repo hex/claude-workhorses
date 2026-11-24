@@ -1,0 +1,5 @@
+# The scripts run on macOS and Linux; a CRLF checkout would break their shebangs.
+*.sh text eol=lf
+bin/wh text eol=lf
+provision/askpass-env text eol=lf
+provision/zshenv text eol=lf

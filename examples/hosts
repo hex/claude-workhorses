@@ -1,0 +1,12 @@
+# The claude-workhorses hosts file: copy it to ~/.config/claude-workhorses/hosts and edit it.
+# One host per line: name, ssh target, arch, cores, RAM in GB, profile, wallpaper color.
+# - name: lower-case letters, digits and dashes; wh and sync.sh take it as the host's name.
+# - ssh target: an alias from ~/.ssh/config or user@host. ~/.ssh/config decides the route.
+# - arch: x86_64 or arm64. cores and RAM: whole numbers, shown to Claude in the host table.
+# - profile: dedicated (the Mac is the workhorse's alone) or shared (its owner uses it too).
+# - color: a dedicated host's solid-colour wallpaper, a file name from
+#   /System/Library/Desktop Pictures/Solid Colors without .png; - on a shared host.
+# The first host listed wins a tie when wh picks one by load.
+alpha  alpha-mini             x86_64  6   16  dedicated  Turquoise Green
+beta   beta-mini              x86_64  6   16  dedicated  Electric Blue
+gamma  me@gamma.example.test  arm64   10  16  shared     -
