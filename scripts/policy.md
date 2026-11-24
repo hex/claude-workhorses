@@ -8,9 +8,9 @@ run on a workhorse instead. These are the workhorses, from the claude-workhorses
 Every host carries the same tools, installed by the plugin's provision scripts: `git-lfs`, `cmake`,
 `ninja`, node 24 (node 26 through `mise exec node@26 --`), Chrome for Testing (`CHROME_BIN`), bun,
 pnpm, go, rust, .NET 10, JDK 21, `fastlane`, `ffmpeg`, `claude`, `codex`, `opencode` and
-`macos-harness`. No host has Xcode, code signing, a GPU or Homebrew. A dedicated host is the
-workhorse's alone and has the Unity 6000.3 editor but no Unity license, so the editor exits 198, tests
-included. A shared host is its owner's Mac too: the same tools, no Unity, and its login, remote
+`macos-harness`. No host has Xcode, code signing, a GPU or Homebrew, and on macOS 15 `sips` writes
+no AVIF file. A dedicated host is the workhorse's alone and has the Unity 6000.3 editor but no Unity
+license, so the editor exits 198, tests included. A shared host is its owner's Mac too: the same tools, no Unity, and its login, remote
 access, firewall and network settings stay the owner's. Dedicated hosts are identical by design.
 
 A workhorse can be slower per core than this machine, so never offload a job to make it faster;
