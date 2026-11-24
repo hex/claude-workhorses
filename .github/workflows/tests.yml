@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    # The cap turns a hung run into a failure, not a six-hour job.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # macOS runners ship bash 3.2 as /bin/bash, the scripts' compat target.
+      - name: Show bash version
+        run: /bin/bash --version | head -1
+
+      # The mod's tests run under claude plugin test, which needs no login.
+      # The version is pinned so a Claude Code release cannot redden main on a
+      # commit nobody touched; bump it deliberately.
+      - name: Install Claude Code
+        env:
+          CLAUDE_CODE_VERSION: 2.1.331
+        run: |
+          curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors -o install.sh https://claude.ai/install.sh
+          bash install.sh "$CLAUDE_CODE_VERSION"
+          rm -f install.sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run the checks
+        run: /bin/bash tests/run.sh
