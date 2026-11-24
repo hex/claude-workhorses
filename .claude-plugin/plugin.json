@@ -1,7 +1,7 @@
 {
   "name": "claude-workhorses",
   "version": "2026.11.1",
-  "description": "Run long jobs on your own spare Macs instead of the machine you work on: wh copies the current git repository to a workhorse, brought level with the laptop and .git included, and runs the command there; a badge and a band line show each run while it goes; a session-start policy tells Claude when to offload; and the provision scripts set up every workhorse with the same tools.",
+  "description": "Runs long jobs on your spare Macs. wh copies the current git repository to a workhorse, .git included, and runs the command there. Claude reads an offload policy and a table of your hosts at session start, a badge and a line above the prompt show each run, and the provision scripts give every workhorse the same tools.",
   "author": {
     "name": "hex",
     "url": "https://github.com/hex"

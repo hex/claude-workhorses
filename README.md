@@ -122,7 +122,9 @@ It needs the workhorse user's sudo password for each host. It runs your helper,
 `~/.config/claude-workhorses/sudo-password`, with the host name as its one argument and reads the
 password from its output. The helper must be a file you own that only you can write; the plugin
 never runs its output as shell text. [examples/sudo-password](examples/sudo-password) reads it from
-the login keychain. The password reaches the host in the ssh session's environment, never on disk.
+the login keychain. The password reaches the host in the ssh session's environment. On a dedicated
+host, `setup.sh` also writes it to `/etc/kcpassword` (root only, in the obfuscated form macOS reads)
+so the workhorse user logs in at boot.
 
 Every host gets the Command Line Tools, MacPorts, the agent CLIs (`claude`, `codex`, `opencode`),
 `macos-harness`, and the tools in [provision/tools.sh](provision/tools.sh): `git-lfs`, `cmake`,
@@ -130,15 +132,12 @@ Every host gets the Command Line Tools, MacPorts, the agent CLIs (`claude`, `cod
 Testing and more. Every host also gets no sleep, Spotlight off, a raised open-file limit and a
 neutral git identity, and turns Wi-Fi off while Ethernet is up.
 
-The profile decides how much of the Mac the plugin takes over:
-
-- **dedicated**: the Mac is the workhorse's alone. On top of the above, `setup.sh` turns off ssh
-  password logins, turns on the firewall in stealth mode, logs the workhorse user in at boot (it
-  writes `/etc/kcpassword` for that), sets a solid wallpaper in the host's color, trims the Dock,
-  allows Screen Sharing for the workhorse user, and installs Tailscale and the Unity 6000.3 editor
-  (no license).
-- **shared**: its owner uses it too. Login, remote access, firewall, network and wallpaper stay the
-  owner's, and it gets no Unity.
+The profile decides how much of the Mac the plugin takes over. A dedicated Mac is the workhorse's
+alone. On top of the above, `setup.sh` turns off ssh password logins, turns on the firewall in
+stealth mode, logs the workhorse user in at boot, sets a solid wallpaper in the host's color, trims
+the Dock, allows Screen Sharing for the workhorse user, and installs Tailscale and the Unity 6000.3
+editor (no license). A shared Mac is its owner's too. Its login, remote access, firewall, network
+and wallpaper stay the owner's, and it gets no Unity.
 
 `sync.sh diff` leaves out the lines a shared host differs on by design, and the dependency lines
 when two hosts have different architectures.
