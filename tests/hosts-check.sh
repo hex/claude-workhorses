@@ -1,6 +1,8 @@
 #!/bin/bash
 # ABOUTME: Checks how scripts/lib/hosts.sh reads the hosts file and calls the sudo-password helper; no host is contacted.
 # ABOUTME: Usage: tests/hosts-check.sh; exits 1 on the first wrong answer.
+# The helpers this writes are sh scripts held as text: their $1 and $# are theirs, not this script's.
+# shellcheck disable=SC2016
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd -P)

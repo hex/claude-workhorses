@@ -1,0 +1,4 @@
+# Scripts reach scripts/lib/hosts.sh through a path built from their own folder, which shellcheck
+# cannot resolve on its own; with these it follows the source= directive next to each source line.
+external-sources=true
+source-path=SCRIPTDIR

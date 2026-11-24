@@ -1,5 +1,6 @@
 # ABOUTME: Reads the workhorse hosts file and calls the user's sudo-password helper, for mirror.sh, sync.sh and the session-start policy.
 # ABOUTME: Both live in $CLAUDE_WORKHORSES_CONFIG_DIR, by default ~/.config/claude-workhorses; values are checked here and never evaluated.
+# shellcheck shell=bash
 
 # The folder that holds the hosts file and the sudo-password helper.
 workhorses_config_dir() {
