@@ -10,8 +10,8 @@ level with this machine, `.git` included. This machine stays free. A workhorse c
 so offload to free this machine, never to go faster. The workhorse table printed at session start
 lists each host with its architecture, cores, RAM and profile.
 
-Each run adds a few seconds before the command starts. On a 6-core Intel Mac mini over a LAN it took
-about 1.5 s on a small repo and 4 s on one of 70,000 files (5 to 6 s with every laptop core busy).
+Each run adds a few seconds before the command starts: about 1.5 s on a small repo and 4 s on one of
+70,000 files (5 to 6 s with every laptop core busy).
 This machine's Watchman reports what changed here, and the host lists what the last job changed in
 the copy, so a run patches only those paths. When Watchman is not installed or has restarted since
 the copy's last run, `wh` says `full walk:` and compares every file instead (8 to 25 s on that large

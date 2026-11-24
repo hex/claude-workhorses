@@ -11,19 +11,19 @@ export CLAUDE_WORKHORSES_CONFIG_DIR=$config
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 
-out=$(bash "$root/scripts/policy.sh")
+out=$("$BASH" "$root/scripts/policy.sh")
 [ "$out" = "claude-workhorses: no workhorses are configured (no hosts file at $config/hosts), so wh cannot run; the plugin's README shows how to add one." ] ||
   fail "a missing hosts file: got '$out'"
 echo "ok   with no hosts file, one line says so"
 
 printf '%s\n' "gamma g x86_64 6 16 spare Turquoise Green" >"$config/hosts"
-out=$(bash "$root/scripts/policy.sh")
+out=$("$BASH" "$root/scripts/policy.sh")
 [ "$out" = "claude-workhorses: the hosts file is not usable, so wh cannot run: claude-workhorses: $config/hosts line 1: profile \"spare\" for gamma is not dedicated or shared" ] ||
   fail "a bad hosts file: got '$out'"
 echo "ok   with a bad hosts file, one line names the problem"
 
 printf '%s\n' "gamma gamma@gamma-mini.example.test x86_64 6 16 dedicated Turquoise Green" "alpha ws-alpha arm64 10 24 shared -" >"$config/hosts"
-out=$(bash "$root/scripts/policy.sh")
+out=$("$BASH" "$root/scripts/policy.sh")
 table=$(grep '^|' <<<"$out")
 [ "$table" = "| Host | ssh | Arch | Cores | RAM | Profile |
 |------|-----|------|-------|-----|---------|
