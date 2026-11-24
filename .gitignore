@@ -1,0 +1,11 @@
+# Generated plugin API types (/plugin-types); regenerated per Claude Code build
+.claude/types/
+
+# Local per-developer settings
+.claude/*.local.*
+
+# Session state (cs session manager)
+.cs/
+
+# OS files
+.DS_Store
