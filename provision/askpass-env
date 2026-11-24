@@ -1,0 +1,5 @@
+#!/bin/sh
+# ABOUTME: sudo askpass helper that answers with the password held in $SUDO_PW.
+# ABOUTME: The password lives only in the env of the SSH session that set it, never on disk.
+[ -n "${SUDO_PW:-}" ] || { echo "askpass-env: SUDO_PW is not set" >&2; exit 1; }
+printf '%s\n' "$SUDO_PW"
