@@ -58,12 +58,12 @@ load_hosts() {
       # setup.sh puts the colour in a wallpaper path and an AppleScript string: letters and spaces only.
       dedicated)
         if ! [[ $colour =~ ^[A-Za-z][A-Za-z\ ]*$ ]]; then
-          echo "$where colour \"$colour\" for $name is not a wallpaper colour name (letters and spaces)" >&2
+          echo "$where color \"$colour\" for $name is not a wallpaper color name (letters and spaces)" >&2
           return 1
         fi ;;
       shared)
         if [ "$colour" != - ]; then
-          echo "$where colour \"$colour\" for $name must be - on a shared host, which keeps its owner's wallpaper" >&2
+          echo "$where color \"$colour\" for $name must be - on a shared host, which keeps its owner's wallpaper" >&2
           return 1
         fi ;;
       *) echo "$where profile \"$profile\" for $name is not dedicated or shared" >&2; return 1 ;;

@@ -30,7 +30,7 @@ expect_load() {
   echo "ok   $label"
 }
 
-expect_load "hosts load in file order; comments and blank lines are skipped; a colour keeps its spaces" \
+expect_load "hosts load in file order; comments and blank lines are skipped; a color keeps its spaces" \
 "gamma|gamma@gamma-mini.example.test|x86_64|6|16|dedicated|Turquoise Green
 alpha|ws-alpha|arm64|10|16|shared|-" \
 "# name ssh arch cores ram profile colour
@@ -75,16 +75,16 @@ expect_load "an unknown profile is refused" \
 "claude-workhorses: $config/hosts line 1: profile \"spare\" for gamma is not dedicated or shared" \
 "gamma g x86_64 6 16 spare Turquoise Green"
 
-expect_load "a dedicated host without a colour is refused" \
-"claude-workhorses: $config/hosts line 1: colour \"\" for gamma is not a wallpaper colour name (letters and spaces)" \
+expect_load "a dedicated host without a color is refused" \
+"claude-workhorses: $config/hosts line 1: color \"\" for gamma is not a wallpaper color name (letters and spaces)" \
 "gamma g x86_64 6 16 dedicated"
 
-expect_load "a colour that could break out of the wallpaper script is refused" \
-"claude-workhorses: $config/hosts line 1: colour \"Blue\" to x\" for gamma is not a wallpaper colour name (letters and spaces)" \
+expect_load "a color that could break out of the wallpaper script is refused" \
+"claude-workhorses: $config/hosts line 1: color \"Blue\" to x\" for gamma is not a wallpaper color name (letters and spaces)" \
 'gamma g x86_64 6 16 dedicated Blue" to x'
 
-expect_load "a shared host keeps its owner's wallpaper, so its colour is -" \
-"claude-workhorses: $config/hosts line 1: colour \"Electric Blue\" for alpha must be - on a shared host, which keeps its owner's wallpaper" \
+expect_load "a shared host keeps its owner's wallpaper, so its color is -" \
+"claude-workhorses: $config/hosts line 1: color \"Electric Blue\" for alpha must be - on a shared host, which keeps its owner's wallpaper" \
 "alpha a arm64 10 16 shared Electric Blue"
 
 rm -f "$config/hosts"
