@@ -17,8 +17,8 @@ Each script starts a private tmux server, `tmux -L svgcap`, at 110 columns by 40
 start when that server already has a session. It never touches the default tmux server.
 
 It copies the Go module in [demo/](demo/) to a new folder under `/tmp/wh-capture-*/`, makes it a git
-repository named `demo`, and runs `wh` there. Every run is a first copy on the host, because each
-demo folder is new. `/tmp` keeps the folder's path free of a user name.
+repository named `demo`, and runs `wh` there. Each demo folder is new, so its first run is a first
+copy on the host. `/tmp` keeps the folder's path free of a user name.
 
 The capture writes its own hosts file with one host, `alpha`, whose ssh target is `alpha-mini`. It
 asks the host for its architecture, cores and memory to fill in the rest of the line.

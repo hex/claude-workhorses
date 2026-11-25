@@ -322,7 +322,10 @@ class Capture:
         svg = self.work / f"{self.name}.svg"
         render(manifest, svg)
         files = [manifest, svg, *{self.work / c["file"] for f in self.frames for c in f["captures"].values()}]
-        check = run(sys.executable, str(CAPTURE / "check-privacy.py"), *map(str, files), env=self.env, check=False)
+        # Names kept out of the repository reach the check through WH_PRIVACY_PATTERNS, when it is set.
+        patterns = {"WH_PRIVACY_PATTERNS": os.environ["WH_PRIVACY_PATTERNS"]} if "WH_PRIVACY_PATTERNS" in os.environ else {}
+        check = run(sys.executable, "-B", str(CAPTURE / "check-privacy.py"), *map(str, files),
+                    env={**self.env, **patterns}, check=False)
         if check.returncode != 0:
             raise RuntimeError(f"The privacy check failed:\n{check.stdout}{check.stderr}capture is in {self.work}")
         for path in files[2:]:
