@@ -37,9 +37,9 @@ It runs Claude Code, Codex, pi and OpenCode, each with this checkout as its plug
 config folders, pointed at a local server that records each request and answers it with an error,
 so no request reaches a model provider (an agent may still fetch its own settings or plugins). Each
 passes when a request it sent holds a token found only in the notes of the check's own config, and
-the workhorse skill. An agent that is not installed prints a
-`skip:` line, and the check fails when none is. Codex runs with `--dangerously-bypass-hook-trust` in its throwaway `CODEX_HOME`; your
-own Codex still asks you to trust the hook in `/hooks`. The check does not run Antigravity;
+the workhorse skill. An agent that is not installed prints a `skip:` line, and the check fails when
+none is. Codex runs with `--dangerously-bypass-hook-trust` in its throwaway `CODEX_HOME`; your own
+Codex still asks you to trust the hook in `/hooks`. The check does not run Antigravity;
 `policy-check` checks its hook's output instead.
 
 ## Type check
