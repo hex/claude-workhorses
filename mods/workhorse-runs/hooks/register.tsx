@@ -68,10 +68,14 @@ export function describe(start: Pick<Start, 'host' | 'dir' | 'command'>): string
   return `${start.host}: ${runDetail(start)}`
 }
 
-// What the run does: its command, one line, without its gtimeout guard, and the repository it runs in.
+// The run's command on one line, without its gtimeout guard.
+function runCommand(start: Pick<Start, 'command'>): string {
+  return start.command.replace(/\s+/g, ' ').trim().replace(TIMEOUT_PREFIX, '')
+}
+
+// What the run does: its command and the repository it runs in.
 function runDetail(start: Pick<Start, 'dir' | 'command'>): string {
-  const command = start.command.replace(/\s+/g, ' ').trim().replace(TIMEOUT_PREFIX, '')
-  return `${command} (${repoName(start.dir)})`
+  return `${runCommand(start)} (${repoName(start.dir)})`
 }
 
 export function duration(seconds: number): string {
@@ -136,7 +140,8 @@ export function badgeText(active: Iterable<Start>, copying: ReadonlySet<string>,
 export function bandLines(active: Iterable<Start>, nowSeconds: number): RunLines {
   return [...active].map(start => ({
     label: `wh ${start.host}:`,
-    detail: `${runDetail(start)} · ${clock(nowSeconds - start.at)}`,
+    command: runCommand(start),
+    repoAndTime: `(${repoName(start.dir)}) · ${clock(nowSeconds - start.at)}`,
   }))
 }
 
@@ -170,12 +175,22 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {lines.slice(0, BAND_MAX_RUNS).map(line => (
           <Box flexDirection="row" gap={1}>
-            <Text color={BADGE_GREEN} weight="bold">
-              {line.label}
-            </Text>
-            <Text dimColor italic wrap="truncate-end">
-              {line.detail}
-            </Text>
+            {/* Only the command gives way on a narrow band, cut in its middle so both of its ends show. */}
+            <Box flexShrink={0}>
+              <Text color={BADGE_GREEN} weight="bold">
+                {line.label}
+              </Text>
+            </Box>
+            <Box flexShrink={1}>
+              <Text dimColor italic wrap="truncate-middle">
+                {line.command}
+              </Text>
+            </Box>
+            <Box flexShrink={0}>
+              <Text dimColor italic>
+                {line.repoAndTime}
+              </Text>
+            </Box>
           </Box>
         ))}
         {hidden > 0 ? (
@@ -241,7 +256,7 @@ export const register: Register = on => {
 
     const show = async (nowMs: number) => {
       const lines = bandLines(active.values(), nowMs / 1000)
-      const flat = (rows: RunLines) => rows.map(row => `${row.label} ${row.detail}`).join('\n')
+      const flat = (rows: RunLines) => rows.map(row => `${row.label} ${row.command} ${row.repoAndTime}`).join('\n')
       if (flat(await read($, runLines)) !== flat(lines)) await update($, runLines, () => lines)
       await drawBadge(nowMs)
       const spinning = active.size > 0 && copying.size === 0

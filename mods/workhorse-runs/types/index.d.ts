@@ -3,8 +3,8 @@
 // "↗ wh - gamma 0:42" while the repository is still copying to the workhorse, a spinner frame for the arrow
 // once the job runs; null with no run.
 export type Badge = string | null
-// One line per run, oldest first: the label "wh gamma:" and the detail "pnpm test (demo) · 0:42"; empty with no run.
-export type RunLines = readonly { label: string; detail: string }[]
+// One line per run, oldest first: the label "wh gamma:", the command "pnpm test" and "(demo) · 0:42"; empty with no run.
+export type RunLines = readonly { label: string; command: string; repoAndTime: string }[]
 
 declare module 'claude-code' {
   interface PluginState {

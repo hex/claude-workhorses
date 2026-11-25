@@ -32,16 +32,17 @@ async function bandNow($: Parameters<TestBody>[0], props: Partial<typeof BAND_PR
     component: 'AbovePrompt',
     props: { ...BAND_PROPS, ...props },
   })
-  // Each run is a green bold label ("wh gamma:") followed by its grey italic detail.
+  // Each run is a green bold label ("wh gamma:") followed by its grey italic command, then its repository and time.
   const texts = await ui.findAll({ type: 'Text' })
   await ui.unmount()
   const lines: string[] = []
   texts.forEach((label, at) => {
     if (!/^wh \S+:$/.test(label.text)) return
-    const detail = texts[at + 1]
+    const [command, repoAndTime] = [texts[at + 1], texts[at + 2]]
     expect(label.props).toMatchObject({ color: BADGE_GREEN, weight: 'bold' })
-    expect(detail?.props).toMatchObject({ dimColor: true, italic: true })
-    lines.push(`${label.text} ${detail?.text}`)
+    expect(command?.props).toMatchObject({ dimColor: true, italic: true })
+    expect(repoAndTime?.props).toMatchObject({ dimColor: true, italic: true })
+    lines.push(`${label.text} ${command?.text} ${repoAndTime?.text}`)
   })
   return lines
 }
