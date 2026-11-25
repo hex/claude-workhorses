@@ -56,11 +56,11 @@ recipe_path() {
 
 # Whether line $1, which a host wrote, has the shape of a probe line once probe_line_shaped sets
 # probe_line to it with tabs as spaces, each run of spaces as one and none at either end: a lower-case
-# name, then at most seven words of letters, digits and ._@:/+,()- with a digit among them, or the
+# name, then at most seven words of letters, digits and ._@:/+,()~- with a digit among them, or the
 # word "missing" last; 100 characters at most. A job on a host can write what a probe prints, so host
 # text reaches Claude only in this shape.
 probe_line_shaped() {
-  local shape='^[a-z0-9][a-z0-9._+-]*( [A-Za-z0-9._@:/+,()-]+){1,7}$'
+  local shape='^[a-z0-9][a-z0-9._+-]*( [A-Za-z0-9._@:/+,()~-]+){1,7}$'
   probe_line=${1//$'\t'/ }
   while [[ $probe_line == *"  "* ]]; do probe_line=${probe_line//  / }; done
   probe_line=${probe_line# }

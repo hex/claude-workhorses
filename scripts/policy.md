@@ -11,7 +11,7 @@ A workhorse can be slower per core than this machine, so never offload a job to 
 offload it to keep this machine free.
 
 Change a workhorse only through sync.sh. The user's tools file, `@CONFIG@/tools`, lists what each
-host gets: one recipe and its arguments per line, with optional `@arch=` and `@hosts=` filters.
+host gets: one recipe and its arguments per line, with optional `@arch=`, `@os=` and `@hosts=` filters.
 `bash @SYNC@` brings every host (or the hosts named after it) to that list; `bash @SYNC@ status` says
 how each run ended and stores the record this policy's tool list comes from; confirm with
 `bash @SYNC@ diff`. The workhorse skill names the built-in recipes. Never install a tool on one host
@@ -28,7 +28,8 @@ by hand.
   `AskUserQuestion`, never in prose, before sync.sh runs; the recommended option adds the
   line, syncs the hosts it targets and confirms with `bash @SYNC@ diff`, then offloads the job. Run
   locally only if the user declines, and say so. A job that needs arm64 output goes to an arm64 host
-  or stays local; one that needs x86_64 goes to an x86_64 host.
+  or stays local; one that needs x86_64 goes to an x86_64 host. A job that needs macOS goes to a Mac
+  and one that needs Linux to a Linux host; each host's record above names its system.
 - In a git repository, run the job with `wh [host] [--timeout <limit>] -- <command...>` from
   anywhere inside the repo, for example `wh --timeout 30m -- pnpm test`, from a background shell;
   the `workhorse` skill has the details. With no host, `wh` asks every host at once and picks,

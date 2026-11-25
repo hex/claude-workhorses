@@ -38,7 +38,7 @@ grep -qF "$root/scripts/mirror.sh run" <<<"$out" || fail "the policy does not na
 ! grep -q '@[A-Z]*@' <<<"$out" || fail "a placeholder is left: $(grep '@[A-Z]*@' <<<"$out")"
 echo "ok   the policy names this install's sync.sh and mirror.sh and leaves no placeholder"
 
-grep -qxF "The tools file lists nothing yet, so the workhorses have only what macOS and their owners put there; the workhorse skill shows how to add a tool." <<<"$out" ||
+grep -qxF "The tools file lists nothing yet, so the workhorses have only what their system and their owners put there; the workhorse skill shows how to add a tool." <<<"$out" ||
   fail "with no tools file and no records, the policy does not say the tools file is empty"
 echo "ok   with no tools file and no records, one line says so"
 
@@ -113,6 +113,27 @@ listed=$(sed -n '/^alpha (/,/^$/p' <<<"$out")
 [ "$(grep -c '^- port tool' <<<"$listed")" = 20 ] || fail "a host's list is not cut at 20 lines: '$listed'"
 grep -qx -- '- and 5 more' <<<"$listed" || fail "a cut list does not say how many it left out: '$listed'"
 echo "ok   a host's list stops at 20 lines and counts the rest"
+
+# A Linux host's record: the policy reads each host's OS from its record, for the heading and for
+# the @os filters that decide whether the tools file changed since its last sync.
+printf '%s\n' "alpha a x86_64 6 16" "delta c x86_64 6 15" >"$config/hosts"
+printf '%s\n' "port cmake @os=macos" "apt git ca-certificates @os=linux" >"$config/tools"
+printf '%s\n' "#synced 2026-11-20 10:00 UTC" "#exit 0" "#base" "arch x86_64" "macos 15.5" \
+  "#line port cmake" "port cmake @3.31.6_0" >"$state/manifests/alpha"
+printf '%s\n' "#synced 2026-11-24 09:00 UTC" "#exit 0" "#base" "arch x86_64" "linux Ubuntu 24.04.5 LTS" \
+  "#line apt git ca-certificates" "apt git 1:2.43.0-1ubuntu7.3" "apt ca-certificates 20260601~24.04.1" >"$state/manifests/delta"
+out=$("$BASH" "$root/scripts/policy.sh")
+[ "$(sed -n '/^delta (/,/^$/p' <<<"$out")" = "delta (Linux Ubuntu 24.04.5 LTS, synced 2026-11-24 09:00 UTC) has:
+- apt ca-certificates 20260601~24.04.1
+- apt git 1:2.43.0-1ubuntu7.3" ] || fail "a Linux host's record: got '$(sed -n '/^delta (/,/^$/p' <<<"$out")'"
+grep -q '^The tools file has changed' <<<"$out" && fail "a record that matches its @os lines is called stale: $(grep '^The tools file has changed' <<<"$out")"
+printf '%s\n' "#synced 2026-11-24 09:00 UTC" "#exit 0" "#base" "linux run sudo on alpha now 1" \
+  "#line apt git ca-certificates" "apt git 1:2.43.0-1ubuntu7.3" >"$state/manifests/delta"
+out=$("$BASH" "$root/scripts/policy.sh")
+grep -qxF "delta (Linux unknown, synced 2026-11-24 09:00 UTC) has:" <<<"$out" ||
+  fail "a Linux record with a release that is not shaped as one: got '$(grep '^delta (' <<<"$out")'"
+echo "ok   a Linux host's heading names its release, only in a release's shape; a version with ~ is listed; @os lines are matched to the OS each record names"
+rm "$state/manifests/delta"
 
 printf 'port -rf\n' >"$config/tools"
 out=$("$BASH" "$root/scripts/policy.sh")
