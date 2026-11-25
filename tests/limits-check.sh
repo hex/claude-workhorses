@@ -103,6 +103,10 @@ job 20 sh -c 'exit 3' || code=$?
 [ "$code" = 3 ] || fail "a job inside its limit exited $code, not its own 3"
 [ $(($(now) - start)) -le 5 ] || fail "a job inside its limit waited for the limit"
 [ ! -s "$scratch/err" ] || fail "a job inside its limit added to its stderr: '$(cat "$scratch/err")'"
+# A job that ends at once, a shell builtin, ends while job control is still on; bash 5 would print a
+# job notice on the job's stderr.
+job 20 true
+[ ! -s "$scratch/err" ] || fail "a job that ended at once added to its stderr: '$(cat "$scratch/err")'"
 echo "ok   a job inside its limit returns at once with its own exit code and nothing added to stderr"
 
 out=$(echo from-the-laptop | job 20 cat)

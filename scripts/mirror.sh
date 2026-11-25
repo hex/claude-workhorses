@@ -293,14 +293,18 @@ shift 5
 [ "$limit" != 0 ] || { "$@"; exit; }
 # The timer leaves this file when the limit passes; it lies outside the lock, which a signal can remove first.
 /bin/rm -f "$limited"
-# Job control gives the job, and the timer, a process group of its own.
+# Job control gives the job, and the timer, a process group of its own. While it is on, bash 5
+# reports a job that has already ended (a builtin, say) on this shell's stderr, which is the job's, so
+# this shell's stderr goes to /dev/null until it is off and the job gets the real one as descriptor 2.
+exec 3>&2 2>/dev/null
 set -m
-"$@" &
+"$@" 2>&3 3>&- &
 job=$!
 (/bin/sleep "$limit" && : >"$limited" && kill -s TERM -- "-$job" && /bin/sleep 10 && kill -s KILL -- "-$job") \
-  </dev/null >/dev/null 2>&1 &
+  </dev/null >/dev/null 2>&1 3>&- &
 timer=$!
 set +m
+exec 2>&3 3>&-
 status=0
 wait "$job" || status=$?
 # The job's first process can end while others it started ignore the SIGTERM; they get SIGKILL now.
