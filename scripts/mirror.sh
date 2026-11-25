@@ -403,6 +403,9 @@ SCRIPT
 # index. A linked worktree's .git on the laptop is a file naming a folder in the main checkout; in the
 # copy it becomes an ordinary repository: the shared folder, then the worktree's own HEAD, index and
 # reflog over it. Lock files stay behind, as a git command on the laptop holds one only for a moment.
+# The worktree's own files go by checksum: a copy seeded from the main checkout's holds that HEAD,
+# which can match the worktree's in size (main and side) and in the whole second that openrsync's
+# protocol 29 compares, so a comparison by size and time would keep the main checkout's HEAD.
 sync_git() {
   local dir=$1 target=$2 work=$3 common own ssh=(-e "ssh -o BatchMode=yes -o ConnectTimeout=10")
   common=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)
@@ -412,7 +415,7 @@ sync_git() {
   else
     rsync -a --delete --exclude '*.lock' --exclude /worktrees/ --exclude /HEAD --exclude /ORIG_HEAD \
       --exclude /index --exclude /logs/HEAD "${ssh[@]}" "$common/" "$target:$work/.git/" &&
-      rsync -a --exclude '*.lock' --exclude /commondir --exclude /gitdir "${ssh[@]}" "$own/" "$target:$work/.git/"
+      rsync -a -c --exclude '*.lock' --exclude /commondir --exclude /gitdir "${ssh[@]}" "$own/" "$target:$work/.git/"
   fi
 }
 
