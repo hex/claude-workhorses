@@ -4,7 +4,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
-## Unreleased
+## 2026.11.7
 
 ### Changed
 - `wh` with no host spreads work over the hosts. It ranks each free host by its load plus the runs going there, per core, so a run that started seconds ago counts before the 1-minute load shows it. A host that holds the repository's copy wins only while under half busy, and `wh` skips a host whose copy another run holds, so a second run of the same repository goes to another host instead of stopping with `BLOCKED`. The `using` line names the runs going on the chosen host.
