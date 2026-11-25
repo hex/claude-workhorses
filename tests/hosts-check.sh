@@ -154,4 +154,37 @@ printf '#!/bin/sh\nexit 0\n' >"$helper"
 expect_password "a helper that prints nothing is refused" \
 "claude-workhorses: the sudo-password helper printed nothing for gamma" 1
 
+# probe-host.sh asks a host over ssh for its architecture, cores and memory and prints a hosts line.
+# An ssh that answers from $config/answer, and records its calls, stands first on PATH.
+mkdir -p "$config/bin"
+printf '#!/bin/sh\necho "ssh $*" >>"%s/ssh-calls"\ncat "%s/answer"\n' "$config" "$config" >"$config/bin/ssh"
+chmod +x "$config/bin/ssh"
+
+# Runs probe-host.sh with $3... and compares stdout+stderr and the exit code.
+expect_probe() {
+  local label=$1 want=$2 want_exit=$3 out code=0
+  shift 3
+  : >"$config/ssh-calls"
+  out=$(PATH="$config/bin:$PATH" "$BASH" "$here/../scripts/probe-host.sh" "$@" 2>&1) || code=$?
+  if [ "$out" != "$want" ] || [ "$code" != "$want_exit" ]; then
+    echo "FAIL $label: wanted '$want' exit $want_exit, got '$out' exit $code" >&2
+    exit 1
+  fi
+  echo "ok   $label"
+}
+
+printf '%s\n' x86_64 6 17179869184 >"$config/answer"
+expect_probe "a host's answer becomes a hosts line, named after the ssh target" "mini-two jane@mini-two.example.test x86_64 6 16" 0 jane@mini-two.example.test
+printf '%s\n' arm64 10 25769803776 >"$config/answer"
+expect_probe "a name can be given" "gamma studio arm64 10 24" 0 studio gamma
+printf '%s\n' arm64 10 17716740096 >"$config/answer"
+expect_probe "RAM rounds to the nearest GB" "gamma studio arm64 10 17" 0 studio gamma
+expect_probe "a target ssh would read as an option is refused before ssh runs" \
+"claude-workhorses: ssh target \"-oProxyCommand=x\" is not an ssh alias or user@host" 1 -oProxyCommand=x
+expect_probe "a bad name is refused" "claude-workhorses: host name \"Gamma\" is not lower-case letters, digits and dashes" 1 studio Gamma
+[ ! -s "$config/ssh-calls" ] || { echo "FAIL probe-host.sh ran ssh for a bad target or name: $(cat "$config/ssh-calls")" >&2; exit 1; }
+printf '%s\n' i386 6 17179869184 >"$config/answer"
+expect_probe "an answer that is not a Mac this plugin knows is refused" \
+"claude-workhorses: studio answered \"i386 6 17179869184\", not an architecture (x86_64 or arm64), a core count and a memory size" 1 studio gamma
+
 echo "all hosts-file and helper checks passed"

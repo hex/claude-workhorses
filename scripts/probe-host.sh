@@ -1,0 +1,32 @@
+#!/bin/bash
+# ABOUTME: Asks a Mac over ssh for its architecture, physical cores and memory and prints its hosts-file line.
+# ABOUTME: Usage: probe-host.sh <ssh target> [name]; the name defaults to the target's host part up to its first dot.
+set -euo pipefail
+
+lib=$(cd "$(dirname "$0")/lib" && pwd -P)
+# shellcheck source=lib/hosts.sh
+. "$lib/hosts.sh"
+# shellcheck source=lib/bounded.sh
+. "$lib/bounded.sh"
+
+target=${1:?usage: probe-host.sh <ssh target> [name]}
+if ! valid_ssh_target "$target"; then
+  echo "claude-workhorses: ssh target \"$target\" is not an ssh alias or user@host" >&2
+  exit 1
+fi
+name=${2:-$(printf '%s' "${target#*@}" | cut -d. -f1 | tr 'A-Z_' 'a-z-')}
+if ! valid_host_name "$name"; then
+  echo "claude-workhorses: host name \"$name\" is not lower-case letters, digits and dashes" >&2
+  exit 1
+fi
+
+answer=$(run_bounded 20 ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" \
+  '/usr/bin/uname -m; /usr/sbin/sysctl -n hw.physicalcpu hw.memsize') ||
+  { echo "claude-workhorses: $target did not answer over ssh (BatchMode, so it needs your key)" >&2; exit 1; }
+read -r arch cores memory <<<"$(tr '\n' ' ' <<<"$answer")" || true
+if ! [[ $arch =~ ^(x86_64|arm64)$ && $cores =~ ^[1-9][0-9]*$ && $memory =~ ^[1-9][0-9]*$ ]]; then
+  echo "claude-workhorses: $target answered \"$(tr '\n' ' ' <<<"$answer" | sed 's/ $//')\", not an architecture (x86_64 or arm64), a core count and a memory size" >&2
+  exit 1
+fi
+gigabyte=$((1024 * 1024 * 1024))
+echo "$name $target $arch $cores $(((memory + gigabyte / 2) / gigabyte))"

@@ -45,6 +45,12 @@ workhorses_state_dir() {
   printf '%s\n' "${CLAUDE_WORKHORSES_STATE_DIR:-$HOME/.local/state/claude-workhorses}"
 }
 
+# A host name: lower-case letters, digits and dashes.
+valid_host_name() { [[ $1 =~ ^[a-z0-9][a-z0-9-]*$ ]]; }
+
+# An alias from ~/.ssh/config or user@host. A leading dash would make ssh read it as an option.
+valid_ssh_target() { [[ $1 =~ ^[A-Za-z0-9_][A-Za-z0-9._@-]*$ ]]; }
+
 # Reads the hosts file into one array per column, in file order: host_names, host_ssh, host_arch,
 # host_cores, host_ram (GB) and host_options (the line's options, space-separated, in its order). One
 # host per line, fields split on whitespace; a # starts a comment. Every value is checked here,
@@ -66,7 +72,7 @@ load_hosts() {
     read -r -a options <<<"$rest" || true
     [ -n "$name" ] || continue
     local where="claude-workhorses: $file line $number:"
-    if ! [[ $name =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    if ! valid_host_name "$name"; then
       echo "$where host name \"$name\" is not lower-case letters, digits and dashes" >&2
       return 1
     fi
@@ -76,8 +82,7 @@ load_hosts() {
         return 1
       fi
     done
-    # An alias from ~/.ssh/config or user@host. A leading dash would make ssh read it as an option.
-    if ! [[ $ssh =~ ^[A-Za-z0-9_][A-Za-z0-9._@-]*$ ]]; then
+    if ! valid_ssh_target "$ssh"; then
       echo "$where ssh target \"$ssh\" for $name is not an ssh alias or user@host" >&2
       return 1
     fi
