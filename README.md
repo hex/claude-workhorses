@@ -314,8 +314,10 @@ mise into `~/.local/bin` and keeps it current, and its line's versions become mi
 on the `PATH` through mise's shims, so `mise node@24 node@26` makes `node` the 24 and leaves 26 to
 `mise exec node@26 --`. The shims come ahead of the system's folders, so mise's versions win over
 apt's, but behind `~/.local/bin` and the folders of recipes whose names sort after `mise`, such as
-rustup's `~/.cargo/bin`. The other recipes need a few packages before them on Linux:
+rustup's `~/.cargo/bin`. The recipes need a few packages before them on Linux:
 
+- `curl`, which a minimal Ubuntu lacks, for the `mise`, `uv`, `claude`, `rustup`, `dotnet`, `bun`,
+  `opencode` and `bundletool` recipes, which download with it; put it on the `apt` line, listed first.
 - `build-essential` for the C compiler and linker that Rust, gems with native code and mise's Ruby use.
 - `unzip` for `bun`'s installer, and `libatomic1` for node 26.
 - Chrome for Testing's libraries for `chrome-for-testing`; on Ubuntu 24.04: `libnss3`,
