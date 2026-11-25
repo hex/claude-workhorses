@@ -6,6 +6,7 @@ set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
 install() {
+  macos_only macports
   xcode-select -p >/dev/null 2>&1 || need macports "the Command Line Tools: list command-line-tools before it"
   # Homebrew refuses Intel Macs and, on a shared Mac, belongs to the owner's account, so packages come
   # from MacPorts, whose installer is built for each macOS release.

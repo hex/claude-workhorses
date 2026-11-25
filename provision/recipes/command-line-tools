@@ -6,6 +6,7 @@ set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
 install() {
+  macos_only command-line-tools
   xcode-select -p >/dev/null 2>&1 && return 0
   # This marker makes softwareupdate list the Command Line Tools package.
   local marker=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress label update_pid

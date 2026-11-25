@@ -17,3 +17,9 @@ need() {
   echo "$1 needs $2" >&2
   exit 1
 }
+
+# Fails unless this host runs macOS, naming recipe $1 and the filter its line lacks. A recipe for
+# macOS calls it first, so on Linux it stops before it changes anything.
+macos_only() {
+  [ "$(uname -s)" = Darwin ] || { echo "$1 runs only on macOS: give its line @os=macos" >&2; exit 1; }
+}

@@ -6,6 +6,7 @@ set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
 install() {
+  macos_only port
   [ -x /opt/local/bin/port ] || need port "MacPorts: list macports before it"
   [ $# -gt 0 ] || { echo "port: name at least one port" >&2; exit 1; }
   local name

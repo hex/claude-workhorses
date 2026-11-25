@@ -5,6 +5,7 @@ set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
 install() {
+  macos_only unity
   local editor_version=${1:?unity takes an editor version} editor_changeset=${2:?unity takes the editor changeset} arch hub_arch
   shift 2
   arch=$(uname -m)
