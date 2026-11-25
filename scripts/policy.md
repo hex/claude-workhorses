@@ -56,8 +56,9 @@ by hand.
   `ssh -o BatchMode=yes -o ConnectTimeout=5 <ssh> uptime` and shows a 1-minute load below its core
   count; if none qualifies, run locally and say so, and never wait on a host that is down. Sync the
   folder with `rsync -az --delete` to `~/work/<repo>-<sha8>/` named as above, with the same
-  exclusions. Take the lock with `mkdir <dir>.lock` before syncing and remove it when the job ends;
-  if the lock exists, another agent owns the directory, so do not sync over it. Run detached
+  exclusions. Take the lock with `mkdir <dir>.lock` before syncing, write this machine's name, the
+  time and the job into `<dir>.lock/owner`, and remove the lock when the job ends; if the lock
+  exists, another agent owns the directory, so do not sync over it. Run detached
   (`nohup`, or a tmux session named after the directory), with output in `run.log` and the exit code
   in `run.status`. The exit code is the verdict. Wait from a background shell, not by polling in the
   foreground.
@@ -65,6 +66,9 @@ by hand.
 - Every agent that tests a repo shares the work copy `mirror.sh run` made for it, and that copy
   keeps its installed dependencies, so leave it in place. An rsync directory is this session's disk:
   delete it when the work ends. Delete nothing on a workhorse that this session did not create.
+  Before deleting anything on a host that a job could read, list `~/work/*.lock` and read each
+  lock's `owner` file; while a lock this session did not take is there, a run may be reading those
+  files, so wait for it to go.
 - No sudo and no installs outside the remote directory on a workhorse without asking the user.
 
 @NOTES@

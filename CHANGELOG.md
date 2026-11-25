@@ -4,6 +4,11 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Changed
+- The session-start policy has Claude read the `owner` file of every `~/work/*.lock` on a host before deleting anything a job could read there, and wait while a lock it did not take is present. A lock taken by hand for an rsync job gets an `owner` file too.
+
 ## 2026.11.5
 
 ### Added
