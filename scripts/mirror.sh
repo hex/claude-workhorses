@@ -41,8 +41,9 @@ is_tailscale() {
 # The copy of the repository at $1 on a workhorse, a path under ~: its folder name and a hash of its laptop path.
 work_name() { echo "work/$(printf '%s' "${1##*/}" | tr -c 'A-Za-z0-9._-' '_')-$(printf '%s' "$1" | shasum | cut -c1-8)"; }
 
-# Runs an argv on a workhorse. Each argument is quoted for the mini's login shell (zsh, which reads
-# ~/.zshenv for PATH), so paths and commands cross SSH as data, never as shell text.
+# Runs an argv on a workhorse. Each argument is quoted for the host's login shell (zsh on a Mac, which
+# reads ~/.zshenv for PATH; bash on Linux, which reads the top of ~/.bashrc when sshd starts it), so
+# paths and commands cross SSH as data, never as shell text.
 remote() {
   local target=$1
   shift
@@ -165,13 +166,26 @@ $reasons"
 # Prints one line per entry of the copy in the current folder (mode, size, modification time to the
 # nanosecond, ./path), sorted, leaving out the repository's own .git and every name in $1 (one per
 # line), the same names the patch leaves out. Two listings of one copy differ where something changed it.
-# The scripts that run on a host call macOS's own tools by path: a GNU stat or find that a tool
-# install put first on the host's PATH reads these options differently.
+# The scripts that run on a host call the system's own tools by path: on a Mac, a GNU stat or find
+# that a tool install put first on the host's PATH reads these options differently. A Linux host's
+# GNU find prints the type as a letter, the permission bits alone and ten digits of fraction; awk
+# turns that into the line macOS's stat prints, the mode in octal with its type bits and nine digits.
 list_copy=$(cat <<'SCRIPT'
 list_copy() {
   local prune=() name
   while IFS= read -r name; do prune+=(-name "$name" -o); done <<<"$1"
-  /usr/bin/find . -mindepth 1 \( "${prune[@]}" -path ./.git \) -prune -o -exec /usr/bin/stat -f '%p %z %Fm %N' {} + | LC_ALL=C /usr/bin/sort
+  if [ "$(/usr/bin/uname -s)" = Darwin ]; then
+    /usr/bin/find . -mindepth 1 \( "${prune[@]}" -path ./.git \) -prune -o -exec /usr/bin/stat -f '%p %z %Fm %N' {} +
+  else
+    /usr/bin/find . -mindepth 1 \( "${prune[@]}" -path ./.git \) -prune -o -printf '%y %m %s %T@ %p\n' |
+      /usr/bin/awk 'BEGIN { split("f 10 d 4 l 12 p 1 c 2 b 6 s 14", t, " "); for (i = 1; i < 14; i += 2) type[t[i]] = t[i + 1] }
+        {
+          kind = $1; mode = $2; size = $3; time = $4
+          # The path is the rest of the line, spaces and all.
+          path = substr($0, length(kind) + length(mode) + length(size) + length(time) + 5)
+          printf "%s%04d %s %s %s\n", type[kind], mode, size, substr(time, 1, index(time, ".") + 9), path
+        }'
+  fi | LC_ALL=C /usr/bin/sort
 }
 SCRIPT
 )
