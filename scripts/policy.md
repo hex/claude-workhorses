@@ -31,7 +31,7 @@ by hand.
   or stays local; one that needs x86_64 goes to an x86_64 host. A job that needs macOS goes to a Mac
   and one that needs Linux to a Linux host; each host's record above names its system.
 - In a git repository, run the job with `wh [host] [--timeout <limit>] -- <command...>` from
-  anywhere inside the repo, for example `wh --timeout 30m -- pnpm test`, from a background shell;
+  anywhere inside the repo (`wh` is `@WH@`; call it by that path when `wh` is not on the `PATH`), for example `wh --timeout 30m -- pnpm test`, from a background shell;
   the `workhorse` skill has the details. With no host, `wh` asks every host at once and picks,
   among those whose 1-minute load is below their core count, the least busy by load plus runs going,
   per core, though a host that holds the repo's copy wins while under half busy, and it skips a host

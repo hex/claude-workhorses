@@ -35,8 +35,9 @@ echo "ok   the host table lists every host in file order"
 
 grep -qF "\`bash $root/provision/sync.sh\`" <<<"$out" || fail "the policy does not name $root/provision/sync.sh"
 grep -qF "$root/scripts/mirror.sh run" <<<"$out" || fail "the policy does not name $root/scripts/mirror.sh"
+grep -qF "\`$root/bin/wh\`" <<<"$out" || fail "the policy does not name $root/bin/wh, which an agent without the plugin's bin/ on its PATH runs"
 ! grep -q '@[A-Z]*@' <<<"$out" || fail "a placeholder is left: $(grep '@[A-Z]*@' <<<"$out")"
-echo "ok   the policy names this install's sync.sh and mirror.sh and leaves no placeholder"
+echo "ok   the policy names this install's wh, sync.sh and mirror.sh and leaves no placeholder"
 
 grep -qxF "The tools file lists nothing yet, so the workhorses have only what their system and their owners put there; the workhorse skill shows how to add a tool." <<<"$out" ||
   fail "with no tools file and no records, the policy does not say the tools file is empty"

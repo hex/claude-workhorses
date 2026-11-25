@@ -199,5 +199,6 @@ while IFS= read -r line || [ -n "$line" ]; do
   esac
   line=$(replace "$line" @SYNC@ "$sync")
   line=$(replace "$line" @CONFIG@ "$(workhorses_config_dir)")
+  line=$(replace "$line" @WH@ "$root/bin/wh")
   replace "$line" @MIRROR@ "$root/scripts/mirror.sh"
 done <"$root/scripts/policy.md"
