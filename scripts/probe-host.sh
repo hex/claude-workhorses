@@ -1,5 +1,5 @@
 #!/bin/bash
-# ABOUTME: Asks a Mac over ssh for its architecture, physical cores and memory and prints its hosts-file line.
+# ABOUTME: Asks a Mac or a Linux host over ssh for its architecture, physical cores and memory and prints its hosts-file line.
 # ABOUTME: Usage: probe-host.sh <ssh target> [name]; the name defaults to the target's host part up to its first dot.
 set -euo pipefail
 
@@ -20,10 +20,14 @@ if ! valid_host_name "$name"; then
   exit 1
 fi
 
+# Linux counts physical cores as the distinct core and socket pairs lscpu lists (nproc counts
+# hyperthreads too), and memory as MemTotal, which /proc/meminfo gives in kB.
 answer=$(run_bounded 20 ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" \
-  '/usr/bin/uname -m; /usr/sbin/sysctl -n hw.physicalcpu hw.memsize') ||
+  'uname -m; if [ "$(uname -s)" = Darwin ]; then /usr/sbin/sysctl -n hw.physicalcpu hw.memsize; else lscpu -p=core,socket | grep -v "^#" | sort -u | wc -l; echo $(($(sed -n "s/^MemTotal: *\([0-9]*\) kB$/\1/p" /proc/meminfo) * 1024)); fi') ||
   { echo "claude-workhorses: $target did not answer over ssh (BatchMode, so it needs your key)" >&2; exit 1; }
 read -r arch cores memory <<<"$(tr '\n' ' ' <<<"$answer")" || true
+# Linux names 64-bit ARM aarch64; the hosts file, like macOS, says arm64.
+[ "$arch" != aarch64 ] || arch=arm64
 if ! [[ $arch =~ ^(x86_64|arm64)$ && $cores =~ ^[1-9][0-9]*$ && $memory =~ ^[1-9][0-9]*$ ]]; then
   echo "claude-workhorses: $target answered \"$(tr '\n' ' ' <<<"$answer" | sed 's/ $//')\", not an architecture (x86_64 or arm64), a core count and a memory size" >&2
   exit 1

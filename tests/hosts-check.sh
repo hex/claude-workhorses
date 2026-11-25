@@ -189,8 +189,10 @@ expect_probe "a target ssh would read as an option is refused before ssh runs" \
 "claude-workhorses: ssh target \"-oProxyCommand=x\" is not an ssh alias or user@host" 1 -oProxyCommand=x
 expect_probe "a bad name is refused" "claude-workhorses: host name \"Gamma\" is not lower-case letters, digits and dashes" 1 studio Gamma
 [ ! -s "$config/ssh-calls" ] || { echo "FAIL probe-host.sh ran ssh for a bad target or name: $(cat "$config/ssh-calls")" >&2; exit 1; }
+printf '%s\n' aarch64 4 8589934592 >"$config/answer"
+expect_probe "a Linux host's aarch64 is the hosts file's arm64" "pi pi arm64 4 8" 0 pi
 printf '%s\n' i386 6 17179869184 >"$config/answer"
-expect_probe "an answer that is not a Mac this plugin knows is refused" \
+expect_probe "an answer that is not a host this plugin knows is refused" \
 "claude-workhorses: studio answered \"i386 6 17179869184\", not an architecture (x86_64 or arm64), a core count and a memory size" 1 studio gamma
 
 echo "all hosts-file and helper checks passed"
