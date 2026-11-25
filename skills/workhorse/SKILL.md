@@ -7,8 +7,8 @@ description: Run a job on one of the user's workhorses, the spare Macs in the cl
 
 `wh` runs a command on a workhorse in a private copy of the current git repo, after bringing the copy
 level with this machine, `.git` included. This machine stays free. A workhorse can be slower per core,
-so offload to free this machine, never to go faster. The workhorse table printed at session start
-lists each host with its architecture, cores, RAM and profile.
+so offload to free this machine, never to go faster. The policy printed at session start lists each
+host with its architecture, cores and RAM, and the tools each host had at its last sync.
 
 Each run adds a few seconds before the command starts: about 1.5 s on a small repo and 4 s on one of
 70,000 files (5 to 6 s with every laptop core busy).
@@ -20,8 +20,8 @@ on that large repo). Copying `.git` adds about a second (0.6 to 1.3 s in dry run
 54 GB `.git` included).
 
 ```bash
-wh -- gtimeout 30m pnpm test          # a free host, by load
-wh alpha -- gtimeout 20m cargo test   # a named host
+wh --timeout 30m -- pnpm test          # a free host, by load
+wh alpha --timeout 20m -- cargo test   # a named host
 ```
 
 - Run it from anywhere inside the repo. The command runs in the same subfolder of the copy. A fresh
@@ -34,10 +34,10 @@ wh alpha -- gtimeout 20m cargo test   # a named host
 - With no host, `wh` picks among the hosts whose 1-minute load is below their core count: one that
   already holds the repo's copy, then the lowest load per core. Name the host when the job needs
   x86_64 or arm64; the table's Arch column says which host has which.
-- Always put `--` before the command. Bound every command with `gtimeout`.
-- The hosts' default `node` is 24. A repo that needs Node 26 runs under mise:
-  `wh -- gtimeout 30m mise exec node@26 -- npm test`. Headless browser tests find Chrome for Testing
-  through `CHROME_BIN` (`~/.local/bin/chrome`), which every host sets.
+- Always put `--` before the command. Bound every job with `--timeout` (`90s`, `30m`, `2h`): past
+  it, `wh` stops the job and everything it started and exits 124. The hosts need no `gtimeout`.
+- Use only the tools the session-start policy lists for the host. A runtime installed with the
+  `mise` recipe runs as `wh --timeout 30m -- mise exec node@26 -- npm test`.
 - Run it from a background shell (`run_in_background: true`) when it takes minutes, and wait for the
   exit notification instead of polling.
 
@@ -48,20 +48,59 @@ Use it when any of these holds:
 - The user names a workhorse or one of its hosts, or asks for a remote run.
 - You are about to run a full suite or build that takes minutes, and nobody needs the result in the
   next 2 minutes.
-- This machine's 1-minute load (`uptime`) is over 10.
+- This machine's 1-minute load (`uptime`) is over its core count.
 - The job writes more than 5 GB.
 
-Run it locally instead when the job needs over 10 GB of RAM, a GPU, code signing, API keys or other
-environment variables set only on this machine (`wh` passes none), or Unity (a dedicated host's
-editor has no license and exits 198; a shared host has no Unity). For arm64 output, name an arm64
-host.
+Run it locally instead when the job needs more RAM than the hosts have, a GPU, code signing, API
+keys or other environment variables set only on this machine (`wh` passes none), or anything the
+user's notes at the end of the session-start policy rule out. For arm64 output, name an arm64 host.
+Any git repo works; for a folder that is not a git repo, follow the workhorse policy printed at
+session start.
+
+## When a host lacks a tool
 
 When the job needs a tool the hosts lack or have in too old a version (a runtime, a browser, a
-command-line tool, Xcode or a simulator runtime), do not run it locally. Ask the user with
-`AskUserQuestion` whether to install it, recommending the option that adds it to the provision
-scripts for every host, runs `provision/sync.sh` and checks `provision/sync.sh diff`. Then run the
-job with `wh`. Run it locally only if the user declines, and say so. Any git repo works; for a folder
-that is not a git repo, follow the workhorse policy printed at session start.
+command-line tool), do not run it locally. Each host gets what the user's tools file lists,
+`~/.config/claude-workhorses/tools` (or `$CLAUDE_WORKHORSES_CONFIG_DIR/tools`): one recipe and its
+arguments per line, then optional filters, `@arch=x86_64` or `arm64`, and `@hosts=alpha,beta`.
+
+1. Write the line. Prefer a built-in recipe from the table below. Arguments are letters, digits and
+   `@._/+-`, and never start with `-`. A recipe that needs another names it when it fails; put the
+   line it needs earlier in the file.
+2. Ask the user with `AskUserQuestion`, never in prose, before sync.sh runs. The question
+   shows the exact line, and the recommended option appends it and syncs the hosts it targets. When
+   no built-in recipe fits, write a user recipe instead: an executable in
+   `~/.config/claude-workhorses/recipes/<name>`, owned by the user, writable only by them, that
+   answers `install [args]` and `probe [args]` (probe prints `<name> <version>` lines and exits 0).
+   Show its full text in the question. A recipe that runs `sudo -A` must carry the line
+   `# needs: sudo`, and the question must say it runs as root on every host it targets.
+3. On yes, append the line, then run `bash <sync.sh> <host>...` for the hosts it targets (the policy
+   names sync.sh's path). The sync runs detached on each host; `bash <sync.sh> status <host>` says
+   `running`, or how it ended and which step stopped it, and stores the record the policy reads.
+   Wait with `sleep` in a background shell between checks.
+4. Confirm with `bash <sync.sh> diff`, then run the job with `wh`.
+
+Run the job locally only if the user declines, and say so. Removing a line uninstalls nothing.
+
+| Recipe | Arguments | Installs |
+|--------|-----------|----------|
+| `command-line-tools` | none | Apple's Command Line Tools: git, clang, make (sudo) |
+| `macports` | none | MacPorts for macOS 15 or 27; every sync upgrades outdated ports (sudo) |
+| `port` | port names | MacPorts ports (sudo; needs `macports` first) |
+| `npm` | package names, `pkg@version` to pin | global npm packages under `~/.local` (needs node and npm first) |
+| `mise` | `tool@version` | runtimes through mise (needs mise first, `port mise` say) |
+| `uv` | none | uv |
+| `uv-tool` | package names | Python command-line tools through uv (needs `uv` first) |
+| `gem` | gem names | gems with their commands, under `~/.local` (needs a Ruby first) |
+| `claude` | none | Claude Code |
+| `rustup` | none | Rust |
+| `dotnet` | a channel, `10.0` | the .NET SDK |
+| `bun` | none | bun |
+| `opencode` | none | opencode |
+| `chrome-for-testing` | none | Chrome for Testing, with `CHROME_BIN` set (needs npx first) |
+| `bundletool` | a version | Google's bundletool (runs with the `java` on the `PATH`) |
+| `macos-harness` | none | macos-harness and its skill (needs `uv` first) |
+| `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor; no license |
 
 ## Git in the copy
 
@@ -75,6 +114,7 @@ holding the worktree's branch and index. Lock files (`*.lock`) stay on this mach
 | Code | Meaning |
 |------|---------|
 | the command's own | The command ran; this is its result. |
+| 124 | The command ran past `--timeout`; `wh` stopped it and everything it started. |
 | 3, with `BLOCKED` on stderr | The command did not run. The message says why: no host free or reachable, another run holds the lock, copying `.git` or the patch from this machine failed, git tracks files `wh` skips, or the repo's first copy on that host would send over 1 GB (`.git` and files together) through Tailscale (make it from a network that reaches the host without Tailscale, or name a host on this network). |
 | 2 | Usage error: missing `--`, not inside a git repo, an unknown host, or a missing or bad hosts file. |
 
@@ -85,7 +125,7 @@ tell the user.
 
 The copy keeps installed dependencies between runs, but `wh` never carries `node_modules/`,
 `target/`, `.venv/`, `venv/`, `Library/`, `.build/`, `.gradle/`, `DerivedData/` or `__pycache__/`.
-The first time, install them on the host: `wh -- gtimeout 20m pnpm install --frozen-lockfile`.
+The first time, install them on the host: `wh --timeout 20m -- pnpm install --frozen-lockfile`.
 Never copy built artifacts between architectures (an arm64 laptop and an x86_64 host, say). A
 worktree's first copy on a host starts from that host's copy of the main checkout, `.git` included,
 when there is one.

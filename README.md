@@ -19,17 +19,17 @@ front of you.
 | --- | --- |
 | Claude Code on your Mac | `wh` on the path of every command Claude runs, the offload policy and your host table at the start of every session, the `workhorse` skill, and the badge and band. |
 | Your own terminal | `wh` by its full path, or linked into a folder on your `PATH`. Its runs show in the badge and band of a Claude Code session whose folder holds the repository or sits inside it. |
-| The workhorses | Spare Macs, Intel or Apple silicon, on macOS 15 or 27. `wh` reaches them over ssh, and the provision scripts give each one the same tools. |
+| The workhorses | Spare Macs, Intel or Apple silicon, with Remote Login on. `wh` reaches them over ssh and needs nothing installed there. `sync.sh` gives each one the tools you list. |
 
 ## Install
 
 You need:
 
-- macOS on the machine you work on, with `jq`, `rsync`, `ssh` and `gtimeout` (from `coreutils`).
+- macOS on the machine you work on, with `jq`, `rsync` and `ssh`.
   [Watchman](https://facebook.github.io/watchman/) makes later runs faster. Without it, every run
   compares each file's size and modification time.
-- One or more Macs as workhorses, Intel or Apple silicon, on macOS 15 or 27, with Remote Login on and
-  your ssh key accepted by the workhorse user.
+- One or more Macs as workhorses, Intel or Apple silicon, with Remote Login on and your ssh key
+  accepted by the workhorse user.
 
 ```text
 /plugin marketplace add hex/claude-marketplace
@@ -38,28 +38,38 @@ You need:
 
 ## First run
 
-1. Write the hosts file, `~/.config/claude-workhorses/hosts`. One host per line: name, ssh target,
-   arch, cores, RAM in GB, profile, wallpaper color.
+1. In Claude Code, from a git repository, run `/claude-workhorses:setup` with your hosts' ssh
+   targets:
 
    ```text
-   # name  ssh target             arch    cores  RAM  profile    color
-   alpha   alpha-mini             x86_64  6      16   dedicated  Turquoise Green
-   beta    beta-mini              x86_64  6      16   dedicated  Electric Blue
-   gamma   me@gamma.example.test  arm64   10     16   shared     -
+   /claude-workhorses:setup alpha-mini me@gamma.example.test
+   ```
+
+   It asks each host for its architecture, cores and RAM, shows you the lines it would add to
+   `~/.config/claude-workhorses/hosts`, and on your yes adds them and runs a first job on each host.
+   It installs nothing.
+2. Or write the hosts file yourself. One host per line: name, ssh target, arch, cores, RAM in GB,
+   then any [host options](#host-options).
+
+   ```text
+   # name  ssh target             arch    cores  RAM  options
+   alpha   alpha-mini             x86_64  6      16   no-sleep maxfiles
+   gamma   me@gamma.example.test  arm64   10     16
    ```
 
    [examples/hosts](examples/hosts) explains each field. The ssh target is an alias from
-   `~/.ssh/config` or `user@host`, so addresses and routes stay in your ssh config.
-2. Check that each host answers: `ssh -o BatchMode=yes alpha-mini uptime`.
-3. Provision the hosts. Write the sudo-password helper (see [Provisioning](#provisioning)), then ask
-   Claude to provision the workhorses. The session-start policy gives it the path to `sync.sh`.
-4. In a git repository, run something small:
+   `~/.ssh/config` or `user@host`, so addresses and routes stay in your ssh config. Check that each
+   host answers: `ssh -o BatchMode=yes alpha-mini uptime`.
+3. In a git repository, run something small:
 
    ```bash
-   wh -- gtimeout 5m git log -1 --oneline
+   wh --timeout 5m -- git log -1 --oneline
    ```
 
-   The first run in a repository copies every file. Later runs send only what changed.
+   The first run in a repository copies every file. Later runs send only what changed. A Mac without
+   Apple's Command Line Tools has no working `git`; the next step installs them.
+4. When a job needs a tool a host lacks, Claude proposes a line for your tools file and asks before
+   anything changes. See [Provisioning](#provisioning).
 
 ## Features
 
@@ -70,24 +80,27 @@ You need:
 | Send only what changed since the last run | [What gets copied](#what-gets-copied) |
 | See each run above the prompt and in the footer while it goes | [The badge and band](#the-badge-and-band) |
 | Tell Claude when to offload, and which hosts it has | [The offload policy and the skill](#the-offload-policy-and-the-skill) |
-| Give every workhorse the same tools, and check they still match | [Provisioning](#provisioning) |
-| Keep the hosts file and the sudo helper somewhere else | [Configuration](#configuration) |
+| Give each workhorse the tools you list, and check they still match | [Provisioning](#provisioning) |
+| Keep the hosts file, the tools file and the sudo helper somewhere else | [Configuration](#configuration) |
 
 [TESTING.md](TESTING.md) covers the checks that need no workhorse and the end-to-end check against
 one.
 
 ### Running a job
 
-`wh [host] -- <command...>` runs from anywhere inside a git repository. The command runs in the same
-subfolder of the copy. Bound every command with `gtimeout`:
+`wh [host] [--timeout <limit>] -- <command...>` runs from anywhere inside a git repository. The
+command runs in the same subfolder of the copy. Bound every job with `--timeout`, in seconds,
+minutes or hours:
 
 ```bash
-wh -- gtimeout 30m pnpm test          # a free host, by load
-wh alpha -- gtimeout 20m cargo test   # a named host
+wh --timeout 30m -- pnpm test          # a free host, by load
+wh alpha --timeout 20m -- cargo test   # a named host
 ```
 
-The exit code is the command's. Exit 3 with `BLOCKED` on stderr means the command did not run, and
-the message says why. Exit 2 is a usage error, an unknown host, or a missing or bad hosts file.
+The exit code is the command's. Past its limit, `wh` stops the job and everything it started
+(`SIGTERM`, then `SIGKILL` 10 seconds later) and exits 124, as `gtimeout` does. The host needs no
+`gtimeout`. Exit 3 with `BLOCKED` on stderr means the command did not run, and the message says
+why. Exit 2 is a usage error, an unknown host, or a missing or bad hosts file.
 
 ### Choosing a host
 
@@ -107,7 +120,7 @@ locks it, copies `.git`, patches the working tree, then runs the command:
   compares every file's size and modification time instead.
 - `node_modules/`, `target/`, `.venv/`, `venv/`, `Library/`, `.build/`, `.gradle/`,
   `DerivedData/`, `__pycache__/`, `.DS_Store` and `.cs/` never cross. Install dependencies on the
-  host once (`wh -- gtimeout 20m pnpm install --frozen-lockfile`) and they stay between runs.
+  host once (`wh --timeout 20m -- pnpm install --frozen-lockfile`) and they stay between runs.
 - Git in the copy has your commits, branch and index. A linked worktree's copy is an ordinary
   repository holding the worktree's branch and index.
 - `wh` refuses a first copy of over 1 GB that would cross Tailscale. Make it from a network that
@@ -137,66 +150,148 @@ how to make them again.
 ### The offload policy and the skill
 
 At the start of every session, a hook gives Claude the offload policy: when to offload, when to stay
-local, and a table of your hosts with their ssh target, architecture, cores, RAM and profile. With no hosts file,
-or one it cannot use, it says so in one line instead. The `workhorse` skill covers how to run `wh`
-well: exit codes, first runs, and git in the copy.
+local, a table of your hosts with their ssh target, architecture, cores and RAM, and the tools each
+host had at its last sync. It lists the tools every host has once, then what each host has on its own,
+with its macOS release and sync date. The hook reads only files on your machine; it never contacts
+a host. With no hosts file, or one it cannot use, it says so in one line instead.
+
+The list comes from the record `sync.sh status` stores, so a host never synced has none, and a host
+whose tools lines changed since its last sync shows as out of date. For what no record shows (no
+code signing, a tool that needs a license), write `~/.config/claude-workhorses/notes`. The hook
+appends it as written. The `workhorse` skill covers how to run `wh` well: exit codes, first runs,
+git in the copy, and the steps for adding a tool.
 
 ### Provisioning
 
-> [!WARNING]
-> `sync.sh` assumes each host's workhorse user exists only to run jobs. It replaces that user's
-> `~/.zshenv` and sets its global git name and email. Never point it at an account you use yourself.
-> `wh` needs none of this: a Mac with Remote Login and the tools your jobs use is enough.
-
-`provision/sync.sh` copies the provision folder to each host and runs `setup.sh`, `tools.sh` and,
-on a dedicated host, `unity.sh`, detached on the host:
+`wh` needs nothing on a workhorse beyond Remote Login. Everything else is opt-in: the tools file
+says what each host gets, and host options change how the Mac runs. `provision/sync.sh` copies the
+recipes and options a host needs and runs them there, detached:
 
 ```bash
 bash provision/sync.sh             # every host; or name some
-bash provision/sync.sh status      # how each host's last run ended
-bash provision/sync.sh diff        # compare the hosts' installed versions
+bash provision/sync.sh status      # how each host's last run ended; stores its record
+bash provision/sync.sh diff        # compare the hosts, tools line by tools line
 ```
 
-It needs the workhorse user's sudo password for each host. It runs your helper,
+Before it contacts any host, `sync.sh` checks the hosts file, the tools file and every recipe it
+names. A run stops at the first step that fails, and `status` names that step and its exit code.
+On the host, the run appends one line to the workhorse user's `~/.zshenv`, marked
+`# claude-workhorses`, which loads the `PATH` the recipes set. The rest of that file stays untouched.
+Removing a line from the tools file, or an option from a host, undoes nothing on the host.
+
+#### The tools file
+
+`~/.config/claude-workhorses/tools` has one recipe per line, then its arguments, then any filters.
+Lines run in file order, so a line goes after the one it needs. It starts empty;
+[examples/tools](examples/tools) shows the shape.
+
+```text
+command-line-tools
+macports
+port cmake ninja ripgrep nodejs24 npm11
+npm pnpm @openai/codex
+mise node@26
+dotnet 10.0 @arch=x86_64
+unity 6000.3.28f1 8f082d2fe476 android ios webgl @hosts=alpha
+```
+
+- `@arch=x86_64` or `@arch=arm64` gives the line only to hosts of that architecture, and
+  `@hosts=alpha,beta` only to those hosts. With both, a host must match both.
+- Arguments are letters, digits and `@._/+-`, and never start with `-`. A recipe gets them as its
+  arguments, never as shell text.
+- `sync.sh diff` compares each line only among the hosts it targets.
+
+| Recipe | Arguments | Installs |
+| --- | --- | --- |
+| `command-line-tools` | none | Apple's Command Line Tools: git, clang, make (sudo) |
+| `macports` | none | MacPorts for macOS 15 or 27; every sync upgrades outdated ports (sudo) |
+| `port` | port names | MacPorts ports (sudo; needs `macports` first) |
+| `npm` | package names, `pkg@version` to pin | global npm packages under `~/.local`, at their latest unless pinned |
+| `mise` | `tool@version` | runtimes through mise; run one with `mise exec node@26 -- <command>` |
+| `uv` | none | uv |
+| `uv-tool` | package names | Python command-line tools through uv |
+| `gem` | gem names | gems and their commands, under `~/.local` |
+| `claude` | none | Claude Code, updated on every sync |
+| `rustup` | none | Rust |
+| `dotnet` | a channel, `10.0` | the .NET SDK |
+| `bun` | none | bun, upgraded on every sync |
+| `opencode` | none | opencode, upgraded on every sync |
+| `chrome-for-testing` | none | Chrome for Testing, with `CHROME_BIN` pointing at it |
+| `bundletool` | a version | Google's bundletool |
+| `macos-harness` | none | macos-harness and its skill for Claude on the host |
+| `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor, without a license |
+
+A recipe that needs another one fails with a message naming it, such as `port needs MacPorts: list
+macports before it`.
+
+#### Your own recipes
+
+A recipe is an executable that answers `install [args]` and `probe [args]`. `probe` prints one
+`<name> <version>` line per tool and exits 0; the policy's tool list shows those lines. Put
+yours in `~/.config/claude-workhorses/recipes/<name>`. The name is lower-case letters, digits and
+dashes, and may not be a built-in recipe's name. `sync.sh` refuses a recipe unless you own it, its
+folder and the config folder, and nobody else can write any of them, because it runs on every host
+its line targets. A recipe that runs `sudo -A` says so with the line `# needs: sudo` near its top;
+only those recipes get the sudo password. `sync.sh` copies only the `recipes` folder's named files
+to a host, never the config folder itself.
+
+#### Host options
+
+Host options go at the end of a host's line in the hosts file. Each one changes the Mac for every
+user of it, so give them only to a Mac that exists to run jobs. None is on by default.
+
+| Option | What it does | Sudo |
+| --- | --- | --- |
+| `no-sleep` | Never sleep, restart after a power cut, wake on LAN | yes |
+| `no-spotlight` | Spotlight indexing off on every volume | yes |
+| `maxfiles` | Open-file limit 65536/200000, now and at every boot | yes |
+| `wifi-off` | Wi-Fi off while Ethernet is up, so traffic takes the cable | yes |
+| `git-identity` | A neutral global git name and email, for test suites that commit | no |
+| `key-only-ssh` | ssh logins by key only | yes |
+| `firewall` | macOS firewall on, in stealth mode, signed apps allowed | yes |
+| `headless` | No screensaver and no Siri | no |
+| `dock` | A Dock with Terminal, Activity Monitor and System Settings; keeps a backup | no |
+| `wallpaper=<name>` | A solid wallpaper from Solid Colors, `_` for each space: `wallpaper=Turquoise_Green` | no |
+| `screensharing` | Lets the workhorse user in over Screen Sharing | yes |
+| `tailscale` | Installs Tailscale; you log in on the Mac's screen | yes |
+| `autologin` | Logs the workhorse user in at boot | yes |
+
+> [!WARNING]
+> `autologin` stores the workhorse user's password in `/etc/kcpassword`. The file is root-only,
+> but macOS keeps the password there in a reversible form, not encrypted.
+
+#### The sudo password
+
+`sync.sh` asks for a host's sudo password only when one of its options, or a recipe on one of its
+lines, needs it. A host with neither syncs without one. It runs your helper,
 `~/.config/claude-workhorses/sudo-password`, with the host name as its one argument and reads the
 password from its output. The helper must be a file you own that only you can write; the plugin
 never runs its output as shell text. [examples/sudo-password](examples/sudo-password) reads it from
-the login keychain. The password reaches the host in the ssh session's environment. On a dedicated
-host, `setup.sh` also writes it to `/etc/kcpassword` (root only, in the obfuscated form macOS reads)
-so the workhorse user logs in at boot.
-
-Every host gets the Command Line Tools, MacPorts, the agent CLIs (`claude`, `codex`, `opencode`),
-`macos-harness`, and the tools in [provision/tools.sh](provision/tools.sh): `git-lfs`, `cmake`,
-`ninja`, node 24 and 26, bun, pnpm, go, rust, .NET 10, JDK 21, `fastlane`, `ffmpeg`, Chrome for
-Testing and more. Every host also gets no sleep, Spotlight off, a raised open-file limit and a
-neutral git identity, and turns Wi-Fi off while Ethernet is up.
-
-The profile decides how much of the Mac the plugin takes over. A dedicated Mac is the workhorse's
-alone. On top of the above, `setup.sh` turns off ssh password logins, turns on the firewall in
-stealth mode, logs the workhorse user in at boot, sets a solid wallpaper in the host's color, trims
-the Dock, allows Screen Sharing for the workhorse user, and installs Tailscale and the Unity 6000.3
-editor (no license). A shared Mac is its owner's too. Its login, remote access, firewall, network
-and wallpaper stay the owner's, and it gets no Unity.
-
-`sync.sh diff` leaves out the lines a shared host differs on by design, and the dependency lines
-when two hosts have different architectures.
+the login keychain. The password reaches the host in the ssh session's environment, and only the
+steps that need it see it.
 
 ### Configuration
 
 | Setting | Where |
 | --- | --- |
-| Hosts | `~/.config/claude-workhorses/hosts` |
+| Hosts and host options | `~/.config/claude-workhorses/hosts` |
+| What each host gets | `~/.config/claude-workhorses/tools` |
+| Your own recipes | `~/.config/claude-workhorses/recipes/` |
+| Facts for Claude that no record shows | `~/.config/claude-workhorses/notes` |
 | Sudo passwords, for `sync.sh` | `~/.config/claude-workhorses/sudo-password`, an executable |
 | Another config folder | `CLAUDE_WORKHORSES_CONFIG_DIR`, read by `wh`, `sync.sh` and the policy |
+| Each host's last record | `~/.local/state/claude-workhorses/manifests/<host>`, or `CLAUDE_WORKHORSES_STATE_DIR` |
 
 ## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
-| `wh` exits 2 with "no hosts file" | Write `~/.config/claude-workhorses/hosts`, as in [First run](#first-run). For a bad line, the error names the file and the line number. |
+| `wh` exits 2 with "no hosts file" | Run `/claude-workhorses:setup` or write `~/.config/claude-workhorses/hosts`, as in [First run](#first-run). For a bad line, the error names the file and the line number. |
 | `wh: command not found` in your own terminal | Claude Code puts the plugin's `bin/` on the path of the commands Claude runs, not on your shell's. Call `bin/wh` in the installed plugin by its full path, or link it into a folder on your `PATH`. |
-| `BLOCKED: gtimeout is missing` | Install `coreutils`; `wh` needs it to ask the hosts for their load. |
+| `wh` exits 124 | The job ran past `--timeout`. Give it a longer limit, or split it. |
 | `BLOCKED: no workhorse is free` | The message lists each host's reason. Every host is at its core count or unreachable; run the job locally. |
 | `... is in use: ...` | Another run holds that copy's lock. If that run has ended, remove the `.lock` folder the message names. |
 | Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
+| `git` fails on a new host | macOS's `git` stays a stub until the Command Line Tools arrive. Add the `command-line-tools` line. |
+| `sync.sh status` says `stopped at <step>` | That recipe or option failed; the lines under it are the end of the host's `~/workhorse/run.log`. A recipe that needs another names it there. |
 | `sync.sh` says "no sudo password" | The line above it says why: the helper is missing, not executable, writable by others, failed, or printed nothing. |

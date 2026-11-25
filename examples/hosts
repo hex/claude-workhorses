@@ -19,7 +19,8 @@
 #     wallpaper=NAME a solid-colour wallpaper from /System/Library/Desktop Pictures/Solid Colors,
 #                    with _ for each space: wallpaper=Turquoise_Green
 #     wifi-off       Wi-Fi off while Ethernet is up, so traffic takes the cable
-#   Options marked in the README as needing sudo make sync.sh ask your sudo-password helper.
+#   All but dock, git-identity, headless and wallpaper need sudo, so sync.sh asks your
+#   sudo-password helper for a host that has one.
 # The first host listed wins a tie when wh picks one by load.
 alpha  alpha-mini             x86_64  6   16  no-sleep maxfiles headless wallpaper=Turquoise_Green
 beta   beta-mini              x86_64  6   16  no-sleep maxfiles headless wallpaper=Electric_Blue
