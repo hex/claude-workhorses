@@ -72,9 +72,10 @@ Watchman watch on each demo folder, and on the host removes each demo copy by it
 removes its `/tmp/wh-capture-*` folder; after a failure it keeps it and prints the path, with the
 screen it gave up on.
 
-Two things stay. Each `wh` run adds its lines to `~/.local/state/workhorse/runs.jsonl`, the log the
-mod reads, and each `claude-band.sh` theme adds the demo folder to the trusted folders in
-`~/.claude.json`.
+Some things stay. Each `wh` run adds its lines to `~/.local/state/workhorse/runs.jsonl`, the log the
+mod reads. Each `claude-band.sh` theme adds its demo folder to the trusted folders in
+`~/.claude.json`, adds the typed command to `~/.claude/history.jsonl`, and leaves the session's
+transcript in a folder under `~/.claude/projects/` named after the demo folder.
 
 ## Checks
 
