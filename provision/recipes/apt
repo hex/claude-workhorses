@@ -30,8 +30,9 @@ install() {
 probe() {
   local name version
   for name in "$@"; do
-    # dpkg keeps a removed package's version while its config files stay, so the status must be installed too.
-    version=$(dpkg-query -W -f='${db:Status-Status} ${Version}' "$name" 2>/dev/null | sed -n 's/^installed //p' || true)
+    # dpkg keeps a removed package's version while its config files stay, so the status must be installed
+    # too. A package installed for two architectures gives a line for each; the first installed one counts.
+    version=$(dpkg-query -W -f='${db:Status-Status} ${Version}\n' "$name" 2>/dev/null | awk '$1 == "installed" {print $2; exit}' || true)
     echo "apt $name ${version:-missing}"
   done
 }

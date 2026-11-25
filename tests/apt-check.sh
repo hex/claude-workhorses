@@ -29,7 +29,24 @@ for name in curl git nodejs openssh-server; do
   case $name in "$2"*) echo "$name" ;; esac
 done
 EOF
-chmod +x "$bin/sudo" "$bin/apt-get" "$bin/apt-cache"
+# dpkg-query -W prints package $3 once for each architecture it is installed for, in the format of
+# -f=, with the format's backslash escapes read and no newline of its own.
+cat >"$bin/dpkg-query" <<'EOF'
+#!/bin/bash
+format=${2#-f=}
+case $3 in
+  libc6) instances=("installed 2.39-0ubuntu8.4" "installed 2.39-0ubuntu8.4") ;;
+  libssl3) instances=("config-files 3.0.13-0ubuntu3.4" "installed 3.0.13-0ubuntu3.5") ;;
+  git) instances=("installed 1:2.43.0-1ubuntu7.3") ;;
+  curl) instances=("config-files 8.5.0-2ubuntu10.6") ;;
+  *) echo "dpkg-query: no packages found matching $3" >&2; exit 1 ;;
+esac
+for instance in "${instances[@]}"; do
+  line=${format//'${db:Status-Status}'/${instance%% *}}
+  printf '%b' "${line//'${Version}'/${instance#* }}"
+done
+EOF
+chmod +x "$bin/sudo" "$bin/apt-get" "$bin/apt-cache" "$bin/dpkg-query"
 export PATH=$bin:$PATH
 
 # Runs the recipe's install with the given packages and compares its stderr, its exit code and the
@@ -59,5 +76,15 @@ expect_install "a name no package has exactly is refused after the lists are fre
 # boot), and dpkg keeps a conffile edited on the host instead of asking about it.
 expect_install "known names are installed without a question, waiting for the lock" "" 0 "unset -o DPkg::Lock::Timeout=300 update -q
 noninteractive -o DPkg::Lock::Timeout=300 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y -q git curl" git curl
+
+# A package installed for two architectures is one line; one whose files are gone but whose config
+# files stay is missing.
+out=$("$BASH" "$recipe" probe libc6 libssl3 git curl zsh)
+[ "$out" = "apt libc6 2.39-0ubuntu8.4
+apt libssl3 3.0.13-0ubuntu3.5
+apt git 1:2.43.0-1ubuntu7.3
+apt curl missing
+apt zsh missing" ] || fail "the probe: got '$out'"
+echo "ok   the probe prints one line a package, installed for two architectures or only its config files kept"
 
 echo "all apt recipe checks passed"
