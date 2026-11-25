@@ -103,7 +103,7 @@ Run the job locally only if the user declines, and say so. Removing a line unins
 | `bundletool` | a version | Google's bundletool (runs with the `java` on the `PATH`) |
 | `macos-harness` | none | macos-harness and its skill (needs `uv` first) |
 | `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor; no license |
-| `apt` | package names | Debian and Ubuntu packages, on Linux hosts only: `@os=linux` (sudo) |
+| `apt` | exact package names, none ending in `-` or `+` | Debian and Ubuntu packages, on Linux hosts only: `@os=linux` (sudo) |
 
 ## Git in the copy
 

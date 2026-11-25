@@ -233,7 +233,7 @@ unity 6000.3.28f1 8f082d2fe476 android ios webgl @hosts=alpha
 | `bundletool` | a version | Google's bundletool |
 | `macos-harness` | none | macos-harness and its skill for Claude on the host |
 | `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor, without a license |
-| `apt` | package names | Debian and Ubuntu packages, after `apt-get update`; give its line `@os=linux` (sudo) |
+| `apt` | exact package names, none ending in `-` or `+` | Debian and Ubuntu packages, after `apt-get update`; give its line `@os=linux` (sudo) |
 
 A recipe that needs another one fails with a message naming it, such as `port needs MacPorts: list
 macports before it`.
