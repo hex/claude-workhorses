@@ -143,6 +143,11 @@ well: exit codes, first runs, and git in the copy.
 
 ### Provisioning
 
+> [!WARNING]
+> `sync.sh` assumes each host's workhorse user exists only to run jobs. It replaces that user's
+> `~/.zshenv` and sets its global git name and email. Never point it at an account you use yourself.
+> `wh` needs none of this: a Mac with Remote Login and the tools your jobs use is enough.
+
 `provision/sync.sh` copies the provision folder to each host and runs `setup.sh`, `tools.sh` and,
 on a dedicated host, `unity.sh`, detached on the host:
 
