@@ -54,8 +54,10 @@ expect_install "a name ending in + is refused before apt-get runs" \
   'apt: "git+" is not a Debian package name' 1 "" git+
 # apt-get reads a name that no package has, with . or * in it, as a pattern.
 expect_install "a name no package has exactly is refused after the lists are fresh, before the install" \
-  'apt: no package is named "node.js"' 1 "unset update -q" git node.js
-expect_install "known names are installed without a question" "" 0 "unset update -q
-noninteractive install -y -q git curl" git curl
+  'apt: no package is named "node.js"' 1 "unset -o DPkg::Lock::Timeout=300 update -q" git node.js
+# apt-get waits up to 5 minutes for another apt to let go of the lock (apt-daily often holds it after a
+# boot), and dpkg keeps a conffile edited on the host instead of asking about it.
+expect_install "known names are installed without a question, waiting for the lock" "" 0 "unset -o DPkg::Lock::Timeout=300 update -q
+noninteractive -o DPkg::Lock::Timeout=300 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y -q git curl" git curl
 
 echo "all apt recipe checks passed"
