@@ -12,7 +12,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 
 ### Changed
 - The session-start policy lists each host's tools as one line per recipe, `- mise: node 24.22.3 26.13.1, go 1.27.4`, so a long `apt` line no longer pushes a host's other tools past the cut. It counts the `apt` packages whose name starts with `lib` as libraries and names only the missing ones. A recipe's line stops at 2000 characters and a host's list at 6000, each saying how much it cut, in place of the cuts at 20 and 40 lines. The policy leaves out and counts the lines under a `#line` header whose recipe is not shaped as a recipe name.
-- `command-line-tools`, `macports`, `port`, `macos-harness` and `unity` stop on a Linux host before they run anything, with a message that names the `@os=macos` filter their line lacks.
+- A `command-line-tools`, `macports`, `port`, `macos-harness` or `unity` line that reaches a Linux host stops `sync.sh` before it asks for the sudo password or takes the host's lock, with a message that names the `@os=macos` filter the line lacks. A recipe of your own says it runs only on macOS with the line `# os: macos`.
 - A missing node or Ruby names the line that brings it on Linux too, `mise node@24` or `mise ruby@3.4`.
 
 ### Fixed

@@ -80,6 +80,9 @@ shaped_probe_lines() {
 # Whether recipe file $1 says, in its first lines, that it runs sudo: a line "# needs: sudo".
 recipe_declares_sudo() { head -n 10 "$1" | grep -qx '# needs: sudo'; }
 
+# Whether recipe file $1 says, in its first lines, that it runs only on macOS: a line "# os: macos".
+recipe_macos_only() { head -n 10 "$1" | grep -qx '# os: macos'; }
+
 # Reads the tools file into one array per field, in file order: tool_recipe, tool_args (the
 # arguments, space-separated), tool_arch (empty: any), tool_os (macos, linux or empty: any),
 # tool_hosts (space-separated names; empty: any) and tool_path (the recipe file). A line is a recipe

@@ -240,8 +240,9 @@ unity 6000.3.28f1 8f082d2fe476 android ios webgl @hosts=alpha
 
 A recipe that needs another one fails with a message naming it, such as `port needs MacPorts: list
 macports before it`. Every recipe but the `apt` one runs on a Mac, and every one but the five marked
-macOS only runs on Linux. Those five stop on a Linux host before they change anything, with a message
-that names the `@os=macos` filter their line lacks.
+macOS only runs on Linux. A line for one of those five that reaches a Linux host stops `sync.sh`
+before it asks for the sudo password or takes the host's lock, with a message that names the
+`@os=macos` filter the line lacks.
 
 #### Your own recipes
 
@@ -252,7 +253,8 @@ recipe's line, each without the recipe's name and the space or dash after it. Pu
 dashes, and may not be a built-in recipe's name. `sync.sh` refuses a recipe unless you own it, its
 folder and the config folder, and nobody else can write any of them, because it runs on every host
 its line targets. A recipe that runs `sudo -A` says so with the line `# needs: sudo` near its top;
-only those recipes get the sudo password. `sync.sh` copies only the `recipes` folder's named files
+only those recipes get the sudo password. A recipe that runs only on macOS says so with the line
+`# os: macos` there, and `sync.sh` refuses its line on a Linux host. `sync.sh` copies only the `recipes` folder's named files
 to a host, never the config folder itself.
 
 #### Host options
@@ -355,6 +357,6 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
 | `git` fails on a new host | macOS's `git` stays a stub until the Command Line Tools arrive. Add the `command-line-tools` line. On Linux, install `git` (`apt git @os=linux`). |
 | `sync.sh` says a host "runs Linux, where host options do not apply" | Remove the options it names from that host's line in the hosts file. |
-| A run stops with `<recipe> runs only on macOS` | That recipe's line reached a Linux host. Give it `@os=macos`. |
+| `sync.sh` or a run stops with `<recipe> runs only on macOS` | That recipe's line reached a Linux host. Give it `@os=macos`. |
 | `sync.sh status` says `stopped at <step>` | That recipe or option failed; the lines under it are the end of the host's `~/workhorse/run.log`. A recipe that needs another names it there. |
 | `sync.sh` says "no sudo password" | The line above it says why: the helper is missing, not executable, writable by others, failed, or printed nothing. |

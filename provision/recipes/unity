@@ -1,6 +1,7 @@
 #!/bin/bash
 # ABOUTME: Recipe: Unity Hub, the unity CLI and one editor: unity <version> <changeset> [module...] (unity 6000.3.28f1 8f082d2fe476 android ios webgl).
 # ABOUTME: install adds the editor and modules for this Mac's architecture when missing; licensing is not handled. probe prints unity-cli, unity-editors and unity-hub lines.
+# os: macos
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 

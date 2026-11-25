@@ -2,6 +2,7 @@
 # ABOUTME: Recipe: MacPorts ports, by name: port <name>... ; needs the macports recipe listed before it.
 # ABOUTME: install installs the named ports (the macports line upgrades outdated ones). probe prints "port <name> <version>" per name.
 # needs: sudo
+# os: macos
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 

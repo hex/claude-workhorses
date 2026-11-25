@@ -2,6 +2,7 @@
 # ABOUTME: Recipe: Apple's Command Line Tools (git, clang, make). install takes no arguments; a re-run leaves an installed copy as it is.
 # ABOUTME: probe prints "command-line-tools <version>".
 # needs: sudo
+# os: macos
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 

@@ -1,6 +1,7 @@
 #!/bin/bash
 # ABOUTME: Recipe: macos-harness, which drives app windows, under Python 3.12 through uv, plus its skill for Claude on the host.
 # ABOUTME: install takes no arguments and upgrades it to its latest release; needs the uv recipe before it. probe prints "macos-harness <uv tool list line>".
+# os: macos
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 

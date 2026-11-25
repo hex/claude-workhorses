@@ -2,6 +2,7 @@
 # ABOUTME: Recipe: MacPorts, from its signed installer for this macOS release (15 or 27), building with the Command Line Tools.
 # ABOUTME: install takes no arguments; every run updates the ports tree and upgrades every outdated port. probe prints "macports <version>".
 # needs: sudo
+# os: macos
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 

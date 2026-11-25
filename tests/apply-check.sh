@@ -305,6 +305,21 @@ expect_sync "a host that runs neither macOS nor Linux" "alpha: runs \"SunOS\", n
 rm "$scratch/answers/a.os" "$scratch/answers/b.os"
 echo "ok   sync.sh asks each host's OS first, and refuses host options on a Linux host and a host that runs neither, before any lock or password"
 
+# A macOS-only recipe's line that reaches a Linux host stops sync.sh before any password, helper or
+# lock, sudo recipe or not; there is no sudo-password helper here. On a Mac the same line goes on.
+printf 'Linux\n' >"$scratch/answers/g.os"
+for line in "command-line-tools" "macports" "port git" "macos-harness" "unity 6000.3.28f1 8f082d2fe476"; do
+  printf '%s\n' "after" "$line" >"$config/tools"
+  expect_sync "$line on a Linux host" "gamma: ${line%% *} runs only on macOS: give its line @os=macos; nothing was run" 1 gamma
+  [ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 g uname -s" ] ||
+    fail "sync.sh went past the OS question for $line on a Linux host: $(cat "$scratch/calls")"
+done
+rm "$scratch/answers/g.os"
+printf '%s\n' "macos-harness" >"$config/tools"
+expect_sync "a macOS-only line on a Mac" "alpha: a sync is already running (~/workhorse.lock exists)" 1 alpha
+printf '%s\n' "plain ok" >"$config/tools"
+echo "ok   a macOS-only recipe's line on a Linux host stops sync.sh with the @os=macos it lacks, before any password or lock"
+
 mkdir -p "$scratch/answers"
 touch "$scratch/answers/lock-free" "$scratch/answers/copy-works" "$scratch/answers/start-works"
 printf '#!/bin/sh\necho secret-pw-123\n' >"$config/sudo-password"

@@ -71,7 +71,7 @@ learn_host_os() {
 # Starts a run on host $1. Its caller tests its result, which turns set -e off in here, so every step
 # checks its own.
 start_sync() {
-  local host=$1 target sudo_pw="" stage code=0 index
+  local host=$1 target sudo_pw="" stage code=0 index i
   target=$(ssh_target "$host") || return 1
   index=$(host_index "$host") || return 1
   # The host's OS decides which tools lines it gets, and so whether it needs the password.
@@ -79,6 +79,14 @@ start_sync() {
   if [ "${host_os[index]}" = linux ] && [ -n "${host_options[index]}" ]; then
     echo "$host runs Linux, where host options do not apply: remove ${host_options[index]// /, } from its hosts line; nothing was run" >&2
     return 1
+  fi
+  # A line for a recipe that runs only on macOS stops a Linux host here, before the password or the lock.
+  if [ "${host_os[index]}" = linux ]; then
+    for i in "${!tool_recipe[@]}"; do
+      tool_targets "$i" "$host" && recipe_macos_only "${tool_path[i]}" || continue
+      echo "$host: ${tool_recipe[i]} runs only on macOS: give its line @os=macos; nothing was run" >&2
+      return 1
+    done
   fi
   # Read before the lock: a missing password stops here instead of starting a run that fails at sudo.
   if host_needs_sudo "$host"; then
