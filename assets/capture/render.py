@@ -118,10 +118,11 @@ def expand_tabs(row):
 
 def half_circle(side, column):
     """A half ellipse filling one cell, from the row's baseline frame: the cell runs from -16.72 to 5.28."""
+    # Each shape reaches 0.5 px into the cell it meets, so no seam shows against that cell's background.
     left, right = column * 7.8, (column + 1) * 7.8
     if side == "left":
-        return f"M{right:g} -16.72A7.8 11 0 0 0 {right:g} 5.28Z"
-    return f"M{left:g} -16.72A7.8 11 0 0 1 {left:g} 5.28Z"
+        return f"M{right + .5:g} -16.72H{right:g}A7.8 11 0 0 0 {right:g} 5.28H{right + .5:g}Z"
+    return f"M{left - .5:g} -16.72H{left:g}A7.8 11 0 0 1 {left:g} 5.28H{left - .5:g}Z"
 
 
 def draw(group, ansi, theme, start, stop):
