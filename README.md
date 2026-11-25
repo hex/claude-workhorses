@@ -307,6 +307,9 @@ A Windows PC serves through WSL2, with Ubuntu say:
   them to `/mnt/c`, the Windows drive, or link them there. Microsoft's WSL guidance keeps the files
   Linux tools work on in the Linux filesystem, for speed.
 - The probe reports the cores and memory WSL2 has, which Windows sets for the WSL2 machine.
+- Use WSL's mirrored networking: `wh` refuses a first copy of over 1 GB through Tailscale by the
+  server address of the ssh connection inside WSL, which in the default network address translation
+  (NAT) mode is WSL's own address, never Tailscale's.
 
 ### Configuration
 
