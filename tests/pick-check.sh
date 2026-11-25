@@ -6,8 +6,29 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd -P)
 # bash 3.2 cannot source a process substitution, so the function's text is evaluated.
 mirror=$here/../scripts/mirror.sh
-eval "$(sed -n '/^choose_host() {$/,/^}$/p' "$mirror")"
+eval "$(sed -n '/^probe_answer() {$/,/^}$/p; /^choose_host() {$/,/^}$/p' "$mirror")"
 declare -F choose_host >/dev/null || { echo "FAIL: no choose_host function in $mirror" >&2; exit 1; }
+declare -F probe_answer >/dev/null || { echo "FAIL: no probe_answer function in $mirror" >&2; exit 1; }
+
+# Feeds one host's raw probe answer to probe_answer and compares the line it prints for choose_host.
+expect_answer() {
+  local label=$1 want=$2 out
+  shift 2
+  out=$(probe_answer "$@")
+  if [ "$out" != "$want" ]; then
+    echo "FAIL $label: wanted '$want', got '$out'" >&2
+    exit 1
+  fi
+  echo "ok   $label"
+}
+
+# pick_host joins each answer's lines with spaces, so every answer ends in one.
+expect_answer "a Mac's answer gives its 1-minute load and physical cores" "gamma ok 1.39 6 copy" \
+  gamma 0 "{ 1.39 1.37 1.32 } 6 copy "
+expect_answer "a Linux host's answer gives the 1-minute load of /proc/loadavg and physical cores" "delta ok 0.52 6 none" \
+  delta 0 "0.52 0.40 0.30 1/215 1245 6 none "
+expect_answer "a host whose ssh failed is unreachable" "beta unreachable" beta 255 ""
+expect_answer "an answer of another shape is unexpected" "beta unexpected Linux 12 none " beta 0 "Linux 12 none "
 
 # Feeds probe lines to choose_host and compares what it prints on stdout and stderr, and its exit code.
 expect() {

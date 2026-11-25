@@ -83,6 +83,27 @@ log_end() {
     '{event: "end", id: $id, at: $at, exit: $exit} + (if $reason == "" then {} else {reason: $reason} end)' >>"$run_log"
 }
 
+# Turns host $1's answer to pick_host's probe, from an ssh that exited $2, into one probe line for
+# choose_host. The answer's lines come joined by spaces: the load line, the physical core count, and
+# copy|none. A Mac's load line is vm.loadavg's "{ 1.39 1.37 1.32 }"; a Linux host's is /proc/loadavg's
+# "0.52 0.40 0.30 1/215 1245". Either way the first number is the 1-minute load.
+probe_answer() {
+  local host=$1 status=$2 answer=$3 load cores copy
+  if [ "$status" != 0 ]; then
+    echo "$host unreachable"
+    return 0
+  fi
+  case "$answer" in
+    "{ "*) read -r _ load _ _ _ cores copy <<<"$answer" ;;
+    *) read -r load _ _ _ _ cores copy <<<"$answer" ;;
+  esac
+  if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[0-9]+$ && $copy =~ ^(copy|none)$ ]]; then
+    echo "$host ok $load $cores $copy"
+  else
+    echo "$host unexpected $answer"
+  fi
+}
+
 # Picks the workhorse for a job from one probe line per host, in all_hosts order: "<host> ok <load>
 # <cores> copy|none", "<host> unreachable" or "<host> unexpected <answer>". Among the hosts whose
 # 1-minute load is below their physical core count, it prefers one that already holds the repository's
@@ -106,10 +127,11 @@ choose_host() {
     }'
 }
 
-# Asks every workhorse at once for its load, its core count and whether it holds the copy $1 (a path
-# under ~), lets choose_host pick, and names the choice on stderr. A host that has not answered within
-# 2 seconds counts as unreachable: ssh's ConnectTimeout does not cover the name lookup, and a .local
-# name that nobody answers takes 5 seconds to fail.
+# Asks every workhorse at once for its load, its physical core count and whether it holds the copy $1
+# (a path under ~), lets choose_host pick, and names the choice on stderr. A host that has not answered
+# within 2 seconds counts as unreachable: ssh's ConnectTimeout does not cover the name lookup, and a
+# .local name that nobody answers takes 5 seconds to fail. Linux counts physical cores as the distinct
+# core and socket pairs lscpu lists, since nproc counts each core's hyperthreads.
 pick_host() {
   local work=$1 answers host answer load cores copy probes="" chosen reasons
   answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-pick.XXXX")
@@ -118,7 +140,7 @@ pick_host() {
       # set -e would end this subshell on a failed probe before it wrote the status.
       local status=0
       run_bounded 2 ssh -o BatchMode=yes -o ConnectTimeout=2 "$(ssh_target "$host")" \
-        "/usr/sbin/sysctl -n vm.loadavg hw.physicalcpu; if test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" \
+        "if [ \"\$(uname -s)\" = Darwin ]; then /usr/sbin/sysctl -n vm.loadavg hw.physicalcpu; else cat /proc/loadavg; lscpu -p=core,socket | grep -v '^#' | sort -u | wc -l; fi; if test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" \
         >"$answers/$host" 2>/dev/null || status=$?
       echo "$status" >"$answers/$host.status"
     } &
@@ -126,15 +148,7 @@ pick_host() {
   wait
   for host in "${all_hosts[@]}"; do
     answer=$(tr '\n' ' ' <"$answers/$host")
-    # vm.loadavg prints "{ 1.39 1.37 1.32 }"; the core count and copy|none follow on their own lines.
-    read -r _ load _ _ _ cores copy <<<"$answer"
-    if [ "$(cat "$answers/$host.status")" != 0 ]; then
-      probes+="$host unreachable"$'\n'
-    elif [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[0-9]+$ && $copy =~ ^(copy|none)$ ]]; then
-      probes+="$host ok $load $cores $copy"$'\n'
-    else
-      probes+="$host unexpected $answer"$'\n'
-    fi
+    probes+="$(probe_answer "$host" "$(cat "$answers/$host.status")" "$answer")"$'\n'
   done
   rm -rf "$answers"
   if ! chosen=$(choose_host <<<"${probes%$'\n'}" 2>/dev/null); then
