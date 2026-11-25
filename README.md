@@ -108,9 +108,12 @@ why. Exit 2 is a usage error, an unknown host, or a missing or bad hosts file.
 ### Choosing a host
 
 With no host named, `wh` asks every host at once for its 1-minute load and physical core count (on
-Linux, the cores `lscpu` lists, not their hyperthreads). Among the
-hosts whose load is below their core count, it picks one that already holds the repository's copy,
-then the one with the lowest load per core, then the first in the hosts file. A host that has not
+Linux, the cores `lscpu` lists, not their hyperthreads), the runs going there and whether it holds
+the repository's copy. Among the hosts whose load is below their core count, it ranks each by its load
+plus its runs going, per core, since the 1-minute load lags a run that just started. A host that holds
+the copy, and so its installed dependencies, wins while that figure is under half; past it the least
+busy host wins, so work spreads instead of piling onto one host. It skips a host whose copy another
+run holds, so two runs of one repository go to two hosts. Ties go to the first in the hosts file. A host that has not
 answered within 2 seconds counts as unreachable.
 
 ### What gets copied

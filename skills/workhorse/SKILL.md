@@ -31,8 +31,9 @@ wh alpha --timeout 20m -- cargo test   # a named host
   (`↗ wh - alpha 0:42`), then spins (`⠋ wh - alpha 0:43`) while the job runs, a line per run above the
   prompt (`wh alpha: pnpm test (demo) · 0:43`), at most three of them and a count of the rest, and a
   toast when one that took over 2 minutes ends or a run ends with `BLOCKED`.
-- With no host, `wh` picks among the hosts whose 1-minute load is below their core count: one that
-  already holds the repo's copy, then the lowest load per core. Name the host when the job needs
+- With no host, `wh` picks among the hosts whose 1-minute load is below their core count: the least
+  busy by load plus runs going, per core, though a host with the repo's copy wins while under half
+  busy, and it skips a host whose copy another run holds. Name the host when the job needs
   x86_64 or arm64, or macOS or Linux; the table's Arch column says which host has which
   architecture, and each host's record in the policy names its system.
 - Always put `--` before the command. Bound every job with `--timeout` (`90s`, `30m`, `2h`): past

@@ -33,8 +33,9 @@ by hand.
 - In a git repository, run the job with `wh [host] [--timeout <limit>] -- <command...>` from
   anywhere inside the repo, for example `wh --timeout 30m -- pnpm test`, from a background shell;
   the `workhorse` skill has the details. With no host, `wh` asks every host at once and picks,
-  among those whose 1-minute load is below their core count, one that already holds the repo's copy,
-  then the lowest load per core. Name the host when the job needs one architecture or a tool only
+  among those whose 1-minute load is below their core count, the least busy by load plus runs going,
+  per core, though a host that holds the repo's copy wins while under half busy, and it skips a host
+  whose copy another run holds. Name the host when the job needs one architecture or a tool only
   some hosts have. `wh` calls `@MIRROR@ run`, which locks `~/work/<repo>-<first 8 chars of the
   sha1 of the local absolute path>/` on the host, copies this machine's `.git` there and patches the
   working tree from this machine, then runs the command in the same subfolder. A linked worktree's

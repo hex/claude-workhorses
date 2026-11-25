@@ -85,38 +85,44 @@ log_end() {
 }
 
 # Turns host $1's answer to pick_host's probe, from an ssh that exited $2, into one probe line for
-# choose_host. The answer's lines come joined by spaces: the load line, the physical core count, and
-# copy|none. A Mac's load line is vm.loadavg's "{ 1.39 1.37 1.32 }"; a Linux host's is /proc/loadavg's
+# choose_host. The answer's lines come joined by spaces: the load line, the physical core count, the
+# number of runs going there (locks in ~/work), and whether it holds the copy: copy, busy when another
+# run holds the copy's lock, or none. A Mac's load line is vm.loadavg's "{ 1.39 1.37 1.32 }"; a Linux host's is /proc/loadavg's
 # "0.52 0.40 0.30 1/215 1245". Either way the first number is the 1-minute load.
 probe_answer() {
-  local host=$1 status=$2 answer=$3 load cores copy
+  local host=$1 status=$2 answer=$3 load cores runs copy
   if [ "$status" != 0 ]; then
     echo "$host unreachable"
     return 0
   fi
   case "$answer" in
-    "{ "*) read -r _ load _ _ _ cores copy <<<"$answer" ;;
-    *) read -r load _ _ _ _ cores copy <<<"$answer" ;;
+    "{ "*) read -r _ load _ _ _ cores runs copy <<<"$answer" ;;
+    *) read -r load _ _ _ _ cores runs copy <<<"$answer" ;;
   esac
-  if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[1-9][0-9]*$ && $copy =~ ^(copy|none)$ ]]; then
-    echo "$host ok $load $cores $copy"
+  if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[1-9][0-9]*$ && $runs =~ ^[0-9]+$ && $copy =~ ^(copy|busy|none)$ ]]; then
+    echo "$host ok $load $cores $runs $copy"
   else
     echo "$host unexpected $answer"
   fi
 }
 
 # Picks the workhorse for a job from one probe line per host, in all_hosts order: "<host> ok <load>
-# <cores> copy|none", "<host> unreachable" or "<host> unexpected <answer>". Among the hosts whose
-# 1-minute load is below their physical core count, it prefers one that already holds the repository's
-# copy (and so its installed dependencies), then the lowest load per core, then table order. Prints the
-# host; when none is free, prints each host's reason on stderr and fails.
+# <cores> <runs> copy|busy|none", "<host> unreachable" or "<host> unexpected <answer>". It passes over a
+# host whose copy another run holds, since this run would find it locked. Among the hosts whose
+# 1-minute load is below their physical core count, it ranks each by its load plus its runs going, per
+# core: the 1-minute average lags, so a run that started seconds ago counts as one busy core. A host
+# that holds the repository's copy (and so its installed dependencies) comes first while that figure
+# is under half; past it, the least busy host wins, so work spreads over the hosts instead of piling on
+# the one with the copy. Ties go to table order. Prints the host; when none is free, prints each host's
+# reason on stderr and fails.
 choose_host() {
   awk '
     $2 != "ok" { reasons[NR] = $1 ": " substr($0, length($1) + 2); next }
     !($3 < $4) { reasons[NR] = $1 ": load " $3 " of " $4 " cores"; next }
+    $6 == "busy" { reasons[NR] = $1 ": another run holds its copy"; next }
     {
-      rank = ($5 == "copy") ? 0 : 1
-      ratio = $3 / $4
+      ratio = ($3 + $5) / $4
+      rank = ($6 == "copy" && ratio < 0.5) ? 0 : 1
       if (best == "" || rank < best_rank || (rank == best_rank && ratio < best_ratio)) {
         best = $1; best_rank = rank; best_ratio = ratio
       }
@@ -128,20 +134,20 @@ choose_host() {
     }'
 }
 
-# Asks every workhorse at once for its load, its physical core count and whether it holds the copy $1
+# Asks every workhorse at once for its load, its physical core count, its runs going and whether it holds the copy $1
 # (a path under ~), lets choose_host pick, and names the choice on stderr. A host that has not answered
 # within 2 seconds counts as unreachable: ssh's ConnectTimeout does not cover the name lookup, and a
 # .local name that nobody answers takes 5 seconds to fail. Linux counts physical cores as the distinct
 # core and socket pairs lscpu lists, since nproc counts each core's hyperthreads.
 pick_host() {
-  local work=$1 answers host answer load cores copy probes="" chosen reasons
+  local work=$1 answers host answer load cores runs copy probes="" chosen reasons
   answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-pick.XXXX")
   for host in "${all_hosts[@]}"; do
     {
       # set -e would end this subshell on a failed probe before it wrote the status.
       local status=0
       run_bounded 2 ssh -o BatchMode=yes -o ConnectTimeout=2 "$(ssh_target "$host")" \
-        "if [ \"\$(uname -s)\" = Darwin ]; then /usr/sbin/sysctl -n vm.loadavg hw.physicalcpu; else cat /proc/loadavg; lscpu -p=core,socket | grep -v '^#' | sort -u | wc -l; fi; if test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" \
+        "if [ \"\$(uname -s)\" = Darwin ]; then /usr/sbin/sysctl -n vm.loadavg hw.physicalcpu; else cat /proc/loadavg; lscpu -p=core,socket | grep -v '^#' | sort -u | wc -l; fi; find ~/work -maxdepth 1 -name '*.lock' -type d 2>/dev/null | wc -l; if test -d ~/$(printf '%q' "$work.lock"); then echo busy; elif test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" \
         >"$answers/$host" 2>/dev/null || status=$?
       echo "$status" >"$answers/$host.status"
     } &
@@ -157,8 +163,9 @@ pick_host() {
     blocked "no workhorse is free:
 $reasons"
   fi
-  read -r _ _ load cores copy < <(grep "^$chosen " <<<"$probes")
+  read -r _ _ load cores runs copy < <(grep "^$chosen " <<<"$probes")
   if [ "$copy" = copy ]; then copy="it holds the copy"; else copy="first copy there"; fi
+  [ "$runs" = 0 ] || copy="$runs runs going, $copy"
   echo "mirror.sh run: using $chosen (load $load of $cores cores, $copy)" >&2
   echo "$chosen"
 }
