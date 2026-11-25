@@ -62,7 +62,7 @@ Rebuild an SVG from the saved frames, with no host and no model call:
 python3 assets/capture/render.py assets/capture/wh-run.json assets/wh-run.svg
 ```
 
-[assets/banner.svg](../banner.svg) is hand-written and has no capture.
+The README header is the icon, [assets/icon.png](../icon.png), beside the plugin name; it has no capture.
 
 ## Cleanup
 
