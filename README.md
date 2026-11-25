@@ -205,7 +205,8 @@ unity 6000.3.28f1 8f082d2fe476 android ios webgl @hosts=alpha
   `@hosts=alpha,beta` only to those hosts. With both, a host must match both.
 - Arguments are letters, digits and `@._/+-`, and never start with `-`. A recipe gets them as its
   arguments, never as shell text.
-- `sync.sh diff` compares each line only among the hosts it targets.
+- `sync.sh diff` compares each line only among the hosts it targets. The Command Line Tools follow the
+  macOS release, so it compares them only among hosts on the same major release.
 
 | Recipe | Arguments | Installs |
 | --- | --- | --- |

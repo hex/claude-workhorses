@@ -4,6 +4,11 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## 2026.11.3
+
+### Fixed
+- `sync.sh diff` compares the Command Line Tools only among hosts on the same major macOS release, so hosts on different releases no longer fail the diff for a version that follows macOS.
+
 ## 2026.11.2
 
 ### Changed

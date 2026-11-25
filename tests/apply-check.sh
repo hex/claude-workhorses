@@ -322,4 +322,24 @@ beta: the probe for \"plain ok\" reports: plain missing
 gamma: the probe for \"plain ok\" reports: plain missing" 1 diff
 echo "ok   diff shows host text only as probe lines, and fails on a tool missing on every host it targets"
 
+# The Command Line Tools follow the macOS release, so hosts compare them only with hosts on the same release.
+printf '%s\n' "command-line-tools" "plain ok" >"$config/tools"
+printf '%s\n' "#base" "arch x86_64" "macos 15.8.3" "#line command-line-tools" "command-line-tools 16.4.0.0.1" "#line plain ok" "plain v1" >"$scratch/answers/a.manifest"
+printf '%s\n' "#base" "arch x86_64" "macos 15.7" "#line command-line-tools" "command-line-tools 16.4.0.0.1" "#line plain ok" "plain v1" >"$scratch/answers/b.manifest"
+printf '%s\n' "#base" "arch arm64" "macos 27.2" "#line command-line-tools" "command-line-tools 27.2.0.0.1" "#line plain ok" "plain v1" >"$scratch/answers/g.manifest"
+expect_sync "hosts on two macOS releases with the Command Line Tools of each" "all workhorses match (2 tools lines)" 0 diff
+printf '%s\n' "#base" "arch x86_64" "macos 15.7" "#line command-line-tools" "command-line-tools 16.3.0.0.1" "#line plain ok" "plain v1" >"$scratch/answers/b.manifest"
+printf '%s\n' "#base" "arch arm64" "macos 27.2" "#line command-line-tools" "command-line-tools 27.2.0.0.1" "#line plain ok" "plain v2" >"$scratch/answers/g.manifest"
+expect_sync "hosts on one macOS release with different Command Line Tools, and a tool that differs across releases" "--- alpha: command-line-tools
++++ beta: command-line-tools
+@@ -1 +1 @@
+-command-line-tools 16.4.0.0.1
++command-line-tools 16.3.0.0.1
+--- alpha: plain ok
++++ gamma: plain ok
+@@ -1 +1 @@
+-plain v1
++plain v2" 1 diff
+echo "ok   diff compares the Command Line Tools only among hosts on the same macOS release, and every other line across releases"
+
 echo "all sync and apply checks passed"

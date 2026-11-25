@@ -159,11 +159,24 @@ shaped_diff() {
   done
 }
 
+# Recipes whose version follows the macOS release, so diff compares them only among hosts on the same major release.
+macos_release_recipes=" command-line-tools "
+
+# Prints the major macOS release that manifest $1 records, or "unknown".
+manifest_macos_major() {
+  local major
+  major=$(awk '/^#line /{exit} /^macos /{print $2; exit}' "$1")
+  major=${major%%.*}
+  [[ $major =~ ^[0-9]+$ ]] || major=unknown
+  echo "$major"
+}
+
 # Exit 0 only when every host answers and, for each tools line, every host the line targets reports
-# the same probe output as the first of them, and none reports the tool missing or its probe failed.
+# the same probe output as the first of them (the first on the same macOS release, for a recipe that
+# follows it), and none reports the tool missing or its probe failed.
 # Hosts are compared on what they wrote; what is shown of it has a probe line's shape.
 diff_hosts() {
-  local manifests host status=0 i line first block lines=0 code report
+  local manifests host status=0 i line first firsts group entry block lines=0 code report
   manifests=$(mktemp -d "${TMPDIR:-/tmp}/workhorse-manifest.XXXX")
   for host in "${host_names[@]}"; do
     code=0
@@ -178,7 +191,7 @@ diff_hosts() {
   done
   for i in "${!tool_recipe[@]}"; do
     line="${tool_recipe[i]}${tool_args[i]:+ ${tool_args[i]}}"
-    first=""
+    firsts=""
     lines=$((lines + 1))
     for host in "${host_names[@]}"; do
       [ -f "$manifests/$host" ] && tool_targets "$i" "$host" || continue
@@ -192,7 +205,11 @@ diff_hosts() {
         echo "$host: the probe for \"$line\" reports: $report"
         status=1
       done < <(grep -E ' (missing|probe-failed [0-9]+)$' "$manifests/$host.block" | shaped_probe_lines)
-      if [ -z "$first" ]; then first=$host; continue; fi
+      group=all
+      [[ $macos_release_recipes != *" ${tool_recipe[i]} "* ]] || group=macos-$(manifest_macos_major "$manifests/$host")
+      first=""
+      for entry in $firsts; do [ "${entry%%=*}" != "$group" ] || first=${entry#*=}; done
+      if [ -z "$first" ]; then firsts="$firsts $group=$host"; continue; fi
       block=$(diff -u --label "$first: $line" --label "$host: $line" "$manifests/$first.block" "$manifests/$host.block") ||
         { shaped_diff <<<"$block"; status=1; }
     done
