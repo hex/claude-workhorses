@@ -53,4 +53,22 @@ expect_install "macos-harness on Linux" "macos-harness runs only on macOS: give 
 expect_install "unity on Linux" "unity runs only on macOS: give its line @os=macos" 1 "" unity Linux 6000.3.28f1 8f082d2fe476 android
 echo "ok   the macOS-only recipes refuse a Linux host, naming the filter, before they run anything"
 
+# On a Mac, mise comes from MacPorts and a line only installs its versions: PATH and defaults stay as they are.
+expect_install "mise on a Mac" "" 0 "mise install node@26" mise Darwin node@26
+[ ! -e "$HOME/.local/share/claude-workhorses/env.d/mise.sh" ] || fail "mise on a Mac wrote an env snippet: $(cat "$HOME/.local/share/claude-workhorses/env.d/mise.sh")"
+rm "$bin/mise"
+expect_install "mise on a Mac without mise" "mise needs mise: list a recipe that installs it (port mise, say) before it" 1 "" mise Darwin node@26
+echo "ok   on a Mac, mise only installs the versions, and a missing mise names the line that brings it"
+
+# On Linux, the recipe installs mise itself into ~/.local/bin, then keeps it current; the line's
+# versions become the global ones, the first of a tool its default, reached through mise's shims.
+expect_install "mise on Linux without mise" "" 0 "curl -fsSL https://mise.run
+mise use -g node@24 node@26 go@1.27" mise Linux node@24 node@26 go@1.27
+[ -x "$HOME/.local/bin/mise" ] || fail "mise's installer put no mise in ~/.local/bin"
+expect_install "mise on Linux, a second time" "" 0 "mise self-update --yes
+mise use -g node@24 node@26 go@1.27" mise Linux node@24 node@26 go@1.27
+shims=$(env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/sh -c '. "$1"; . "$2"; printf "%s\n" "$PATH"' _ "$scratch/env.sh" "$HOME/.local/share/claude-workhorses/env.d/mise.sh")
+[ "${shims%%:*}" = "$HOME/.local/share/mise/shims" ] || fail "after mise's env snippet, PATH is '$shims'"
+echo "ok   on Linux, mise installs itself, then updates itself, sets the line's versions as the defaults and puts its shims first on the PATH"
+
 echo "all recipe checks passed"

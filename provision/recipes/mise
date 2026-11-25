@@ -1,13 +1,26 @@
 #!/bin/bash
-# ABOUTME: Recipe: runtimes through mise: mise <tool@version>... ; needs mise on the PATH (port mise, say) from a line before it.
-# ABOUTME: install installs each tool@version; run one with mise exec <tool@version> -- <command>. probe prints "mise-<tool> <installed versions>".
+# ABOUTME: Recipe: runtimes through mise: mise <tool@version>... ; on a Mac, needs mise on the PATH (port mise, say) from a line before it.
+# ABOUTME: On a Mac, install installs each tool@version; on Linux it installs mise too and makes them the defaults. probe prints "mise-<tool> <installed versions>".
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
 install() {
-  command -v mise >/dev/null || need mise "mise: list a recipe that installs it (port mise, say) before it"
   [ $# -gt 0 ] || { echo "mise: name at least one tool@version" >&2; exit 1; }
-  mise install "$@"
+  if [ "$(uname -s)" = Darwin ]; then
+    command -v mise >/dev/null || need mise "mise: list a recipe that installs it (port mise, say) before it"
+    mise install "$@"
+    return
+  fi
+  # Linux: no package manager carries mise everywhere, and apt's runtimes run old, so mise comes from
+  # its own release into ~/.local/bin, kept current, and the line's versions become the global ones,
+  # the first of a tool its default, on the PATH through mise's shims.
+  if [ -x "$HOME/.local/bin/mise" ]; then
+    "$HOME/.local/bin/mise" self-update --yes
+  elif ! command -v mise >/dev/null; then
+    curl -fsSL https://mise.run | MISE_INSTALL_PATH="$HOME/.local/bin/mise" sh
+  fi
+  mise use -g "$@"
+  env_snippet mise <<<'workhorse_path_add "$HOME/.local/share/mise/shims"'
 }
 
 probe() {
