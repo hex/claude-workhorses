@@ -60,7 +60,7 @@ git tag "v${NEW_VERSION}"
 
 echo ""
 echo "Released v${NEW_VERSION}"
-echo "  - plugin.json updated"
+echo "  - the Claude Code, Codex, Antigravity and npm manifests updated"
 echo "  - Committed and tagged v${NEW_VERSION}"
 echo ""
 echo "Refreshing plugin cache..."

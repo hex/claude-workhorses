@@ -6,7 +6,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 work=$(mktemp -d)
 server=""
-trap '[ -z "$server" ] || kill "$server" 2>/dev/null; rm -rf "$work"' EXIT
+trap '[ -z "$server" ] || { kill "$server"; wait "$server"; } 2>/dev/null; rm -rf "$work"' EXIT
 
 # A scratch config whose notes end in a token unique to this run, so only the policy can carry it into a request.
 token=wh-check-$RANDOM$RANDOM
@@ -38,12 +38,16 @@ server=$!
 for _ in $(seq 50); do [ -s "$work/port" ] && break; sleep 0.1; done
 url=http://127.0.0.1:$(cat "$work/port")
 
+# The start of the skill's description, which each agent lists among its skills.
+skill="spare Macs and Linux machines in the claude-workhorses hosts file"
+ran=0
+
 # Runs one agent until a request it sent holds the token, or it exits, or 3 minutes pass; passes on the token.
 expect_policy() {
   local agent=$1 pid waited
   shift
   if ! command -v "$agent" >/dev/null; then
-    echo "skip $agent: not installed"
+    echo "skip: $agent is not installed"
     return 0
   fi
   rm -f "$work"/requests/*
@@ -61,7 +65,12 @@ expect_policy() {
     tail -20 "$work/$agent.log" >&2
     exit 1
   fi
-  echo "ok   $agent sends the policy"
+  if ! grep -qs -- "$skill" "$work"/requests/*; then
+    echo "FAIL $agent sent the policy but not the workhorse skill" >&2
+    exit 1
+  fi
+  ran=$((ran + 1))
+  echo "ok   $agent sends the policy and the skill"
 }
 
 expect_policy claude env CLAUDE_CONFIG_DIR="$work/claude" ANTHROPIC_BASE_URL="$url" ANTHROPIC_API_KEY=recorded \
@@ -94,4 +103,5 @@ printf '{"plugins": ["%s"], "model": "recorder/m", "provider": {"recorder": {"np
 expect_policy opencode env XDG_CONFIG_HOME="$work/opencode/config" XDG_DATA_HOME="$work/opencode/data" \
   XDG_STATE_HOME="$work/opencode/state" XDG_CACHE_HOME="$work/opencode/cache" opencode run --standalone hello
 
-echo "all agents send the policy"
+[ "$ran" -gt 0 ] || { echo "FAIL none of Claude Code, Codex, pi and OpenCode is installed, so nothing was checked" >&2; exit 1; }
+echo "all $ran installed agents send the policy and the skill"

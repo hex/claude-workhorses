@@ -12,9 +12,9 @@ const policyScript = join(root, "scripts", "policy.sh");
 
 function readSkill() {
   const text = readFileSync(skillPath, "utf8");
-  const match = text.match(/^---\n([\s\S]*?)\n---\n/);
+  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   if (!match) throw new Error(`claude-workhorses: no frontmatter in ${skillPath}`);
-  const field = (name) => match[1].match(new RegExp(`^${name}: (.*)$`, "m"))?.[1];
+  const field = (name) => match[1].match(new RegExp(`^${name}: (.*?)\r?$`, "m"))?.[1];
   return { id: "claude-workhorses-workhorse", name: field("name"), description: field("description"), path: skillPath, content: text.slice(match[0].length) };
 }
 
