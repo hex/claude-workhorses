@@ -186,4 +186,110 @@ git_expect "$gitroot/repo" "$(git -C "$gitroot/repo" rev-parse HEAD)" "a commit 
 git_expect "$gitroot/wt" "$(git -C "$gitroot/wt" rev-parse HEAD)" "git in a worktree's copy sees the worktree's HEAD" 'git rev-parse HEAD'
 git_expect "$gitroot/wt" "A  g" "the worktree's staged file comes staged" 'git status --porcelain'
 git_expect "$gitroot/repo" "$(git -C "$gitroot/repo" rev-parse HEAD)" "the repository's copy keeps its own HEAD after the worktree's run" 'git rev-parse HEAD'
+
+# wh refuses a first copy larger than CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB when the ssh connection
+# reaches the host on its Tailscale address, counting .git and every file it would send but none under
+# a name it leaves out; over another address the same copy runs. The host is reached through its real
+# Tailscale address, from a hosts file of this check's own, with a limit of 2 MB and 3 MB of files.
+# shellcheck source=../scripts/lib/hosts.sh
+. "$here/../scripts/lib/hosts.sh"
+load_hosts
+i=$(host_index "$host")
+configured=${host_ssh[$i]}
+guard=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/wh-guard.XXXX")" && pwd -P)
+# Every copy, lock and side file wh makes for these repositories on the host starts with this name.
+copies=wh-guard-$$
+guard_cleanup() {
+  local repo
+  for repo in "$guard/$copies"-*; do
+    [ ! -d "$repo" ] || watchman watch-del "$repo" >/dev/null 2>&1 || true
+  done
+  rm -rf "$guard"
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "$configured" "rm -rf ~/work/$copies-*" || true
+}
+trap 'rm -rf "$probe" "$gitroot"; guard_cleanup' EXIT
+
+# Whether address $1 is in Tailscale's range: a first number of 100 and a second from 64 to 127.
+in_tailscale_range() {
+  local first second rest
+  IFS=. read -r first second rest <<<"$1"
+  [ "$first" = 100 ] && [[ $second =~ ^[0-9]+$ ]] && [ "$second" -ge 64 ] && [ "$second" -le 127 ]
+}
+
+# The server address of an ssh connection to target $1, as the host sees it.
+server_address() {
+  # shellcheck disable=SC2016 # expanded on the host
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "$1" 'echo "$SSH_CONNECTION"' | awk '{print $3}'
+}
+
+# A fresh repository named $copies-$1 with one small commit and 3 MB of files at path $2, not committed.
+bulk_repo() {
+  local repo=$guard/$copies-$1
+  git init -q -b main "$repo"
+  (cd "$repo" && echo small >f && git add f && commit -m small)
+  mkdir -p "$(dirname "$repo/$2")"
+  head -c $((3 * 1024 * 1024)) /dev/urandom >"$repo/$2"
+  echo "$repo"
+}
+
+# Every path under ~/work on the host for copy $1: its folder, the folder's contents and any side file
+# or lock beside it. ssh joins its arguments into one line of shell, so the name goes in the text.
+host_holds() {
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "$configured" "cd ~/work && find . -path './$copies-$1-*' | LC_ALL=C sort"
+}
+
+# The host's user and its IPv4 addresses, one a line.
+# shellcheck disable=SC2016 # expanded on the host
+facts=$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$configured" 'id -un; { ifconfig 2>/dev/null || ip -4 -o addr show 2>/dev/null; } |
+  grep -oE "inet (addr:)?[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | grep -oE "[0-9.]+$" || true')
+user=$(sed -n 1p <<<"$facts")
+tailscale=""
+while IFS= read -r address; do
+  if in_tailscale_range "$address"; then tailscale=$address; break; fi
+done < <(sed -n '2,$p' <<<"$facts")
+
+if [ -z "$tailscale" ]; then
+  echo "skip: the first copy through Tailscale: $host has no address in Tailscale's range"
+elif [ "$(server_address "$user@$tailscale" 2>/dev/null)" != "$tailscale" ]; then
+  echo "skip: the first copy through Tailscale: ssh to $user@$tailscale did not answer on that address (Tailscale down here, or a host key ssh does not know)"
+else
+  mkdir "$guard/config"
+  echo "$host $user@$tailscale ${host_arch[$i]} ${host_cores[$i]} ${host_ram[$i]}" >"$guard/config/hosts"
+
+  repo=$(bulk_repo tailscale bulk)
+  code=0
+  (cd "$repo" && CLAUDE_WORKHORSES_CONFIG_DIR=$guard/config CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=2 \
+    "$wh" "$host" -- true) >/dev/null 2>"$guard/err" || code=$?
+  blocked="mirror.sh run: BLOCKED: the first copy of $repo on $host would send 3 MB through Tailscale ($tailscale), over the 2 MB limit;"
+  if [ "$code" != 3 ] || ! grep -qF "$blocked" "$guard/err"; then
+    echo "FAIL a 3 MB first copy through Tailscale with a 2 MB limit: wanted exit 3 and '$blocked ...', got exit $code:" >&2
+    cat "$guard/err" >&2
+    exit 1
+  fi
+  # The lock and the empty folder come before the guard; the lock goes, the folder stays empty.
+  held=$(host_holds tailscale)
+  [[ $held =~ ^\./$copies-tailscale-[0-9a-f]{8}$ ]] ||
+    { echo "FAIL the blocked first copy left more than its empty folder on $host: '$held'" >&2; exit 1; }
+  echo "ok   a first copy whose files and .git pass the limit is blocked through Tailscale, and sends nothing"
+
+  repo=$(bulk_repo skipped node_modules/bulk)
+  out=$(cd "$repo" && CLAUDE_WORKHORSES_CONFIG_DIR=$guard/config CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=2 \
+    "$wh" "$host" -- sh -c 'cat f; test -e node_modules && echo present || echo absent' 2>"$guard/err") ||
+    { echo "FAIL a first copy whose bulk is under node_modules/ failed through Tailscale:" >&2; cat "$guard/err" >&2; exit 1; }
+  [ "$out" = "small"$'\n'"absent" ] ||
+    { echo "FAIL a first copy whose bulk is under node_modules/: wanted 'small' and 'absent', got '$out'" >&2; exit 1; }
+  echo "ok   the same bulk under node_modules/ does not count, and the first copy runs through Tailscale"
+fi
+
+lan=$(server_address "$configured" 2>/dev/null)
+if in_tailscale_range "$lan"; then
+  echo "skip: the first copy without Tailscale: $configured reaches $host through Tailscale from here"
+else
+  repo=$(bulk_repo lan bulk)
+  out=$(cd "$repo" && CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=2 "$wh" "$host" -- sh -c 'wc -c <bulk | tr -d " "' 2>"$guard/err") ||
+    { echo "FAIL a 3 MB first copy outside Tailscale failed:" >&2; cat "$guard/err" >&2; exit 1; }
+  [ "$out" = $((3 * 1024 * 1024)) ] ||
+    { echo "FAIL a 3 MB first copy outside Tailscale: wanted $((3 * 1024 * 1024)) bytes in the copy, got '$out'" >&2; exit 1; }
+  echo "ok   the same first copy over an address outside Tailscale runs"
+fi
 echo "all checks passed on $host"

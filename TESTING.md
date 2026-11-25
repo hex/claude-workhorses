@@ -44,7 +44,13 @@ gtimeout 15m bash tests/wh-check.sh alpha
 It runs `wh` against the named host, a Mac or a Linux host, over 40 kinds of change: edits, restores to older times,
 executable bits, folders, renames, symlinks, edits the job made in the copy, `node_modules` left to
 each side, a forgotten Watchman watch, exit codes, the run log, and git in a repository and in a
-linked worktree. It works in throwaway folders and exits 1 on the first mismatch. Point it at a test
+linked worktree. It then makes three fresh repositories with 3 MB of files each and a Tailscale
+first-copy limit of 2 MB: through the host's own Tailscale address, read on the host and named in a
+hosts file of the check's own, `wh` blocks the first and runs the second, whose bulk sits under
+`node_modules/`; through the hosts file's own target the third runs. A host with no Tailscale
+address, or one ssh cannot reach on it, prints a `skip:` line for the first two, and a hosts file
+target that already goes through Tailscale one for the third. The check removes every copy it made
+under `~/work`. It works in throwaway folders and exits 1 on the first mismatch. Point it at a test
 hosts file with `CLAUDE_WORKHORSES_CONFIG_DIR` to keep your own untouched.
 
 ## Upgrading a provisioned workhorse
