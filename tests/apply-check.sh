@@ -35,11 +35,16 @@ for word in "$@"; do
     (*) target=$word; break ;;
   esac
 done
+answers=$APPLY_CHECK_SCRATCH/answers
+# A target with an answers/<target>.unreachable file is down: ssh itself exits 255.
+[ ! -f "$answers/$target.unreachable" ] || exit 255
+# The command that starts apply.sh also names run.status, so it is matched first.
 case "$*" in
-  (*run.status*) answer=$APPLY_CHECK_SCRATCH/answers/$target.status ;;
-  (*manifest*) answer=$APPLY_CHECK_SCRATCH/answers/$target.manifest ;;
-  (*mkdir*) [ -f "$APPLY_CHECK_SCRATCH/answers/lock-free" ]; exit ;;
-  (*nohup*) exit 0 ;;
+  (*apply.sh*) [ -f "$answers/start-works" ]; exit ;;
+  (*rmdir*) exit 0 ;;
+  (*run.status*) answer=$answers/$target.status ;;
+  (*manifest*) answer=$answers/$target.manifest ;;
+  (*mkdir*) [ -f "$answers/lock-free" ]; exit ;;
   (*) exit 1 ;;
 esac
 [ -f "$answer" ] && cat "$answer"
@@ -178,7 +183,7 @@ expect_sync "a host that needs no sudo" "alpha: a sync is already running (~/wor
 echo "ok   a host whose lines and options need no sudo syncs without a sudo-password helper"
 
 mkdir "$scratch/answers"
-touch "$scratch/answers/lock-free" "$scratch/answers/copy-works"
+touch "$scratch/answers/lock-free" "$scratch/answers/copy-works" "$scratch/answers/start-works"
 printf '#!/bin/sh\necho secret-pw-123\n' >"$config/sudo-password"
 chmod 700 "$config/sudo-password"
 expect_sync "a sync that starts" "beta: sync started; check with: $root/provision/sync.sh status beta" 0 beta
@@ -190,20 +195,35 @@ while IFS= read -r call; do
 done <"$scratch/calls"
 grep -q '^ssh LC_SUDO_PW=secret-pw-123 .*SendEnv=LC_SUDO_PW' "$scratch/calls" || fail "the password does not reach the run that starts apply.sh: $(cat "$scratch/calls")"
 [ "$(grep -c 'LC_SUDO_PW=secret-pw-123' "$scratch/calls")" = 1 ] || fail "the password reaches more than the one ssh that starts the run: $(cat "$scratch/calls")"
-rm "$scratch/answers/lock-free" "$scratch/answers/copy-works"
 echo "ok   a started sync sends the password only in the environment of the ssh that starts apply.sh, never in a command line"
+
+rm "$scratch/answers/start-works"
+expect_sync "a sync whose start fails" "beta: starting the run failed; nothing ran, and the lock is removed" 1 beta
+[ "$(tail -n 1 "$scratch/calls")" = "ssh LC_SUDO_PW=unset -o BatchMode=yes -o ConnectTimeout=10 b rmdir ~/workhorse.lock" ] ||
+  fail "a failed start did not remove the lock: $(cat "$scratch/calls")"
+rm "$scratch/answers/lock-free" "$scratch/answers/copy-works"
+touch "$scratch/answers/b.unreachable"
+expect_sync "a sync of a host that does not answer" "beta: unreachable (ssh exit 255); nothing was run" 1 beta
+rm "$scratch/answers/b.unreachable"
+echo "ok   a start that fails, or a host that does not answer, fails the sync and leaves no lock behind"
 printf '%s\n' "ended 5 broken" "=== broken" >"$scratch/answers/a.status"
 printf '%s\n' "#synced 2026-01-02 03:04 UTC" "#exit 5 broken" "#line plain ok" "plain v1" >"$scratch/answers/a.manifest"
 expect_sync "status of a host whose run ended" "=== alpha
 exit=5, stopped at broken
 === broken
-manifest stored: $scratch/state/manifests/alpha" 0 status alpha
+manifest stored: $scratch/state/manifests/alpha" 1 status alpha
 cmp -s "$scratch/answers/a.manifest" "$scratch/state/manifests/alpha" || fail "the stored manifest differs from the host's"
 printf '%s\n' "running" >"$scratch/answers/b.status"
 expect_sync "status of a host still running" "=== beta
 running" 0 status beta
 [ ! -e "$scratch/state/manifests/beta" ] || fail "status stored a manifest for a run still going"
-echo "ok   status names where a run stopped and stores the manifest of a run that ended, and only then"
+touch "$scratch/answers/a.unreachable"
+expect_sync "status of a host that does not answer, then one still running" "=== alpha
+unreachable (ssh exit 255)
+=== beta
+running" 1 status alpha beta
+rm "$scratch/answers/a.unreachable"
+echo "ok   status names where a run stopped, reports every host, fails when a run failed or a host does not answer, and stores the manifest of a run that ended, and only then"
 
 printf '%s\n' "plain ok" "plain only-arm @arch=arm64" >"$config/tools"
 printf '%s\n' "#base" "arch x86_64" "#line plain ok" "plain v1" >"$scratch/answers/a.manifest"

@@ -22,9 +22,12 @@ finish() {
     /bin/bash ./manifest.sh || echo "#manifest-failed $?"
   } >manifest.new 2>>run.log
   mv manifest.new manifest
+  rm -f "$HOME/workhorse.lock/started"
   rmdir "$HOME/workhorse.lock"
 }
 trap finish EXIT
+# A file in the lock tells sync.sh that this run started, so it never removes the lock of a run that is going.
+: >"$HOME/workhorse.lock/started"
 
 # Whether file $1 declares, in its first lines, that it runs sudo.
 declares_sudo() { head -n 10 "$1" | grep -qx '# needs: sudo'; }

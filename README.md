@@ -175,6 +175,7 @@ bash provision/sync.sh diff        # compare the hosts, tools line by tools line
 
 Before it contacts any host, `sync.sh` checks the hosts file, the tools file and every recipe it
 names. A run stops at the first step that fails, and `status` names that step and its exit code.
+`status` reports every host and exits non-zero when one does not answer or its last run failed.
 On the host, the run appends one line to the workhorse user's `~/.zshenv`, marked
 `# claude-workhorses`, which loads the `PATH` the recipes set. The rest of that file stays untouched.
 Removing a line from the tools file, or an option from a host, undoes nothing on the host.
