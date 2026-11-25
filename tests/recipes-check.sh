@@ -67,9 +67,22 @@ mise use -g node@24 node@26 go@1.27" mise Linux node@24 node@26 go@1.27
 [ -x "$HOME/.local/bin/mise" ] || fail "mise's installer put no mise in ~/.local/bin"
 expect_install "mise on Linux, a second time" "" 0 "mise self-update --yes
 mise use -g node@24 node@26 go@1.27" mise Linux node@24 node@26 go@1.27
-shims=$(env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/sh -c '. "$1"; . "$2"; printf "%s\n" "$PATH"' _ "$scratch/env.sh" "$HOME/.local/share/claude-workhorses/env.d/mise.sh")
-[ "${shims%%:*}" = "$HOME/.local/share/mise/shims" ] || fail "after mise's env snippet, PATH is '$shims'"
-echo "ok   on Linux, mise installs itself, then updates itself, sets the line's versions as the defaults and puts its shims first on the PATH"
+echo "ok   on Linux, mise installs itself, then updates itself and sets the line's versions as the defaults"
+
+# The PATH a step and a login shell get is the env.sh apply.sh builds from every recipe's snippet. Here
+# bun's snippet sorts before mise's and rustup's after it; apply.sh runs with no lines, so it only builds env.sh.
+PATH=$path "$BASH" "$scratch/recipes/rustup" install
+PATH=$path "$BASH" "$scratch/recipes/bun" install
+mkdir "$HOME/workhorse" "$HOME/workhorse.lock"
+cp "$here"/../provision/host/* "$HOME/workhorse/"
+: >"$HOME/workhorse/tools"
+: >"$HOME/workhorse/options"
+(cd "$HOME/workhorse" && RECIPES_CHECK_OS=Linux SHELL=/bin/bash PATH=$path /bin/bash ./apply.sh run >run.log 2>&1 3</dev/null) || true
+[ "$(cat "$HOME/workhorse/run.status")" = 0 ] || fail "apply.sh with no lines ended '$(cat "$HOME/workhorse/run.status")': $(cat "$HOME/workhorse/run.log")"
+shims=$(env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/sh -c '. "$1"; printf "%s\n" "$PATH"' _ "$HOME/.local/share/claude-workhorses/env.sh")
+[ "$shims" = "$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.local/share/mise/shims:$HOME/.bun/bin:/usr/bin:/bin" ] ||
+  fail "with env.sh as apply.sh builds it, PATH is '$shims'"
+echo "ok   mise's shims come ahead of the system's folders, behind ~/.local/bin and the folders of snippets that sort after mise's"
 
 # The probe prints a line for each tool, once however many of its versions the line names.
 printf '%s\n' '#!/bin/bash' 'case "$3" in node) printf "node  24.22.3\nnode  26.13.1\n" ;; go) echo "go  1.27.4" ;; esac' >"$HOME/.local/bin/mise"
