@@ -4,6 +4,17 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+- Codex, pi, OpenCode and Antigravity load the plugin: each gets the session-start policy and the `workhorse` skill, and the README's Install section has the command for each. Codex has its own manifest and hooks file, pi an extension that sets the policy as a system prompt section, OpenCode a `server.js` plugin, and Antigravity a native manifest whose hook prints the policy as the JSON step it reads. The badge, band and `/claude-workhorses:setup` stay Claude Code's.
+
+### Changed
+- The policy gives the full path of `wh`, since only Claude Code puts the plugin's `bin/` on the `PATH`. The policy and skill name `AskUserQuestion` and `run_in_background` as Claude Code's, so another agent uses its own question tool.
+
+### Fixed
+- Codex no longer drops the session-start hook: it refused `hooks/hooks.json` for the `modules` key the Claude Code mod needs, so a Codex session never got the policy.
+
 ## 2026.11.8
 
 ### Fixed

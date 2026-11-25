@@ -6,7 +6,7 @@
 
 <p align="center">Long jobs run on your spare Macs while this one stays free.</p>
 
-A Claude Code plugin that runs long jobs on your spare Macs, or on Linux machines, a Windows PC's
+A plugin for Claude Code, Codex, pi, OpenCode and Antigravity that runs long jobs on your spare Macs, or on Linux machines, a Windows PC's
 Windows Subsystem for Linux (WSL2) included. `wh` copies the git repository you are in to a workhorse, brings the copy level with your machine (`.git` included), and runs the command
 there. The test suite or the build runs on the workhorse, and your laptop stays free for the work in
 front of you.
@@ -18,6 +18,7 @@ front of you.
 | Where | What you get |
 | --- | --- |
 | Claude Code on your Mac | `wh` on the path of every command Claude runs, the offload policy and your host table at the start of every session, the `workhorse` skill, and the badge and band. |
+| Codex, pi, OpenCode or Antigravity on your Mac | The offload policy and your host table in every session, which give `wh`'s full path, and the `workhorse` skill. No badge, band or `/claude-workhorses:setup`: those are Claude Code's. |
 | Your own terminal | `wh` by its full path, or linked into a folder on your `PATH`. Its runs show in the badge and band of a Claude Code session whose folder holds the repository or sits inside it. |
 | The workhorses | Spare Macs, Intel or Apple silicon, with Remote Login on, or Linux machines with sshd. `wh` reaches them over ssh and needs nothing installed on a Mac; see [Linux and WSL hosts](#linux-and-wsl-hosts) for Linux. `sync.sh` gives each one the tools you list. |
 
@@ -36,6 +37,17 @@ You need:
 /plugin marketplace add hex/claude-marketplace
 /plugin install claude-workhorses
 ```
+
+In another agent:
+
+| Agent | Install |
+| --- | --- |
+| Codex | `codex plugin marketplace add hex/claude-marketplace`, then `codex plugin add claude-workhorses@hex-plugins`. Codex runs the plugin's session-start hook only once you trust it in `/hooks`. |
+| pi | `pi install git:github.com/hex/claude-workhorses` |
+| OpenCode | `opencode plugin add github:hex/claude-workhorses`, or the path of a clone under `plugins` in `opencode.json` |
+| Antigravity | `agy plugin install <folder>` on a clone of this repository |
+
+Each one reads the same hosts file and tools records as Claude Code, so set up the workhorses once.
 
 ## First run
 
