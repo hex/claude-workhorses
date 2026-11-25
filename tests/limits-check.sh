@@ -17,7 +17,7 @@ scratch=$(mktemp -d "${TMPDIR:-/tmp}/limits-check.XXXX")
 # A failing check can leave a job's processes behind; each writes its pid to a file in the copy.
 cleanup() {
   local pid
-  for pid in $(cat "$scratch"/work/demo/*.pid 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+  for pid in $(cat "$scratch"/work/demo/*.pid 2>/dev/null); do kill -9 "$pid" 2>/dev/null || true; done
   rm -rf "$scratch"
 }
 trap cleanup EXIT

@@ -86,7 +86,7 @@ build_env() {
   # Snippets come from installers that were not written for set -eu, so they load without it.
   # shellcheck disable=SC2016 # the script is the inner bash's
   while IFS= read -r -d '' record; do
-    [[ $record =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] && step_env+=("$record")
+    if [[ $record =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then step_env+=("$record"); fi
   done < <(/bin/bash -c '. "$1" >&2; for name in $(compgen -e); do printf "%s=%s\0" "$name" "${!name}"; done' \
     _ "$state/env.sh" </dev/null 3<&-)
 }
