@@ -245,13 +245,13 @@ shift 5
 set -m
 "$@" &
 job=$!
-(/bin/sleep "$limit" && /bin/mkdir "$lock/limit" && /bin/kill -TERM -"$job" && /bin/sleep 10 && /bin/kill -KILL -"$job") \
+(/bin/sleep "$limit" && /bin/mkdir "$lock/limit" && kill -s TERM -- "-$job" && /bin/sleep 10 && kill -s KILL -- "-$job") \
   </dev/null >/dev/null 2>&1 &
 timer=$!
 set +m
 status=0
 wait "$job" || status=$?
-/bin/kill -TERM -"$timer" 2>/dev/null || true
+kill -s TERM -- "-$timer" 2>/dev/null || true
 # bash reports the timer it stopped on wait's stderr, which is the job's.
 wait "$timer" 2>/dev/null || true
 if [ -d "$lock/limit" ]; then
