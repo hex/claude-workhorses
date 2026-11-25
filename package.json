@@ -1,0 +1,16 @@
+{
+  "name": "claude-workhorses",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./server": "./opencode/server.js"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  }
+}
