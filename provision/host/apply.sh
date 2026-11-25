@@ -8,7 +8,7 @@ state=$HOME/.local/share/claude-workhorses
 cd "$here"
 
 # sync.sh's ssh runs "apply.sh start" with the password on stdin, so no variable carries it through
-# the login shell that reads ~/.zshenv. start marks the lock as taken by a run, then hands the
+# the login shell that reads ~/.zshenv or ~/.bashrc. start marks the lock as taken by a run, then hands the
 # password to the detached run on descriptor 3, a pipe from the printf builtin: it never sits in an
 # environment variable, an argument or a file.
 case "${1:-}" in
@@ -101,16 +101,34 @@ build_env() {
   fi
 }
 
-# ~/.zshenv gets one line that sources env.sh, added once; the rest of the file stays the user's.
-zshenv_line='. "$HOME/.local/share/claude-workhorses/env.sh" # claude-workhorses'
+# wh's commands run in the host's login shell, so the file that shell reads for an ssh command gets
+# one line that sources env.sh, added once; the rest of the file stays the user's. On a Mac that is
+# ~/.zshenv. On Linux, zsh reads ~/.zshenv too, and bash started by sshd reads ~/.bashrc, whose stock
+# first lines return from a shell that is not interactive: the line goes above them.
+source_line='. "$HOME/.local/share/claude-workhorses/env.sh" # claude-workhorses'
 step="env"
 mkdir -p "$state/env.d" "$HOME/.local/bin"
 install -m 700 ./askpass-env "$HOME/.local/bin/askpass-env"
 build_env
-if ! grep -qxF "$zshenv_line" "$HOME/.zshenv" 2>/dev/null; then
-  # A file that does not end in a newline would join the line onto its last one.
-  if [ -s "$HOME/.zshenv" ] && [ -n "$(tail -c 1 "$HOME/.zshenv")" ]; then echo >>"$HOME/.zshenv"; fi
-  printf '%s\n' "$zshenv_line" >>"$HOME/.zshenv"
+rc=.zshenv
+if [ "$(uname -s)" != Darwin ]; then
+  case "${SHELL##*/}" in
+    bash) rc=.bashrc ;;
+    zsh) ;;
+    *) echo "the login shell is $SHELL; wh's commands get the recipes' PATH only from bash (~/.bashrc) or zsh (~/.zshenv)" >&2; exit 1 ;;
+  esac
+fi
+if ! grep -qxF "$source_line" "$HOME/$rc" 2>/dev/null; then
+  if [ "$rc" = .bashrc ] && [ -s "$HOME/.bashrc" ]; then
+    # Writing into the file, not over it, keeps its owner, mode and any symlink to it.
+    { printf '%s\n' "$source_line"; cat "$HOME/.bashrc"; } >bashrc.new
+    cat bashrc.new >"$HOME/.bashrc"
+    rm -f bashrc.new
+  else
+    # A file that does not end in a newline would join the line onto its last one.
+    if [ -s "$HOME/$rc" ] && [ -n "$(tail -c 1 "$HOME/$rc")" ]; then echo >>"$HOME/$rc"; fi
+    printf '%s\n' "$source_line" >>"$HOME/$rc"
+  fi
 fi
 
 if [ -n "$sudo_pw" ]; then

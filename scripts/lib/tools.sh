@@ -144,6 +144,9 @@ load_tools() {
   done <"$file"
 }
 
+# Prints the OS that manifest $1 records before its first tools block, macos or linux, or nothing.
+manifest_os() { awk '/^#line /{exit} /^(macos|linux) /{print $1; exit}' "$1"; }
+
 # Whether tools line $1 (an index into the arrays load_tools filled) targets host $2. A line with
 # @os needs the host's OS in host_os; without it the line does not target the host, and stderr says so.
 tool_targets() {

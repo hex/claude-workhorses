@@ -22,6 +22,9 @@ cat >"$scratch/bin/sudo" <<'SH'
 echo "sudo $*" >>"$HOME/calls"
 SH
 printf '#!/bin/sh\necho "rsync $*" >>"%s/calls"\n[ -f "%s/answers/copy-works" ]\n' "$scratch" "$scratch" >"$scratch/bin/rsync"
+# apply.sh and manifest.sh ask uname which OS they run on; this one says Darwin unless
+# APPLY_CHECK_UNAME names another, so the checks below run the same on a Mac and on Linux.
+printf '#!/bin/sh\n[ "$1" = -s ] || exec /usr/bin/uname "$@"\necho "${APPLY_CHECK_UNAME:-Darwin}"\n' >"$scratch/bin/uname"
 # The ssh stand-in answers from $scratch/answers/<target>.<status|manifest> when that file exists.
 export APPLY_CHECK_SCRATCH=$scratch
 cat >"$scratch/bin/ssh" <<'SH'
@@ -42,6 +45,7 @@ answers=$APPLY_CHECK_SCRATCH/answers
 # The command that starts apply.sh also names run.status, so it is matched first.
 case "$*" in
   (*apply.sh*) IFS= read -r line; echo "stdin $line" >>"$APPLY_CHECK_SCRATCH/calls"; [ -f "$answers/start-works" ]; exit ;;
+  (*"uname -s"*) if [ -f "$answers/$target.os" ]; then cat "$answers/$target.os"; else echo Darwin; fi; exit ;;
   (*rmdir*) exit 0 ;;
   (*run.status*) answer=$answers/$target.status ;;
   (*manifest*) answer=$answers/$target.manifest ;;
@@ -94,6 +98,25 @@ stage_host beta "$scratch/stage-beta"
 [ "$(cat "$scratch/stage-beta/options")" = "no-sleep sudo
 wallpaper=Teal" ] || fail "beta's options file: '$(cat "$scratch/stage-beta/options")'"
 echo "ok   the staged options mark the ones that need sudo"
+
+# gamma runs Linux: sync.sh learns that from the host before it stages anything.
+printf '%s\n' "apt git curl @os=linux" "plain mac-only @os=macos" "after" >"$config/tools"
+load_tools
+host_os=(macos macos linux)
+mkdir "$scratch/stage-gamma"
+stage_host gamma "$scratch/stage-gamma"
+[ "$(cd "$scratch/stage-gamma/recipes" && ls | tr '\n' ' ')" = "after apt " ] ||
+  fail "gamma's stage holds the recipes: $(cd "$scratch/stage-gamma/recipes" && ls | tr '\n' ' ')"
+[ "$(cat "$scratch/stage-gamma/tools")" = "apt git curl
+after" ] || fail "gamma's tools file: '$(cat "$scratch/stage-gamma/tools")'"
+mkdir "$scratch/stage-alpha-os"
+stage_host alpha "$scratch/stage-alpha-os"
+[ "$(cat "$scratch/stage-alpha-os/tools")" = "plain mac-only
+after" ] || fail "alpha's tools file with @os lines: '$(cat "$scratch/stage-alpha-os/tools")'"
+echo "ok   a Linux host gets the apt line and the lines without @os; a Mac gets its @os=macos line and not the apt one"
+host_os=()
+printf '%s\n' "plain @scope/pkg a.b+c" "rooted x" "broken" "after" "plain only-arm @arch=arm64" >"$config/tools"
+load_tools
 
 # Runs the staged files as sync.sh does on a host: "apply.sh start" with the sudo password $1 (empty:
 # none) on stdin, then waits for the detached run to free the lock. Sets code to the run's exit code.
@@ -199,6 +222,37 @@ for _ in $(seq 100); do [ -d "$scratch/home/workhorse.lock" ] || break; sleep 0.
 [ "$(cat "$scratch/home/workhorse/run.status")" = 0 ] || fail "the detached run ended with '$(cat "$scratch/home/workhorse/run.status")'"
 echo "ok   apply.sh start returns at once, with the run going on detached"
 
+# On Linux, sshd starts bash for a command, and bash reads ~/.bashrc, whose stock first lines return
+# from a shell that is not interactive: the source line goes above them, once.
+printf '%s\n' plain >"$stage/tools"
+cp "$config/recipes/plain" "$stage/recipes/"
+rm -f "$scratch/home/.zshenv"
+printf '%s\n' '# ~/.bashrc' 'case $- in *i*) ;; *) return ;; esac' 'alias ll="ls -l"' >"$scratch/home/.bashrc"
+for _ in 1 2; do
+  APPLY_CHECK_UNAME=Linux SHELL=/bin/bash apply ""
+  [ "$code" = 0 ] || fail "a run on Linux exited $code: $(tail -3 "$scratch/apply.log")"
+done
+[ "$(cat "$scratch/home/.bashrc")" = "$line
+# ~/.bashrc
+case \$- in *i*) ;; *) return ;; esac
+alias ll=\"ls -l\"" ] || fail ".bashrc after two runs on Linux: '$(cat "$scratch/home/.bashrc")'"
+[ ! -e "$scratch/home/.zshenv" ] || fail "a run on Linux with bash wrote ~/.zshenv: '$(cat "$scratch/home/.zshenv")'"
+grep -qx 'linux .*' "$scratch/home/workhorse/manifest" || fail "the manifest of a Linux run has no linux line: $(cat "$scratch/home/workhorse/manifest")"
+grep -q '^macos' "$scratch/home/workhorse/manifest" && fail "the manifest of a Linux run has a macos line: $(cat "$scratch/home/workhorse/manifest")"
+echo "ok   on Linux with bash, the source line goes once at the top of ~/.bashrc, above its interactive guard, and the manifest says linux"
+
+rm "$scratch/home/.bashrc"
+APPLY_CHECK_UNAME=Linux SHELL=/usr/bin/zsh apply ""
+[ "$code" = 0 ] || fail "a run on Linux with zsh exited $code: $(tail -3 "$scratch/apply.log")"
+[ "$(cat "$scratch/home/.zshenv")" = "$line" ] || fail ".zshenv on Linux with zsh: '$(cat "$scratch/home/.zshenv" 2>&1)'"
+[ ! -e "$scratch/home/.bashrc" ] || fail "a run on Linux with zsh wrote ~/.bashrc"
+APPLY_CHECK_UNAME=Linux SHELL=/usr/bin/fish apply ""
+[ "$(cat "$scratch/home/workhorse/run.status")" = "1 env" ] || fail "a run on Linux with fish gave run.status '$(cat "$scratch/home/workhorse/run.status")'"
+grep -qxF "the login shell is /usr/bin/fish; wh's commands get the recipes' PATH only from bash (~/.bashrc) or zsh (~/.zshenv)" "$scratch/apply.log" ||
+  fail "a run on Linux with fish does not name the shell: $(cat "$scratch/apply.log")"
+rm -f "$scratch/home/.zshenv"
+echo "ok   on Linux with zsh the line goes in ~/.zshenv, and another login shell stops the run at the env step, named"
+
 # Host options run through options.sh; a stand-in records what each one sees instead of changing this Mac.
 printf '#!/bin/bash\n[ "$1" = apply ] || { echo "$2 probed"; exit 0; }\necho "option $2 pw=${SUDO_PW:-unset} askpass=${SUDO_ASKPASS:-unset}" >>"$HOME/calls"\n' >"$scratch/stage-beta/options.sh"
 : >"$scratch/stage-beta/tools"
@@ -233,13 +287,25 @@ printf '%s\n' "plain ok" >"$config/tools"
 rm "$config/sudo-password"
 expect_sync "a host that needs sudo without a helper" "claude-workhorses: no executable sudo-password helper at $config/sudo-password
 beta: no sudo password; nothing was run" 1 beta
-[ ! -s "$scratch/calls" ] || fail "sync.sh contacted beta with no password: $(cat "$scratch/calls")"
+[ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 b uname -s" ] ||
+  fail "sync.sh did more than ask beta's OS before it found no password: $(cat "$scratch/calls")"
 expect_sync "a host that needs no sudo" "alpha: a sync is already running (~/workhorse.lock exists)" 1 alpha
-[ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 a mkdir ~/workhorse.lock" ] ||
+[ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 a uname -s
+ssh -o BatchMode=yes -o ConnectTimeout=10 a mkdir ~/workhorse.lock" ] ||
   fail "sync.sh's calls for alpha: $(cat "$scratch/calls")"
 echo "ok   a host whose lines and options need no sudo syncs without a sudo-password helper"
 
-mkdir "$scratch/answers"
+mkdir -p "$scratch/answers"
+printf 'Linux\n' >"$scratch/answers/b.os"
+expect_sync "a Linux host with host options" "beta runs Linux, where host options do not apply: remove no-sleep, wallpaper=Teal from its hosts line; nothing was run" 1 beta
+[ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 b uname -s" ] ||
+  fail "sync.sh went past the OS question for a Linux host with options: $(cat "$scratch/calls")"
+printf 'SunOS\n' >"$scratch/answers/a.os"
+expect_sync "a host that runs neither macOS nor Linux" "alpha: runs \"SunOS\", not macOS or Linux; nothing was run" 1 alpha
+rm "$scratch/answers/a.os" "$scratch/answers/b.os"
+echo "ok   sync.sh asks each host's OS first, and refuses host options on a Linux host and a host that runs neither, before any lock or password"
+
+mkdir -p "$scratch/answers"
 touch "$scratch/answers/lock-free" "$scratch/answers/copy-works" "$scratch/answers/start-works"
 printf '#!/bin/sh\necho secret-pw-123\n' >"$config/sudo-password"
 chmod 700 "$config/sudo-password"
@@ -306,7 +372,14 @@ expect_sync "a host that lacks a line it gets" "gamma: not synced with \"plain o
 mv "$scratch/answers/g.manifest" "$scratch/answers/g.saved"
 expect_sync "a host never synced" "gamma: has no manifest.sh to run (ssh exit 1): sync it first; not compared" 1 diff
 mv "$scratch/answers/g.saved" "$scratch/answers/g.manifest"
-echo "ok   diff compares each tools line only among the hosts it targets, and names a host that lacks one, does not answer or was never synced"
+printf '%s\n' "plain ok" "apt git @os=linux" >"$config/tools"
+printf '%s\n' "#base" "arch x86_64" "macos 15.7" "#line plain ok" "plain v1" >"$scratch/answers/a.manifest"
+printf '%s\n' "#base" "arch x86_64" "macos 15.7" "#line plain ok" "plain v1" >"$scratch/answers/b.manifest"
+printf '%s\n' "#base" "arch x86_64" "linux Ubuntu 24.04.5 LTS" "#line plain ok" "plain v1" "#line apt git" "apt git 1:2.43.0-1ubuntu7.3" >"$scratch/answers/g.manifest"
+expect_sync "an @os=linux line on the one Linux host" "all workhorses match (2 tools lines)" 0 diff
+printf '%s\n' "#base" "arch x86_64" "linux Ubuntu 24.04.5 LTS" "#line plain ok" "plain v1" >"$scratch/answers/g.manifest"
+expect_sync "a Linux host that lacks its @os=linux line" "gamma: not synced with \"apt git\"" 1 diff
+echo "ok   diff compares each tools line only among the hosts it targets, the OS read from each manifest, and names a host that lacks one, does not answer or was never synced"
 
 # A host's probe lines come back only in a probe line's shape; any other line differs as a placeholder.
 printf '%s\n' "plain ok" >"$config/tools"

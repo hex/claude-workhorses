@@ -11,7 +11,14 @@ set -u
 
 echo "#base"
 echo "arch $(uname -m)"
-echo "macos $(sw_vers -productVersion 2>/dev/null || echo unknown)"
+# A Mac records "macos <version>", which sync.sh diff and the policy read; Linux records "linux" and
+# the release's PRETTY_NAME from /etc/os-release.
+if [ "$(uname -s)" = Darwin ]; then
+  echo "macos $(sw_vers -productVersion 2>/dev/null || echo unknown)"
+else
+  release=$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d "\"'")
+  echo "linux ${release:-unknown}"
+fi
 # One block per tools line: the line, then what its recipe's probe prints, sorted.
 while read -r -a words <&3; do
   [ ${#words[@]} -gt 0 ] || continue

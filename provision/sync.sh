@@ -53,11 +53,33 @@ release_lock() {
   fi
 }
 
+# Asks host $1 which OS it runs and records it in host_os, macos or linux. Fails, saying why, when
+# the host does not answer or runs another system.
+learn_host_os() {
+  local host=$1 index answer code=0
+  index=$(host_index "$host") || return 1
+  answer=$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$(ssh_target "$host")" uname -s) || code=$?
+  case "$code:$answer" in
+    0:Darwin) host_os[index]=macos ;;
+    0:Linux) host_os[index]=linux ;;
+    255:*) echo "$host: unreachable (ssh exit 255); nothing was run" >&2; return 1 ;;
+    0:*) echo "$host: runs \"$(printf '%s' "$answer" | LC_ALL=C tr -cd 'A-Za-z0-9._ -' | cut -c1-40)\", not macOS or Linux; nothing was run" >&2; return 1 ;;
+    *) echo "$host: could not tell which OS it runs (ssh exit $code); nothing was run" >&2; return 1 ;;
+  esac
+}
+
 # Starts a run on host $1. Its caller tests its result, which turns set -e off in here, so every step
 # checks its own.
 start_sync() {
-  local host=$1 target sudo_pw="" stage code=0
+  local host=$1 target sudo_pw="" stage code=0 index
   target=$(ssh_target "$host") || return 1
+  index=$(host_index "$host") || return 1
+  # The host's OS decides which tools lines it gets, and so whether it needs the password.
+  learn_host_os "$host" || return 1
+  if [ "${host_os[index]}" = linux ] && [ -n "${host_options[index]}" ]; then
+    echo "$host runs Linux, where host options do not apply: remove ${host_options[index]// /, } from its hosts line; nothing was run" >&2
+    return 1
+  fi
   # Read before the lock: a missing password stops here instead of starting a run that fails at sudo.
   if host_needs_sudo "$host"; then
     sudo_pw=$(sudo_password "$host") || { echo "$host: no sudo password; nothing was run" >&2; return 1; }
@@ -82,7 +104,7 @@ start_sync() {
   fi
   rm -rf "$stage"
   # The password crosses on the ssh session's stdin, from the printf builtin: never in an environment
-  # variable the host's login shell would hold while it reads ~/.zshenv, never in a command line.
+  # variable the host's login shell would hold while it reads its startup file, never in a command line.
   # apply.sh hands it only to the steps that need it.
   printf '%s\n' "$sudo_pw" | ssh -o BatchMode=yes "$target" '/bin/bash ~/workhorse/apply.sh start' || {
     release_lock "$host" "$target" "starting the run failed"
@@ -188,6 +210,10 @@ diff_hosts() {
     esac
     rm -f "$manifests/$host"
     status=1
+  done
+  # Each host's OS, for the @os filters, comes from the manifest it just wrote.
+  for host in "${host_names[@]}"; do
+    [ ! -f "$manifests/$host" ] || host_os[$(host_index "$host")]=$(manifest_os "$manifests/$host")
   done
   for i in "${!tool_recipe[@]}"; do
     line="${tool_recipe[i]}${tool_args[i]:+ ${tool_args[i]}}"
