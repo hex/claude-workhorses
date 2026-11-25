@@ -19,13 +19,16 @@ BANNER = ROOT / "assets/banner.svg"
 ART = 560
 # A part's clip runs lower than the area cut from the still picture: the band between them stays
 # put, like a joint, so a part that turns opens no gap where it meets the head.
-EAR_LEFT = ("172,0 216,0 236,50 234,96 178,96 170,60", "172,0 216,0 236,50 233,84 180,84 170,60")
-EAR_RIGHT = ("388,0 344,0 324,50 326,96 382,96 390,60", "388,0 344,0 324,50 327,84 380,84 390,60")
+EAR_LEFT = ("172,0 216,0 234,50 231,64 216,104 180,104 170,60", "172,0 216,0 232,50 229,64 220,88 196,84 178,70 170,60")
+EAR_RIGHT = ("388,0 344,0 326,50 329,64 344,104 380,104 390,60", "388,0 344,0 328,50 331,64 340,88 364,84 382,70 390,60")
+# The ears only ever turn toward the hair, so the gap an ear leaves is on its outer side, where
+# the page is what belongs. The cut's inner edge sits 2 pixels inside the clip, so the two never
+# share an edge and leave a seam.
 TUFT = ("237,10 323,10 323,80 237,80", "237,10 323,10 323,66 237,66")
-BROW = (296, 160, 66, 20)
-EYES = ((230, 198), (330, 198))
+BROW = (299, 166, 62, 11)
+EYES = ((229, 195), (329, 195))
 LID = "#20a040"
-SKIN = "#25ad45"
+SKIN = "#26ae45"
 ANIMATION = (
     "<style>"
     ".horse-part{transform-box:fill-box}"
@@ -35,16 +38,16 @@ ANIMATION = (
     ".brow{animation:brow 9s infinite}.brow-gap{opacity:0;animation:brow-gap 9s infinite}"
     ".lid{transform-box:fill-box;transform-origin:top;transform:scaleY(0);animation:blink 9s infinite}"
     "@keyframes blink{0%,10%,12.4%,80%,82.4%,100%{transform:scaleY(0)}11.2%,81.2%{transform:scaleY(1)}}"
-    "@keyframes ear-left{0%,25%,32%,48%,58%,100%{transform:rotate(0)}26.5%,29.5%{transform:rotate(-9deg)}"
-    "28%,31%{transform:rotate(3deg)}51%,55%{transform:rotate(-10deg)}}"
-    "@keyframes ear-right{0%,48%,58%,100%{transform:rotate(0)}51%,55%{transform:rotate(-7deg)}}"
-    "@keyframes tuft{0%,48%,60%,100%{transform:skewX(0)}50%{transform:skewX(-12deg)}"
-    "53%{transform:skewX(-8deg)}55%{transform:skewX(-13deg)}57%{transform:skewX(3deg)}}"
-    "@keyframes brow{0%,64%,74%,100%{transform:translateY(0)}66%,72%{transform:translateY(-7px)}}"
+    "@keyframes ear-left{0%,25%,32%,48%,58%,100%{transform:rotate(0)}26.5%,29.5%{transform:rotate(8deg)}"
+    "28%,31%{transform:rotate(2deg)}51%,55%{transform:rotate(9deg)}}"
+    "@keyframes ear-right{0%,48%,58%,100%{transform:rotate(0)}51%,55%{transform:rotate(-9deg)}}"
+    "@keyframes tuft{0%,48%,60%,100%{transform:skewX(0)}50%{transform:skewX(-9deg)}"
+    "53%{transform:skewX(-6deg)}55%{transform:skewX(-10deg)}57%{transform:skewX(2deg)}}"
+    "@keyframes brow{0%,64%,74%,100%{transform:translateY(0)}66%,72%{transform:translateY(-5px)}}"
     "@keyframes brow-gap{0%,64%,74%,100%{opacity:0}64.5%,73.5%{opacity:1}}"
     "@media(prefers-reduced-motion:reduce){.horse-part,.brow-gap,.lid{animation:none}}"
     "</style>"
-    '<defs><mask id="horse-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="560" height="560">'
+    '<defs><filter id="soft"><feGaussianBlur stdDeviation="1.2"/></filter><mask id="horse-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="560" height="560">'
     '<rect width="560" height="560" fill="#fff"/>'
     f'<polygon points="{EAR_LEFT[1]}"/><polygon points="{EAR_RIGHT[1]}"/><polygon points="{TUFT[1]}"/>'
     "</mask>"
@@ -52,16 +55,16 @@ ANIMATION = (
     f'<clipPath id="ear-right"><polygon points="{EAR_RIGHT[0]}"/></clipPath>'
     f'<clipPath id="tuft"><polygon points="{TUFT[0]}"/></clipPath>'
     f'<clipPath id="brow"><rect x="{BROW[0]}" y="{BROW[1]}" width="{BROW[2]}" height="{BROW[3]}"/></clipPath>'
-    + "".join(f'<clipPath id="eye-{i}"><ellipse cx="{x}" cy="{y}" rx="29" ry="15"/></clipPath>' for i, (x, y) in enumerate(EYES))
+    + "".join(f'<clipPath id="eye-{i}"><ellipse cx="{x}" cy="{y}" rx="26" ry="19"/></clipPath>' for i, (x, y) in enumerate(EYES))
     + "</defs>"
-    '<g class="horse-part ear-left"><use href="#horse-art" clip-path="url(#ear-left)"/></g>'
+    + '<g class="horse-part ear-left"><use href="#horse-art" clip-path="url(#ear-left)"/></g>'
     '<g class="horse-part ear-right"><use href="#horse-art" clip-path="url(#ear-right)"/></g>'
     '<g class="horse-part tuft"><use href="#horse-art" clip-path="url(#tuft)"/></g>'
-    f'<rect class="brow-gap" x="{BROW[0]}" y="{BROW[1]}" width="{BROW[2]}" height="{BROW[3]}" fill="{SKIN}"/>'
+    f'<rect class="brow-gap" x="{BROW[0]}" y="{BROW[1]}" width="{BROW[2]}" height="{BROW[3]}" rx="6" fill="{SKIN}" filter="url(#soft)"/>'
     '<g class="horse-part brow"><use href="#horse-art" clip-path="url(#brow)"/></g>'
     + "".join(
-        f'<g clip-path="url(#eye-{i})"><g class="lid"><rect x="{x - 30}" y="{y - 16}" width="60" height="32" fill="{LID}"/>'
-        f'<rect x="{x - 30}" y="{y + 13}" width="60" height="3" fill="#111"/></g></g>'
+        f'<g clip-path="url(#eye-{i})"><g class="lid"><rect x="{x - 27}" y="{y - 20}" width="54" height="41" fill="{LID}"/>'
+        f'<rect x="{x - 27}" y="{y + 17}" width="54" height="4" fill="#111"/></g></g>'
         for i, (x, y) in enumerate(EYES)
     )
 )
