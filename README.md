@@ -1,10 +1,10 @@
-<img src="assets/icon.png" alt="" width="132" align="left">
+<p align="center">
+  <img src="assets/icon.png" alt="" width="160">
+</p>
 
-# claude-workhorses
+<h1 align="center">claude-workhorses</h1>
 
-Long jobs run on your spare Macs while this one stays free.
-
-<br clear="left">
+<p align="center">Long jobs run on your spare Macs while this one stays free.</p>
 
 A Claude Code plugin that runs long jobs on your spare Macs. `wh` copies the git repository you are
 in to a workhorse, brings the copy level with your machine (`.git` included), and runs the command
