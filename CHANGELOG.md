@@ -17,6 +17,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 - A record's probe lines may hold `~`, which Debian versions use.
 
 ### Fixed
+- A job under `--timeout` that ends at once, on a host whose bash is version 5 as on Linux, no longer gets a `[1] Done` job notice on its stderr.
 - A linked worktree's copy on a host could keep the main checkout's `HEAD` when the copy started from the main checkout's and the two `HEAD` files matched in size and second. The worktree's own git files now go by checksum.
 
 ## 2026.11.3
