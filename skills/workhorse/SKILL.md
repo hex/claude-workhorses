@@ -1,6 +1,6 @@
 ---
 name: workhorse
-description: Run a job on one of the user's workhorses, the spare Macs in the claude-workhorses hosts file, against a verified copy of the current git repo, with the `wh` command. Use it when the user names a workhorse or one of its hosts, or asks to offload, and on your own when you are about to run a full test suite, a full build or another job that takes minutes in a git repo, or when this machine is already busy. For git repos, use this instead of claude-tmux:remote-tests. Not for a single test file or a job that finishes in under 2 minutes.
+description: Run a job on one of the user's workhorses, the spare Macs and Linux machines in the claude-workhorses hosts file, against a verified copy of the current git repo, with the `wh` command. Use it when the user names a workhorse or one of its hosts, or asks to offload, and on your own when you are about to run a full test suite, a full build or another job that takes minutes in a git repo, or when this machine is already busy. For git repos, use this instead of claude-tmux:remote-tests. Not for a single test file or a job that finishes in under 2 minutes.
 ---
 
 # Workhorse
@@ -33,7 +33,8 @@ wh alpha --timeout 20m -- cargo test   # a named host
   toast when one that took over 2 minutes ends or a run ends with `BLOCKED`.
 - With no host, `wh` picks among the hosts whose 1-minute load is below their core count: one that
   already holds the repo's copy, then the lowest load per core. Name the host when the job needs
-  x86_64 or arm64; the table's Arch column says which host has which.
+  x86_64 or arm64, or macOS or Linux; the table's Arch column says which host has which
+  architecture, and each host's record in the policy names its system.
 - Always put `--` before the command. Bound every job with `--timeout` (`90s`, `30m`, `2h`): past
   it, `wh` stops the job and everything it started and exits 124. The hosts need no `gtimeout`.
 - Use only the tools the session-start policy lists for the host. A runtime installed with the
@@ -62,7 +63,8 @@ session start.
 When the job needs a tool the hosts lack or have in too old a version (a runtime, a browser, a
 command-line tool), do not run it locally. Each host gets what the user's tools file lists,
 `~/.config/claude-workhorses/tools` (or `$CLAUDE_WORKHORSES_CONFIG_DIR/tools`): one recipe and its
-arguments per line, then optional filters, `@arch=x86_64` or `arm64`, and `@hosts=alpha,beta`.
+arguments per line, then optional filters, `@arch=x86_64` or `arm64`, `@os=macos` or `linux`, and
+`@hosts=alpha,beta`. Give a recipe that exists for one system the matching `@os=`.
 
 1. Write the line. Prefer a built-in recipe from the table below. Arguments are letters, digits and
    `@._/+-`, and never start with `-`. A recipe that needs another names it when it fails; put the
@@ -101,6 +103,7 @@ Run the job locally only if the user declines, and say so. Removing a line unins
 | `bundletool` | a version | Google's bundletool (runs with the `java` on the `PATH`) |
 | `macos-harness` | none | macos-harness and its skill (needs `uv` first) |
 | `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor; no license |
+| `apt` | package names | Debian and Ubuntu packages, on Linux hosts only: `@os=linux` (sudo) |
 
 ## Git in the copy
 

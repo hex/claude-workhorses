@@ -3,6 +3,9 @@
 # - name: lower-case letters, digits and dashes; wh and sync.sh take it as the host's name.
 # - ssh target: an alias from ~/.ssh/config or user@host. ~/.ssh/config decides the route.
 # - arch: x86_64 or arm64. cores and RAM: whole numbers, shown to Claude in the host table.
+# - A Linux host, WSL2 on a Windows PC included, takes the same five fields and no options:
+#   sync.sh refuses options on a host that runs Linux. Its work copies stay under ~/work on the
+#   Linux filesystem, never under /mnt/c.
 # - options: none by default. Each changes the Mac for every user of it, so give them only to a Mac
 #   that exists to run jobs. sync.sh applies them; removing one later undoes nothing.
 #     autologin      log the workhorse user in at boot; stores its password in /etc/kcpassword

@@ -6,8 +6,8 @@
 
 <p align="center">Long jobs run on your spare Macs while this one stays free.</p>
 
-A Claude Code plugin that runs long jobs on your spare Macs. `wh` copies the git repository you are
-in to a workhorse, brings the copy level with your machine (`.git` included), and runs the command
+A Claude Code plugin that runs long jobs on your spare Macs, or on Linux machines, a Windows PC's
+Windows Subsystem for Linux (WSL2) included. `wh` copies the git repository you are in to a workhorse, brings the copy level with your machine (`.git` included), and runs the command
 there. The test suite or the build runs on the workhorse, and your laptop stays free for the work in
 front of you.
 
@@ -19,7 +19,7 @@ front of you.
 | --- | --- |
 | Claude Code on your Mac | `wh` on the path of every command Claude runs, the offload policy and your host table at the start of every session, the `workhorse` skill, and the badge and band. |
 | Your own terminal | `wh` by its full path, or linked into a folder on your `PATH`. Its runs show in the badge and band of a Claude Code session whose folder holds the repository or sits inside it. |
-| The workhorses | Spare Macs, Intel or Apple silicon, with Remote Login on. `wh` reaches them over ssh and needs nothing installed there. `sync.sh` gives each one the tools you list. |
+| The workhorses | Spare Macs, Intel or Apple silicon, with Remote Login on, or Linux machines with sshd. `wh` reaches them over ssh and needs nothing installed on a Mac; see [Linux and WSL hosts](#linux-and-wsl-hosts) for Linux. `sync.sh` gives each one the tools you list. |
 
 ## Install
 
@@ -29,7 +29,8 @@ You need:
   [Watchman](https://facebook.github.io/watchman/) makes later runs faster. Without it, every run
   compares each file's size and modification time.
 - One or more Macs as workhorses, Intel or Apple silicon, with Remote Login on and your ssh key
-  accepted by the workhorse user.
+  accepted by the workhorse user, or Linux hosts as [Linux and WSL hosts](#linux-and-wsl-hosts)
+  describes.
 
 ```text
 /plugin marketplace add hex/claude-marketplace
@@ -106,7 +107,8 @@ why. Exit 2 is a usage error, an unknown host, or a missing or bad hosts file.
 
 ### Choosing a host
 
-With no host named, `wh` asks every host at once for its 1-minute load and core count. Among the
+With no host named, `wh` asks every host at once for its 1-minute load and physical core count (on
+Linux, the cores `lscpu` lists, not their hyperthreads). Among the
 hosts whose load is below their core count, it picks one that already holds the repository's copy,
 then the one with the lowest load per core, then the first in the hosts file. A host that has not
 answered within 2 seconds counts as unreachable.
@@ -154,7 +156,7 @@ how to make them again.
 At the start of every session, a hook gives Claude the offload policy: when to offload, when to stay
 local, a table of your hosts with their ssh target, architecture, cores and RAM, and the tools each
 host had at its last sync. It lists the tools every host has once, then what each host has on its own,
-with its macOS release and sync date. The hook reads only files on your machine; it never contacts
+with its macOS or Linux release and sync date. The hook reads only files on your machine; it never contacts
 a host. With no hosts file, or one it cannot use, it says so in one line instead.
 
 The list comes from the record `sync.sh status` stores, so a host never synced has none, and a host
@@ -181,8 +183,9 @@ bash provision/sync.sh diff        # compare the hosts, tools line by tools line
 Before it contacts any host, `sync.sh` checks the hosts file, the tools file and every recipe it
 names. A run stops at the first step that fails, and `status` names that step and its exit code.
 `status` reports every host and exits non-zero when one does not answer or its last run failed.
-On the host, the run appends one line to the workhorse user's `~/.zshenv`, marked
-`# claude-workhorses`, which loads the `PATH` the recipes set. The rest of that file stays untouched.
+On the host, the run adds one line, marked `# claude-workhorses`, which loads the `PATH` the recipes
+set, to the file the login shell reads for an ssh command: the end of `~/.zshenv` on a Mac or for
+zsh on Linux, and the top of `~/.bashrc` for bash on Linux. The rest of that file stays untouched.
 Removing a line from the tools file, or an option from a host, undoes nothing on the host.
 
 #### The tools file
@@ -201,8 +204,11 @@ dotnet 10.0 @arch=x86_64
 unity 6000.3.28f1 8f082d2fe476 android ios webgl @hosts=alpha
 ```
 
-- `@arch=x86_64` or `@arch=arm64` gives the line only to hosts of that architecture, and
-  `@hosts=alpha,beta` only to those hosts. With both, a host must match both.
+- `@arch=x86_64` or `@arch=arm64` gives the line only to hosts of that architecture,
+  `@os=macos` or `@os=linux` only to hosts that run that system, and `@hosts=alpha,beta` only to
+  those hosts. A host must match every filter on the line. The hosts file does not say which system
+  a host runs: `sync.sh` asks each host before it sends anything, and `diff` and the policy read it
+  from the host's record.
 - Arguments are letters, digits and `@._/+-`, and never start with `-`. A recipe gets them as its
   arguments, never as shell text.
 - `sync.sh diff` compares each line only among the hosts it targets. The Command Line Tools follow the
@@ -227,6 +233,7 @@ unity 6000.3.28f1 8f082d2fe476 android ios webgl @hosts=alpha
 | `bundletool` | a version | Google's bundletool |
 | `macos-harness` | none | macos-harness and its skill for Claude on the host |
 | `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor, without a license |
+| `apt` | package names | Debian and Ubuntu packages, after `apt-get update`; give its line `@os=linux` (sudo) |
 
 A recipe that needs another one fails with a message naming it, such as `port needs MacPorts: list
 macports before it`.
@@ -245,7 +252,8 @@ to a host, never the config folder itself.
 #### Host options
 
 Host options go at the end of a host's line in the hosts file. Each one changes the Mac for every
-user of it, so give them only to a Mac that exists to run jobs. None is on by default.
+user of it, so give them only to a Mac that exists to run jobs. None is on by default. They are macOS
+settings: `sync.sh` refuses a Linux host whose line has any, naming them, before anything runs.
 
 | Option | What it does | Sudo |
 | --- | --- | --- |
@@ -278,9 +286,27 @@ the login keychain. The password reaches the host on the ssh session's stdin, ne
 environment variable, a command line or a file. On the host, the shell that loads the env snippets
 for each step never holds it, and a step that does not declare sudo never gets it. A step that does
 gets it in its environment as `SUDO_PW`, and so does every program that step starts. The login shell
-that starts the run reads `~/.zshenv` while the password waits on its stdin, and any process
+that starts the run reads its startup file while the password waits on its stdin, and any process
 running as the workhorse user can change what the sudo steps run, so the password is only as safe as
 that account.
+
+### Linux and WSL hosts
+
+A Linux host needs sshd, your ssh key, `rsync`, `git` for git commands, and bash or zsh as the
+workhorse user's login shell. `wh` uses the system's `find`, `stat`, `awk` and `lscpu`, which
+Debian and Ubuntu ship. `/claude-workhorses:setup` probes it like a Mac: `uname -m` for the
+architecture (`aarch64` becomes `arm64`), physical cores from `lscpu`, and RAM from `MemTotal`,
+rounded to the nearest GB. Host options are Mac settings and do not apply. The `apt` recipe
+installs packages with `sudo`, so a host without sudo takes only lines that need none.
+
+A Windows PC serves through WSL2, with Ubuntu say:
+
+- Run sshd inside WSL and make it reachable from your machine, then put the route in
+  `~/.ssh/config` and name that alias in the hosts file.
+- The work copies live under `~/work` in the WSL user's home, on the Linux filesystem. Never move
+  them to `/mnt/c` or link them there: files under `/mnt/c` cross into Windows on every access, and
+  a copy there runs far slower and loses the file modes and times `wh` compares.
+- WSL2 gets every core of the PC, and by default half its memory; the probe reports what WSL2 has.
 
 ### Configuration
 
@@ -304,6 +330,7 @@ that account.
 | `BLOCKED: no workhorse is free` | The message lists each host's reason. Every host is at its core count or unreachable; run the job locally. |
 | `... is in use: ...` | Another run holds that copy's lock. If that run has ended, remove the `.lock` folder the message names. |
 | Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
-| `git` fails on a new host | macOS's `git` stays a stub until the Command Line Tools arrive. Add the `command-line-tools` line. |
+| `git` fails on a new host | macOS's `git` stays a stub until the Command Line Tools arrive. Add the `command-line-tools` line. On Linux, install `git` (`apt git @os=linux`). |
+| `sync.sh` says a host "runs Linux, where host options do not apply" | Remove the options it names from that host's line in the hosts file. |
 | `sync.sh status` says `stopped at <step>` | That recipe or option failed; the lines under it are the end of the host's `~/workhorse/run.log`. A recipe that needs another names it there. |
 | `sync.sh` says "no sudo password" | The line above it says why: the helper is missing, not executable, writable by others, failed, or printed nothing. |

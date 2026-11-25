@@ -2,11 +2,13 @@
 # you want. Each line is a recipe, its arguments, then any filters; lines run in this order, so a
 # line goes after the one it needs. The README's Provisioning section lists the built-in recipes.
 #   @arch=x86_64 or @arch=arm64   only hosts of that architecture
+#   @os=macos or @os=linux        only hosts that run that system (sync.sh asks each host)
 #   @hosts=alpha,beta             only these hosts
 # Arguments are letters, digits and @._/+- and never start with -.
-command-line-tools
-macports
-port git-lfs jq ripgrep nodejs24 npm11
+command-line-tools @os=macos
+macports @os=macos
+port git-lfs jq ripgrep nodejs24 npm11 @os=macos
+apt git jq ripgrep @os=linux
 npm pnpm
 uv
 uv-tool ruff

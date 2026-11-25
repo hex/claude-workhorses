@@ -4,6 +4,21 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+- Linux workhorses, a Windows PC's WSL2 included. `wh` reads a Linux host's 1-minute load from `/proc/loadavg` and its physical cores from `lscpu`, so hyperthreads do not count, and lists its copy with GNU `find` in the same format as on a Mac. `/claude-workhorses:setup` probes a Linux host into a hosts line. The hosts file does not change: `sync.sh` asks each host which system it runs before it sends anything, and the host's record names it (`linux Ubuntu 24.04.5 LTS`).
+- Tools lines take `@os=macos` or `@os=linux`. `sync.sh`, `sync.sh diff` and the session-start policy honor it.
+- The `apt` recipe installs Debian and Ubuntu packages with `sudo` and probes each with `dpkg-query`.
+
+### Changed
+- On a Linux host whose login shell is bash, `sync.sh` puts its env line at the top of `~/.bashrc`, above the stock file's guard for shells that are not interactive, since sshd's bash reads that file for every command. zsh on Linux gets `~/.zshenv` as on a Mac, and any other login shell stops the run at its env step.
+- `sync.sh` refuses a Linux host whose hosts line has host options, which are macOS settings, before anything runs.
+- A record's probe lines may hold `~`, which Debian versions use.
+
+### Fixed
+- A linked worktree's copy on a host could keep the main checkout's `HEAD` when the copy started from the main checkout's and the two `HEAD` files matched in size and second. The worktree's own git files now go by checksum.
+
 ## 2026.11.3
 
 ### Fixed
