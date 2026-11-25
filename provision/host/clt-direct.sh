@@ -1,6 +1,6 @@
 #!/bin/bash
 # ABOUTME: Installs the Command Line Tools straight from Apple's signed packages, for when softwareupdate wedges.
-# ABOUTME: Takes the product softwareupdate last tried from /var/log/install.log; needs SUDO_ASKPASS, as setup.sh has.
+# ABOUTME: Takes the product softwareupdate last tried from /var/log/install.log; needs SUDO_ASKPASS, as the command-line-tools recipe has.
 set -euo pipefail
 
 # softwareupdate logs the swcdn URL of every package of the product it starts downloading.

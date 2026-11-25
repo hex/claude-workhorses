@@ -1,113 +1,159 @@
 #!/bin/bash
-# ABOUTME: Brings every workhorse to the state this folder's scripts describe, so all hosts carry the same tools.
-# ABOUTME: Usage: sync.sh [host...] starts a detached run; sync.sh status [host...]; sync.sh diff compares all hosts.
+# ABOUTME: Brings each workhorse to what its hosts-file options and the tools file ask for: copies the host scripts and
+# ABOUTME: recipes over, runs them detached. Usage: sync.sh [host...]; sync.sh status [host...]; sync.sh diff.
 set -euo pipefail
-cd "$(dirname "$0")"
 
+provision=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 # shellcheck source=../scripts/lib/hosts.sh
-. ../scripts/lib/hosts.sh
-load_hosts || exit 1
-all_hosts=("${host_names[@]}")
+. "$provision/../scripts/lib/hosts.sh"
+# shellcheck source=../scripts/lib/tools.sh
+. "$provision/../scripts/lib/tools.sh"
 
-# Each host's ssh target, profile and wallpaper colour come from the hosts file.
 ssh_target() {
   local i
   i=$(host_index "$1") || exit 1
   echo "${host_ssh[$i]}"
 }
 
-# dedicated: the Mac is the workhorse's alone. shared: its owner uses it too (see setup.sh).
-profile() {
-  local i
-  i=$(host_index "$1") || exit 1
-  echo "${host_profile[$i]}"
-}
-
-show_status() {
-  local target
-  target=$(ssh_target "$1")
-  echo "=== $1"
-  ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" '
-    if [ -d ~/workhorse.lock ]; then echo "running"; tail -3 ~/workhorse/run.log
-    elif [ -f ~/workhorse/run.status ]; then echo "exit=$(cat ~/workhorse/run.status)"; tail -3 ~/workhorse/run.log
-    else echo "never synced"; fi'
-}
-
-wallpaper() {
-  local i
-  i=$(host_index "$1") || exit 1
-  echo "${host_colour[$i]}"
+# Fills the empty folder $2 with everything a run on host $1 needs, and nothing else: the scripts in
+# provision/host, the recipes its tools lines name, its tools lines without filters, and its host
+# options, one per line, with "sudo" after those that need the password. The folder that holds the
+# hosts file and the sudo-password helper never goes to a host.
+stage_host() {
+  local host=$1 stage=$2 index i option
+  index=$(host_index "$host")
+  cp "$provision"/host/* "$stage/"
+  mkdir "$stage/recipes"
+  for i in "${!tool_recipe[@]}"; do
+    tool_targets "$i" "$host" || continue
+    cp "${tool_path[i]}" "$stage/recipes/${tool_recipe[i]}"
+    chmod 755 "$stage/recipes/${tool_recipe[i]}"
+  done
+  host_tool_lines "$host" >"$stage/tools"
+  : >"$stage/options"
+  for option in ${host_options[index]}; do
+    if is_one_of "${option%%=*}" "${host_options_sudo[@]}"; then echo "$option sudo"; else echo "$option"; fi
+  done >"$stage/options"
 }
 
 start_sync() {
-  local target profile colour="" sudo_pw
-  target=$(ssh_target "$1")
-  profile=$(profile "$1")
-  # Read before the lock: a missing password stops here instead of starting a run with no sudo password.
-  sudo_pw=$(sudo_password "$1") || { echo "$1: no sudo password; nothing was run" >&2; return 1; }
-  # A shared Mac keeps its owner's wallpaper and gets no Unity.
-  [ "$profile" = shared ] || colour=$(wallpaper "$1")
+  local host=$1 target sudo_pw="" stage
+  target=$(ssh_target "$host")
+  # Read before the lock: a missing password stops here instead of starting a run that fails at sudo.
+  if host_needs_sudo "$host"; then
+    sudo_pw=$(sudo_password "$host") || { echo "$host: no sudo password; nothing was run" >&2; return 1; }
+  fi
   # One run per host: the lock directory exists until the remote run ends.
   ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" 'mkdir ~/workhorse.lock' ||
-    { echo "$1: a sync is already running (~/workhorse.lock exists)" >&2; return 1; }
-  if ! { rsync -az --delete --exclude sync.sh --exclude run.log --exclude run.status ./ "$target:workhorse/" &&
-    ssh -o BatchMode=yes "$target" 'mkdir -p ~/.local/bin && cp ~/workhorse/zshenv ~/.zshenv && install -m 700 ~/workhorse/askpass-env ~/.local/bin/askpass-env'; }; then
+    { echo "$host: a sync is already running (~/workhorse.lock exists)" >&2; return 1; }
+  stage=$(mktemp -d "${TMPDIR:-/tmp}/workhorse-stage.XXXX")
+  if ! { stage_host "$host" "$stage" &&
+    rsync -a --delete --exclude /run.log --exclude /run.status --exclude /manifest "$stage/" "$target:workhorse/"; }; then
+    rm -rf "$stage"
     ssh -o BatchMode=yes "$target" 'rmdir ~/workhorse.lock'
-    echo "$1: copying the workhorse files failed; nothing was run" >&2
+    echo "$host: copying the workhorse files failed; nothing was run" >&2
     return 1
   fi
-  LC_SUDO_PW="$sudo_pw" LC_WORKHORSE_WALLPAPER="$colour" LC_WORKHORSE_PROFILE="$profile" \
-    ssh -o BatchMode=yes -o SendEnv=LC_SUDO_PW -o SendEnv=LC_WORKHORSE_WALLPAPER -o SendEnv=LC_WORKHORSE_PROFILE "$target" '
-    export SUDO_PW="$LC_SUDO_PW"; unset LC_SUDO_PW
-    export WORKHORSE_WALLPAPER="$LC_WORKHORSE_WALLPAPER"; unset LC_WORKHORSE_WALLPAPER
-    export WORKHORSE_PROFILE="$LC_WORKHORSE_PROFILE"; unset LC_WORKHORSE_PROFILE
-    export SUDO_ASKPASS=$HOME/.local/bin/askpass-env
-    unity=./unity.sh; [ "$WORKHORSE_PROFILE" = dedicated ] || unity=true
+  rm -rf "$stage"
+  # The password crosses in the ssh session's environment, never in a command line; apply.sh hands it
+  # only to the steps that need it.
+  LC_SUDO_PW="$sudo_pw" ssh -o BatchMode=yes -o SendEnv=LC_SUDO_PW "$target" '
+    export SUDO_PW="${LC_SUDO_PW:-}"; unset LC_SUDO_PW
     rm -f ~/workhorse/run.status
-    nohup bash -c "cd ~/workhorse && ./setup.sh && ./tools.sh && $unity; echo \$? > ~/workhorse/run.status; rmdir ~/workhorse.lock" \
-      > ~/workhorse/run.log 2>&1 < /dev/null &'
-  echo "$1: sync started; check with: $0 status $1"
+    nohup /bin/bash ~/workhorse/apply.sh > ~/workhorse/run.log 2>&1 < /dev/null &'
+  echo "$host: sync started; check with: $0 status $host"
 }
 
-# Manifest lines a shared host differs on by design: what it leaves to its owner, and its macOS release.
-machine_lines='^(autologin|command-line-tools|dock|firewall|macos|sshd|tailscale|unity-cli|unity-editors|unity-hub) '
-# Manifest lines two hosts of different architectures differ on by design: the dependency ports.
-arch_lines='^(arch|dep) '
+# Shows how host $1's last run went. Once the run has ended, stores the manifest it wrote as
+# <state dir>/manifests/<host>, which the session-start policy reads.
+show_status() {
+  local host=$1 target answer manifests
+  target=$(ssh_target "$host")
+  echo "=== $host"
+  answer=$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" '
+    if [ -d ~/workhorse.lock ]; then echo "running"
+    elif [ -f ~/workhorse/run.status ]; then echo "ended $(cat ~/workhorse/run.status)"
+    else echo "never synced"; fi
+    [ ! -f ~/workhorse/run.log ] || tail -3 ~/workhorse/run.log')
+  case "$answer" in
+    "ended 0"*) echo "exit=0" ;;
+    ended*) read -r _ code step <<<"$answer"; echo "exit=$code, stopped at $step" ;;
+    *) head -n 1 <<<"$answer" ;;
+  esac
+  tail -n +2 <<<"$answer"
+  [[ $answer == ended* ]] || return 0
+  manifests="$(workhorses_state_dir)/manifests"
+  mkdir -p "$manifests"
+  if ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" 'cat ~/workhorse/manifest' >"$manifests/$host.new" &&
+    grep -q '^#synced ' "$manifests/$host.new"; then
+    mv "$manifests/$host.new" "$manifests/$host"
+    echo "manifest stored: $manifests/$host"
+  else
+    rm -f "$manifests/$host.new"
+    echo "$host has no manifest from its last run; sync it again to get one" >&2
+  fi
+}
 
-# Exit 0 only when every host answers and reports the same tool versions as the first that answered.
-# A comparison that involves a shared host leaves out the machine lines, and one across architectures
-# the dependency ports.
+# Prints the probe lines under tools line $2 in manifest file $1, or fails when the manifest has no such line.
+manifest_block() {
+  grep -qxF "#line $2" "$1" || return 1
+  awk -v want="#line $2" '$0 == want {on = 1; next} /^#/ {on = 0} on' "$1"
+}
+
+# Exit 0 only when every host answers and, for each tools line, every host the line targets reports
+# the same probe output as the first of them.
 diff_hosts() {
-  local manifests first="" host status=0 a b
+  local manifests host status=0 i line first block lines=0
   manifests=$(mktemp -d "${TMPDIR:-/tmp}/workhorse-manifest.XXXX")
-  for host in "${all_hosts[@]}"; do
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$(ssh_target "$host")" 'zsh ~/workhorse/manifest.sh' > "$manifests/$host"; then
+  for host in "${host_names[@]}"; do
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$(ssh_target "$host")" '/bin/bash ~/workhorse/manifest.sh' >"$manifests/$host"; then
       echo "$host: unreachable, not compared" >&2
+      rm -f "$manifests/$host"
       status=1
-      continue
     fi
-    if [ -z "$first" ]; then first=$host; continue; fi
-    a=$manifests/$first b=$manifests/$host
-    local skip='^$'
-    if [ "$(profile "$first")" = shared ] || [ "$(profile "$host")" = shared ]; then skip="$skip|$machine_lines"; fi
-    if [ "$(grep '^arch ' "$a")" != "$(grep '^arch ' "$b")" ]; then skip="$skip|$arch_lines"; fi
-    grep -Ev "$skip" "$a" > "$a.compared" || true
-    grep -Ev "$skip" "$b" > "$b.compared" || true
-    a=$a.compared b=$b.compared
-    diff -u --label "$first" --label "$host" "$a" "$b" || status=1
   done
-  [ $status -eq 0 ] && echo "all workhorses match ($(wc -l < "$manifests/$first" | tr -d ' ') items)"
+  for i in "${!tool_recipe[@]}"; do
+    line="${tool_recipe[i]}${tool_args[i]:+ ${tool_args[i]}}"
+    first=""
+    lines=$((lines + 1))
+    for host in "${host_names[@]}"; do
+      [ -f "$manifests/$host" ] && tool_targets "$i" "$host" || continue
+      if ! manifest_block "$manifests/$host" "$line" >"$manifests/$host.block"; then
+        echo "$host: not synced with \"$line\"" >&2
+        status=1
+        continue
+      fi
+      if [ -z "$first" ]; then first=$host; continue; fi
+      block=$(diff -u --label "$first: $line" --label "$host: $line" "$manifests/$first.block" "$manifests/$host.block") ||
+        { echo "$block"; status=1; }
+    done
+    for host in "${host_names[@]}"; do rm -f "$manifests/$host.block"; done
+  done
   rm -rf "$manifests"
+  [ $status -ne 0 ] || echo "all workhorses match ($lines tools lines)"
   return $status
 }
 
-if [ "${1:-}" = status ]; then
-  shift
-  hosts=("$@"); [ ${#hosts[@]} -gt 0 ] || hosts=("${all_hosts[@]}")
-  for host in "${hosts[@]}"; do show_status "$host"; done
-elif [ "${1:-}" = diff ]; then
-  diff_hosts
-else
-  hosts=("$@"); [ ${#hosts[@]} -gt 0 ] || hosts=("${all_hosts[@]}")
-  for host in "${hosts[@]}"; do start_sync "$host"; done
-fi
+main() {
+  # Everything is checked before any host is contacted.
+  load_hosts || exit 1
+  load_tools || exit 1
+  local command=sync host hosts=()
+  case "${1:-}" in
+    status | diff) command=$1; shift ;;
+  esac
+  hosts=("$@")
+  [ ${#hosts[@]} -gt 0 ] || hosts=("${host_names[@]}")
+  for host in "${hosts[@]}"; do host_index "$host" >/dev/null || exit 1; done
+  case "$command" in
+    status) for host in "${hosts[@]}"; do show_status "$host"; done ;;
+    diff) diff_hosts ;;
+    sync)
+      local status=0
+      for host in "${hosts[@]}"; do start_sync "$host" || status=1; done
+      return $status ;;
+  esac
+}
+
+# Sourced by the checks for its functions; run, it syncs.
+[ "${BASH_SOURCE[0]}" != "$0" ] || main "$@"

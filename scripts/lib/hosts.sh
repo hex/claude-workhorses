@@ -40,6 +40,11 @@ check_host_option() {
   fi
 }
 
+# The folder where sync.sh status stores each host's last manifest, which the session-start policy reads.
+workhorses_state_dir() {
+  printf '%s\n' "${CLAUDE_WORKHORSES_STATE_DIR:-$HOME/.local/state/claude-workhorses}"
+}
+
 # Reads the hosts file into one array per column, in file order: host_names, host_ssh, host_arch,
 # host_cores, host_ram (GB) and host_options (the line's options, space-separated, in its order). One
 # host per line, fields split on whitespace; a # starts a comment. Every value is checked here,
