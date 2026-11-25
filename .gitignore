@@ -9,3 +9,6 @@
 
 # OS files
 .DS_Store
+
+# Python bytecode from the capture scripts
+__pycache__/
