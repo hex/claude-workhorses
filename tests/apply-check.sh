@@ -176,6 +176,29 @@ apply ""
 [ "$(cat "$scratch/home/.zshenv")" = "$line" ] || fail ".zshenv from nothing: '$(cat "$scratch/home/.zshenv")'"
 echo "ok   a missing ~/.zshenv is created with the one line"
 
+printf 'exit 3\n' >"$scratch/home/.local/share/claude-workhorses/env.d/zz-exit.sh"
+apply ""
+rm "$scratch/home/.local/share/claude-workhorses/env.d/zz-exit.sh"
+[ "$(cat "$scratch/home/workhorse/run.status")" = "1 env" ] || fail "a snippet that exits gave run.status '$(cat "$scratch/home/workhorse/run.status")'"
+grep -qxF "env.sh stopped before its end: a snippet in $scratch/home/.local/share/claude-workhorses/env.d exits or fails, and the steps would miss what it sets" "$scratch/apply.log" ||
+  fail "a snippet that exits is not named: $(cat "$scratch/apply.log")"
+echo "ok   a snippet that ends env.sh early stops the run at the env step"
+
+# start must leave nothing holding the ssh session open: $(...) returns only when every writer to its
+# pipe is gone, so the lock still being there afterwards shows the run went on without it.
+recipe nap "" "sleep 3"
+cp "$config/recipes/nap" "$stage/recipes/"
+printf '%s\n' nap >"$stage/tools"
+rm -rf "$scratch/home/workhorse"
+cp -R "$stage" "$scratch/home/workhorse"
+mkdir "$scratch/home/workhorse.lock"
+out=$(printf '\n' | HOME=$scratch/home PATH="$scratch/bin:$PATH" /bin/bash "$scratch/home/workhorse/apply.sh" start 2>&1)
+[ -e "$scratch/home/workhorse.lock/started" ] || fail "apply.sh start returned only after the run ended: '$out'"
+for _ in $(seq 100); do [ -d "$scratch/home/workhorse.lock" ] || break; sleep 0.1; done
+[ ! -d "$scratch/home/workhorse.lock" ] || fail "the detached run kept its lock for 10 s"
+[ "$(cat "$scratch/home/workhorse/run.status")" = 0 ] || fail "the detached run ended with '$(cat "$scratch/home/workhorse/run.status")'"
+echo "ok   apply.sh start returns at once, with the run going on detached"
+
 # Host options run through options.sh; a stand-in records what each one sees instead of changing this Mac.
 printf '#!/bin/bash\n[ "$1" = apply ] || { echo "$2 probed"; exit 0; }\necho "option $2 pw=${SUDO_PW:-unset} askpass=${SUDO_ASKPASS:-unset}" >>"$HOME/calls"\n' >"$scratch/stage-beta/options.sh"
 : >"$scratch/stage-beta/tools"

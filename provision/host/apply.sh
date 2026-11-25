@@ -83,12 +83,22 @@ build_env() {
   } >"$state/env.sh.new"
   mv "$state/env.sh.new" "$state/env.sh"
   step_env=()
-  # Snippets come from installers that were not written for set -eu, so they load without it.
+  # Snippets come from installers that were not written for set -eu, so they load without it. The
+  # last record, "-end-", shows that env.sh ran to its end.
+  local ended=no
   # shellcheck disable=SC2016 # the script is the inner bash's
   while IFS= read -r -d '' record; do
-    if [[ $record =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then step_env+=("$record"); fi
-  done < <(/bin/bash -c '. "$1" >&2; for name in $(compgen -e); do printf "%s=%s\0" "$name" "${!name}"; done' \
+    if [ "$record" = -end- ]; then
+      ended=yes
+    elif [[ $record =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+      step_env+=("$record")
+    fi
+  done < <(/bin/bash -c '. "$1" >&2; for name in $(compgen -e); do printf "%s=%s\0" "$name" "${!name}"; done; printf "%s\0" -end-' \
     _ "$state/env.sh" </dev/null 3<&-)
+  if [ $ended != yes ]; then
+    echo "env.sh stopped before its end: a snippet in $state/env.d exits or fails, and the steps would miss what it sets" >&2
+    return 1
+  fi
 }
 
 # ~/.zshenv gets one line that sources env.sh, added once; the rest of the file stays the user's.

@@ -274,10 +274,12 @@ lines, needs it. A host with neither syncs without one. It runs your helper,
 password from its output. The helper must be a file you own that only you can write; the plugin
 never runs its output as shell text. [examples/sudo-password](examples/sudo-password) reads it from
 the login keychain. The password reaches the host on the ssh session's stdin, never in an
-environment variable or a command line. On the host, no env snippet, `~/.unity/env` or `~/.zshenv`
-line can read it, and neither can a step that does not declare sudo. A step that does gets it in its
-environment as `SUDO_PW`, and so does every program that step starts. Any process running as the
-workhorse user can change what those steps run, so the password is only as safe as that account.
+environment variable, a command line or a file. On the host, the shell that loads the env snippets
+for each step never holds it, and a step that does not declare sudo never gets it. A step that does
+gets it in its environment as `SUDO_PW`, and so does every program that step starts. The login shell
+that starts the run reads `~/.zshenv` while the password waits on its stdin, and any process
+running as the workhorse user can change what the sudo steps run, so the password is only as safe as
+that account.
 
 ### Configuration
 
