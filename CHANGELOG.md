@@ -4,6 +4,20 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+- The built-in recipes run on Linux hosts, all but the five that need macOS: `npm`, `mise`, `uv`, `uv-tool`, `gem`, `claude`, `rustup`, `dotnet`, `bun`, `opencode`, `chrome-for-testing` and `bundletool`. The README's Linux section names the apt packages some of them need first.
+- On Linux, the `mise` recipe installs mise into `~/.local/bin` and keeps it current, and its line's versions become mise's global ones, on the `PATH` through mise's shims, the first of a tool its default: `mise node@24 node@26` makes `node` the 24. A Mac's `mise` line still only installs its versions.
+
+### Changed
+- `command-line-tools`, `macports`, `port`, `macos-harness` and `unity` stop on a Linux host before they run anything, with a message that names the `@os=macos` filter their line lacks.
+- A missing node or Ruby names the line that brings it on Linux too, `mise node@24` or `mise ruby@3.4`.
+
+### Fixed
+- `uv`'s probe drops a Linux build's target, `(x86_64-unknown-linux-gnu)`, as it drops a Mac's, so hosts of either architecture compare.
+- `mise`'s probe prints a tool once when its line names two of its versions.
+
 ## 2026.11.4
 
 ### Added

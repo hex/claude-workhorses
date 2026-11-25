@@ -216,11 +216,11 @@ unity 6000.3.28f1 8f082d2fe476 android ios webgl @hosts=alpha
 
 | Recipe | Arguments | Installs |
 | --- | --- | --- |
-| `command-line-tools` | none | Apple's Command Line Tools: git, clang, make (sudo) |
-| `macports` | none | MacPorts for macOS 15 or 27; every sync upgrades outdated ports (sudo) |
-| `port` | port names | MacPorts ports (sudo; needs `macports` first) |
+| `command-line-tools` | none | Apple's Command Line Tools: git, clang, make (sudo; macOS only) |
+| `macports` | none | MacPorts for macOS 15 or 27; every sync upgrades outdated ports (sudo; macOS only) |
+| `port` | port names | MacPorts ports (sudo; needs `macports` first; macOS only) |
 | `npm` | package names, `pkg@version` to pin | global npm packages under `~/.local`, at their latest unless pinned |
-| `mise` | `tool@version` | runtimes through mise; run one with `mise exec node@26 -- <command>` |
+| `mise` | `tool@version` | runtimes through mise; run one with `mise exec node@26 -- <command>`. On Linux it installs mise itself, and the line's versions become the defaults on the `PATH`, the first of a tool first |
 | `uv` | none | uv |
 | `uv-tool` | package names | Python command-line tools through uv |
 | `gem` | gem names | gems and their commands, under `~/.local` |
@@ -231,12 +231,14 @@ unity 6000.3.28f1 8f082d2fe476 android ios webgl @hosts=alpha
 | `opencode` | none | opencode, upgraded on every sync |
 | `chrome-for-testing` | none | Chrome for Testing, with `CHROME_BIN` pointing at it |
 | `bundletool` | a version | Google's bundletool |
-| `macos-harness` | none | macos-harness and its skill for Claude on the host |
-| `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor, without a license |
+| `macos-harness` | none | macos-harness and its skill for Claude on the host (macOS only) |
+| `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor, without a license (macOS only) |
 | `apt` | exact package names, none ending in `-` or `+` | Debian and Ubuntu packages, after `apt-get update`; give its line `@os=linux` (sudo) |
 
 A recipe that needs another one fails with a message naming it, such as `port needs MacPorts: list
-macports before it`.
+macports before it`. Every recipe but the `apt` one runs on a Mac, and every one but the five marked
+macOS only runs on Linux. Those five stop on a Linux host before they change anything, with a message
+that names the `@os=macos` filter their line lacks.
 
 #### Your own recipes
 
@@ -299,6 +301,20 @@ architecture (`aarch64` becomes `arm64`), physical cores from `lscpu`, and RAM f
 rounded to the nearest GB. Host options are Mac settings and do not apply. The `apt` recipe
 installs packages with `sudo`, so a host without sudo takes only lines that need none.
 
+Ubuntu's packages stand in for MacPorts where their version is current enough. Where apt has a tool
+only in an old version, under another command name (`fdfind`, `batcat`) or not at all, a `mise` line
+brings it: node, go, Ruby, `gh`, `fd`, `bat`, `yq` and the like. On Linux the `mise` recipe installs
+mise into `~/.local/bin` and keeps it current, and its line's versions become mise's global ones,
+on the `PATH` through mise's shims, so `mise node@24 node@26` makes `node` the 24 and leaves 26 to
+`mise exec node@26 --`. The other recipes need a few packages before them on Linux:
+
+- `build-essential` for the C compiler and linker that Rust, gems with native code and mise's Ruby use.
+- `unzip` for `bun`'s installer, and `libatomic1` for node 26.
+- Chrome for Testing's libraries for `chrome-for-testing`; on Ubuntu 24.04: `libnss3`,
+  `libatk-bridge2.0-0t64`, `libcups2t64`, `libxkbcommon0`, `libxcomposite1`, `libxdamage1`,
+  `libxrandr2`, `libgbm1`, `libpango-1.0-0` and `libasound2t64`.
+- A `java` for `bundletool`, such as `openjdk-21-jdk-headless`.
+
 A Windows PC serves through WSL2, with Ubuntu say:
 
 - Run sshd inside WSL and make it reachable from your machine, then put the route in
@@ -335,5 +351,6 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
 | `git` fails on a new host | macOS's `git` stays a stub until the Command Line Tools arrive. Add the `command-line-tools` line. On Linux, install `git` (`apt git @os=linux`). |
 | `sync.sh` says a host "runs Linux, where host options do not apply" | Remove the options it names from that host's line in the hosts file. |
+| A run stops with "<recipe&gt; runs only on macOS" | That recipe's line reached a Linux host. Give it `@os=macos`. |
 | `sync.sh status` says `stopped at <step>` | That recipe or option failed; the lines under it are the end of the host's `~/workhorse/run.log`. A recipe that needs another names it there. |
 | `sync.sh` says "no sudo password" | The line above it says why: the helper is missing, not executable, writable by others, failed, or printed nothing. |

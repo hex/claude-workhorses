@@ -38,7 +38,8 @@ wh alpha --timeout 20m -- cargo test   # a named host
 - Always put `--` before the command. Bound every job with `--timeout` (`90s`, `30m`, `2h`): past
   it, `wh` stops the job and everything it started and exits 124. The hosts need no `gtimeout`.
 - Use only the tools the session-start policy lists for the host. A runtime installed with the
-  `mise` recipe runs as `wh --timeout 30m -- mise exec node@26 -- npm test`.
+  `mise` recipe runs as `wh --timeout 30m -- mise exec node@26 -- npm test`. On a Linux host, the
+  first version of each tool on its `mise` line is on the `PATH` directly: `node`, `go`, `ruby`.
 - Run it from a background shell (`run_in_background: true`) when it takes minutes, and wait for the
   exit notification instead of polling.
 
@@ -86,11 +87,11 @@ Run the job locally only if the user declines, and say so. Removing a line unins
 
 | Recipe | Arguments | Installs |
 |--------|-----------|----------|
-| `command-line-tools` | none | Apple's Command Line Tools: git, clang, make (sudo) |
-| `macports` | none | MacPorts for macOS 15 or 27; every sync upgrades outdated ports (sudo) |
-| `port` | port names | MacPorts ports (sudo; needs `macports` first) |
+| `command-line-tools` | none | Apple's Command Line Tools: git, clang, make (sudo; macOS only) |
+| `macports` | none | MacPorts for macOS 15 or 27; every sync upgrades outdated ports (sudo; macOS only) |
+| `port` | port names | MacPorts ports (sudo; needs `macports` first; macOS only) |
 | `npm` | package names, `pkg@version` to pin | global npm packages under `~/.local` (needs node and npm first) |
-| `mise` | `tool@version` | runtimes through mise (needs mise first, `port mise` say) |
+| `mise` | `tool@version` | runtimes through mise (on a Mac, needs mise first, `port mise` say; on Linux it installs mise, and the line's versions become the defaults on the `PATH`, the first of a tool first) |
 | `uv` | none | uv |
 | `uv-tool` | package names | Python command-line tools through uv (needs `uv` first) |
 | `gem` | gem names | gems with their commands, under `~/.local` (needs a Ruby first) |
@@ -101,9 +102,15 @@ Run the job locally only if the user declines, and say so. Removing a line unins
 | `opencode` | none | opencode |
 | `chrome-for-testing` | none | Chrome for Testing, with `CHROME_BIN` set (needs npx first) |
 | `bundletool` | a version | Google's bundletool (runs with the `java` on the `PATH`) |
-| `macos-harness` | none | macos-harness and its skill (needs `uv` first) |
-| `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor; no license |
+| `macos-harness` | none | macos-harness and its skill (needs `uv` first; macOS only) |
+| `unity` | version, changeset, modules | Unity Hub, the `unity` command and one editor; no license (macOS only) |
 | `apt` | exact package names, none ending in `-` or `+` | Debian and Ubuntu packages, on Linux hosts only: `@os=linux` (sudo) |
+
+Every recipe but `apt` runs on a Mac, and every one not marked macOS only runs on Linux. On Linux,
+prefer `apt` for a tool Ubuntu ships in a current version, and `mise` for one it ships old, under
+another command name or not at all. The other recipes need packages before them there:
+`build-essential` for Rust and gems, `unzip` for `bun`, a `java` for `bundletool`, and Chrome's
+libraries for `chrome-for-testing`; the README's Linux section lists them.
 
 ## Git in the copy
 

@@ -9,6 +9,7 @@ command-line-tools @os=macos
 macports @os=macos
 port git-lfs jq ripgrep nodejs24 npm11 @os=macos
 apt git jq ripgrep @os=linux
+mise node@24 node@26 @os=linux
 npm pnpm @os=macos
 uv @os=macos
 uv-tool ruff @os=macos
