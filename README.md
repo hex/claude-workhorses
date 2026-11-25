@@ -5,17 +5,17 @@ in to a workhorse, brings the copy level with your machine (`.git` included), an
 there. The test suite or the build runs on the workhorse, and your laptop stays free for the work in
 front of you.
 
+![wh picks the workhorse alpha, copies a small Go module to it and runs its tests, then after a one-line edit sends only the edited file and runs them again](assets/wh-run.svg)
+
 [![Tests](https://github.com/hex/claude-workhorses/actions/workflows/tests.yml/badge.svg)](https://github.com/hex/claude-workhorses/actions/workflows/tests.yml)
 
-## What you get
+## Where it runs
 
-| Part | What it does |
+| Where | What you get |
 | --- | --- |
-| `wh` | `wh [host] -- <command>` runs the command on a workhorse, in that host's copy of the current repository, and exits with the command's exit code. |
-| Offload policy | At the start of every session Claude reads when to offload, when to stay local, and a table of your hosts. |
-| `workhorse` skill | How to run `wh` well: exit codes, first runs, git in the copy. |
-| Badge and band | While a run goes, a green `wh` badge sits in the prompt footer and a line per run sits above the prompt. A long run, or one that ends `BLOCKED`, ends with a toast. |
-| Provision scripts | `provision/sync.sh` sets up every workhorse with the same tools, and `sync.sh diff` shows whether they still match. |
+| Claude Code on your Mac | `wh` on the path of every command Claude runs, the offload policy and your host table at the start of every session, the `workhorse` skill, and the badge and band. |
+| Your own terminal | `wh` by its full path, or linked into a folder on your `PATH`. Its runs show in the badge and band of a Claude Code session whose folder holds the repository or sits inside it. |
+| The workhorses | Spare Macs, Intel or Apple silicon, on macOS 15 or 27. `wh` reaches them over ssh, and the provision scripts give each one the same tools. |
 
 ## Install
 
@@ -59,6 +59,19 @@ You need:
 
 ## Features
 
+| Capability | Guide |
+| --- | --- |
+| Run a command on a workhorse, in a copy of the repository you are in, and get its exit code back | [Running a job](#running-a-job) |
+| Let `wh` pick the host with room, or name one | [Choosing a host](#choosing-a-host) |
+| Send only what changed since the last run | [What gets copied](#what-gets-copied) |
+| See each run above the prompt and in the footer while it goes | [The badge and band](#the-badge-and-band) |
+| Tell Claude when to offload, and which hosts it has | [The offload policy and the skill](#the-offload-policy-and-the-skill) |
+| Give every workhorse the same tools, and check they still match | [Provisioning](#provisioning) |
+| Keep the hosts file and the sudo helper somewhere else | [Configuration](#configuration) |
+
+[TESTING.md](TESTING.md) covers the checks that need no workhorse and the end-to-end check against
+one.
+
 ### Running a job
 
 `wh [host] -- <command...>` runs from anywhere inside a git repository. The command runs in the same
@@ -98,14 +111,31 @@ locks it, copies `.git`, patches the working tree, then runs the command:
 
 ### The badge and band
 
+![Claude Code runs wh in bash mode: the band above the prompt names the run and its time, and the footer badge counts the copy, then spins while the job runs](assets/claude-band.svg)
+
 Every run writes a start, a synced and an end line to `~/.local/state/workhorse/runs.jsonl`. The
 mod reads that log and shows the runs started from the session's folder:
 
-- The footer badge names the host and counts the copy (`↗ wh - alpha 0:42`), then spins while the
+- The green footer badge names the host and counts the copy (`↗ wh - alpha 0:42`), then spins while the
   job runs (`⠋ wh - alpha 0:43`).
 - The band above the prompt has a line per run (`wh alpha: pnpm test (demo) · 0:43`), at most
   three, then a count of the rest.
 - A run that took over 2 minutes, or ended `BLOCKED`, ends with a toast.
+
+The mod makes no network calls and writes no files. It reads the log once a second. While it shows a
+run, it runs `ps -o pid=,command= -p <pids>` every 15 seconds and drops a run whose `mirror.sh` has
+gone without writing its end line. A run it saw going gets a toast that says so.
+
+Both animations are real runs on one workhorse, named `alpha` in them. In the second one, Claude Code
+runs `wh` as a bash-mode command. [The capture scripts and raw frames](assets/capture/README.md) show
+how to make them again.
+
+### The offload policy and the skill
+
+At the start of every session, a hook gives Claude the offload policy: when to offload, when to stay
+local, and a table of your hosts with their ssh target, architecture, cores, RAM and profile. With no hosts file,
+or one it cannot use, it says so in one line instead. The `workhorse` skill covers how to run `wh`
+well: exit codes, first runs, and git in the copy.
 
 ### Provisioning
 
@@ -152,17 +182,12 @@ when two hosts have different architectures.
 
 ## Troubleshooting
 
-- **`wh` exits 2 with "no hosts file".** Write `~/.config/claude-workhorses/hosts`, as in
-  [First run](#first-run). For a bad line, the error names the file and the line number.
-- **`wh: command not found` in your own terminal.** Claude Code puts the plugin's `bin/` on the
-  path of the commands Claude runs, not on your shell's. Call `bin/wh` in the installed plugin by
-  its full path, or link it into a folder on your `PATH`.
-- **`BLOCKED: gtimeout is missing`.** Install `coreutils`; `wh` needs it to ask the hosts for
-  their load.
-- **`BLOCKED: no workhorse is free`.** The message lists each host's reason. Every host is at its
-  core count or unreachable; run the job locally.
-- **`... is in use: ...`.** Another run holds that copy's lock. If that run has ended, remove the
-  `.lock` folder the message names.
-- **Every run says `full walk:`.** Watchman is not installed, or it restarted since the last run.
-- **`sync.sh` says "no sudo password".** The line above it says why: the helper is missing, not
-  executable, writable by others, failed, or printed nothing.
+| Problem | Fix |
+| --- | --- |
+| `wh` exits 2 with "no hosts file" | Write `~/.config/claude-workhorses/hosts`, as in [First run](#first-run). For a bad line, the error names the file and the line number. |
+| `wh: command not found` in your own terminal | Claude Code puts the plugin's `bin/` on the path of the commands Claude runs, not on your shell's. Call `bin/wh` in the installed plugin by its full path, or link it into a folder on your `PATH`. |
+| `BLOCKED: gtimeout is missing` | Install `coreutils`; `wh` needs it to ask the hosts for their load. |
+| `BLOCKED: no workhorse is free` | The message lists each host's reason. Every host is at its core count or unreachable; run the job locally. |
+| `... is in use: ...` | Another run holds that copy's lock. If that run has ended, remove the `.lock` folder the message names. |
+| Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
+| `sync.sh` says "no sudo password" | The line above it says why: the helper is missing, not executable, writable by others, failed, or printed nothing. |
