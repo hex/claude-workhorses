@@ -1,10 +1,12 @@
 #!/bin/bash
 # ABOUTME: Runs a command on a workhorse in its own copy of a laptop repository, brought level with the laptop first,
-# ABOUTME: .git included. Usage: mirror.sh run <host|auto> <dir> <command...>; wh is the short form.
+# ABOUTME: .git included. Usage: mirror.sh run [--timeout <seconds>] <host|auto> <dir> <command...>; wh is the short form.
 set -euo pipefail
 
 # shellcheck source=lib/hosts.sh
 . "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/lib/hosts.sh"
+# shellcheck source=lib/bounded.sh
+. "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/lib/bounded.sh"
 
 # The hosts, in the hosts file's order, which breaks ties when wh picks one. run fills it.
 all_hosts=()
@@ -110,14 +112,13 @@ choose_host() {
 # name that nobody answers takes 5 seconds to fail.
 pick_host() {
   local work=$1 answers host answer load cores copy probes="" chosen reasons
-  command -v gtimeout >/dev/null || blocked "gtimeout is missing; install coreutils to pick a workhorse"
   answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-pick.XXXX")
   for host in "${all_hosts[@]}"; do
     {
       # set -e would end this subshell on a failed probe before it wrote the status.
       local status=0
-      gtimeout 2 ssh -o BatchMode=yes -o ConnectTimeout=2 "$(ssh_target "$host")" \
-        "sysctl -n vm.loadavg hw.physicalcpu; if test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" \
+      run_bounded 2 ssh -o BatchMode=yes -o ConnectTimeout=2 "$(ssh_target "$host")" \
+        "/usr/sbin/sysctl -n vm.loadavg hw.physicalcpu; if test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" \
         >"$answers/$host" 2>/dev/null || status=$?
       echo "$status" >"$answers/$host.status"
     } &
@@ -150,11 +151,13 @@ $reasons"
 # Prints one line per entry of the copy in the current folder (mode, size, modification time to the
 # nanosecond, ./path), sorted, leaving out the repository's own .git and every name in $1 (one per
 # line), the same names the patch leaves out. Two listings of one copy differ where something changed it.
+# The scripts that run on a host call macOS's own tools by path: a GNU stat or find that a tool
+# install put first on the host's PATH reads these options differently.
 list_copy=$(cat <<'SCRIPT'
 list_copy() {
   local prune=() name
   while IFS= read -r name; do prune+=(-name "$name" -o); done <<<"$1"
-  find . -mindepth 1 \( "${prune[@]}" -path ./.git \) -prune -o -exec stat -f '%p %z %Fm %N' {} + | LC_ALL=C sort
+  /usr/bin/find . -mindepth 1 \( "${prune[@]}" -path ./.git \) -prune -o -exec /usr/bin/stat -f '%p %z %Fm %N' {} + | LC_ALL=C /usr/bin/sort
 }
 SCRIPT
 )
@@ -170,6 +173,7 @@ SCRIPT
 # last job changed, added or deleted.
 prepare_work_copy="$list_copy"$'\n'$(cat <<'SCRIPT'
 set -euo pipefail
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
 work=$HOME/$1 lock=$HOME/$1.lock owner=$2 seed=$3 names=$4
 shift 4
 mkdir -p "$(dirname "$work")"
@@ -211,7 +215,9 @@ SCRIPT
 
 # Runs the job in the given subfolder of the work copy and releases the lock when it ends, even if the
 # laptop disconnects. Before the job starts, it stores the copy's listing and the Watchman clock the
-# patch went by (none when $3 is empty), which the next run compares against.
+# patch went by (none when $3 is empty), which the next run compares against. With a limit of $5
+# seconds (0: none), the job runs in its own process group, and past the limit the whole group gets
+# SIGTERM, then SIGKILL 10 seconds later; the run then exits 124, as gtimeout does.
 run_job="$list_copy"$'\n'$(cat <<'SCRIPT'
 lock=$HOME/$1.lock work=$HOME/$1
 trap 'rm -rf "$lock"' EXIT
@@ -223,17 +229,36 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 # The patch has carried the laptop's file times, so later runs can compare by size and time.
-touch "$work.times"
+/usr/bin/touch "$work.times"
 # Without a listing or a clock, the next run compares every file.
-rm -f "$work.listing" "$work.clock"
+/bin/rm -f "$work.listing" "$work.clock"
 if [ -n "$3" ] && (cd "$work" && list_copy "$4") >"$work.listing.new"; then
-  mv "$work.listing.new" "$work.listing"
+  /bin/mv "$work.listing.new" "$work.listing"
   printf '%s\n' "$3" >"$work.clock"
 fi
-rm -f "$work.listing.new"
+/bin/rm -f "$work.listing.new"
 cd "$work/$2" || exit 1
-shift 4
-"$@"
+limit=$5
+shift 5
+[ "$limit" != 0 ] || { "$@"; exit; }
+# Job control gives the job, and the timer, a process group of its own.
+set -m
+"$@" &
+job=$!
+(/bin/sleep "$limit" && /bin/mkdir "$lock/limit" && /bin/kill -TERM -"$job" && /bin/sleep 10 && /bin/kill -KILL -"$job") \
+  </dev/null >/dev/null 2>&1 &
+timer=$!
+set +m
+status=0
+wait "$job" || status=$?
+/bin/kill -TERM -"$timer" 2>/dev/null || true
+# bash reports the timer it stopped on wait's stderr, which is the job's.
+wait "$timer" 2>/dev/null || true
+if [ -d "$lock/limit" ]; then
+  echo "mirror.sh run: the command ran past its $limit s limit and was stopped" >&2
+  exit 124
+fi
+exit "$status"
 SCRIPT
 )
 
@@ -288,6 +313,7 @@ changed_paths() {
 # parent resolves outside the copy fails the step, and the walk that follows replaces the symlink.
 apply_records=$(cat <<'SCRIPT'
 set -euo pipefail
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
 cd -P "$HOME/$1"
 copy=$PWD
 deletes=()
@@ -362,7 +388,13 @@ patch_listed() {
 # the laptop and the paths the last job changed in the copy, or compare size and modification time
 # of every file when either list is in doubt.
 run() {
-  [ $# -ge 3 ] || { echo "usage: $0 run <host|auto> <dir> <command...>" >&2; exit 2; }
+  local limit=0
+  if [ "${1:-}" = --timeout ]; then
+    limit=${2:-}
+    shift 2 || true
+  fi
+  [ $# -ge 3 ] && [[ $limit =~ ^(0|[1-9][0-9]*)$ ]] ||
+    { echo "usage: $0 run [--timeout <seconds>] <host|auto> <dir> <command...>" >&2; exit 2; }
   local host=$1 dir sub main seed="" target work ignore rsync_excludes=() names=() pattern tracked
   dir=$(cd "$2" && pwd -P)
   shift 2
@@ -467,10 +499,10 @@ $tracked"
   # From here the remote job owns the lock and releases it itself.
   trap 'log_end $?' EXIT
   log_synced
-  remote "$target" /bin/bash -c "$run_job" _ "$work" "${sub:-.}" "$clock" "$(printf '%s\n' "${names[@]}")" "$@"
+  remote "$target" /bin/bash -c "$run_job" _ "$work" "${sub:-.}" "$clock" "$(printf '%s\n' "${names[@]}")" "$limit" "$@"
 }
 
 case "${1:-}" in
   run) shift; run "$@" ;;
-  *) echo "usage: $0 run <host|auto> <dir> <command...>" >&2; exit 2 ;;
+  *) echo "usage: $0 run [--timeout <seconds>] <host|auto> <dir> <command...>" >&2; exit 2 ;;
 esac

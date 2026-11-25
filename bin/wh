@@ -1,20 +1,35 @@
 #!/bin/bash
 # ABOUTME: Runs a command on a workhorse against a verified copy of the current git repo, in the caller's subdirectory.
-# ABOUTME: Usage: wh [host] -- <command...>; no host picks by load. Exit: the command's, 3 BLOCKED, 2 usage.
+# ABOUTME: Usage: wh [host] [--timeout <limit>] -- <command...>; no host picks by load. Exit: the command's, 124 past the limit, 3 BLOCKED, 2 usage.
 set -euo pipefail
 
 usage() {
-  echo "usage: wh [host] -- <command...>  (no host: a free workhorse, by load)" >&2
+  echo "usage: wh [host] [--timeout <limit>] -- <command...>  (no host: a free workhorse, by load; limit: 90s, 30m, 2h)" >&2
   exit 2
 }
 
-host=auto
-if [ "${1:-}" != -- ]; then
+host=auto limit=0
+while [ "${1:-}" != -- ]; do
   [ $# -gt 0 ] || usage
-  host=$1
-  shift
-fi
-[ "${1:-}" = -- ] || usage
+  case "$1" in
+    --timeout)
+      [ $# -ge 2 ] || usage
+      if ! [[ $2 =~ ^([1-9][0-9]*)([smh])$ ]]; then
+        echo "wh: --timeout takes a whole number of seconds, minutes or hours (90s, 30m, 2h), not \"$2\"" >&2
+        exit 2
+      fi
+      case "${BASH_REMATCH[2]}" in
+        s) limit=${BASH_REMATCH[1]} ;;
+        m) limit=$((BASH_REMATCH[1] * 60)) ;;
+        h) limit=$((BASH_REMATCH[1] * 3600)) ;;
+      esac
+      shift 2 ;;
+    *)
+      [ "$host" = auto ] || usage
+      host=$1
+      shift ;;
+  esac
+done
 shift
 [ $# -gt 0 ] || usage
 
@@ -24,4 +39,4 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
 }
 
 # mirror.sh copies the whole repository and runs the command in this subfolder of the copy.
-exec "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../scripts/mirror.sh" run "$host" "$PWD" "$@"
+exec "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../scripts/mirror.sh" run --timeout "$limit" "$host" "$PWD" "$@"
