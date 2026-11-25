@@ -139,7 +139,11 @@ tell the user.
 
 The copy keeps installed dependencies between runs, but `wh` never carries `node_modules/`,
 `target/`, `.venv/`, `venv/`, `Library/`, `.build/`, `.gradle/`, `DerivedData/` or `__pycache__/`.
-The first time, install them on the host: `wh --timeout 20m -- pnpm install --frozen-lockfile`.
+With no host named, a run can land on a host that has no copy yet, whenever the hosts that hold one
+are half busy or more; `wh` then says `first copy there`. Put the install in the same run as the
+job, where it costs little once the dependencies are there:
+`wh --timeout 30m -- sh -c 'pnpm install --frozen-lockfile && pnpm test'`. For a repo whose install
+takes long, name the host that holds the copy instead.
 Never copy built artifacts between architectures (an arm64 laptop and an x86_64 host, say). A
 worktree's first copy on a host starts from that host's copy of the main checkout, `.git` included,
 when there is one.

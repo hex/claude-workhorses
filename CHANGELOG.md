@@ -10,6 +10,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 - Codex, pi, OpenCode and Antigravity load the plugin: each gets the session-start policy and the `workhorse` skill, and the README's Install section has the command for each. Codex has its own manifest and hooks file, pi an extension that sets the policy as a system prompt section, OpenCode a `server.js` plugin, and Antigravity a native manifest whose hook prints the policy as the JSON step it reads. The badge, band and `/claude-workhorses:setup` stay Claude Code's.
 
 ### Changed
+- The `workhorse` skill puts the dependency install in the same run as the job, since with no host named a run can land on a host without the copy whenever the hosts that hold one are half busy.
 - The policy gives the full path of `wh`, since only Claude Code puts the plugin's `bin/` on the `PATH`. The policy and skill name `AskUserQuestion` and `run_in_background` as Claude Code's, so another agent uses its own question tool.
 
 ### Fixed
