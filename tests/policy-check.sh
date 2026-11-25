@@ -51,9 +51,9 @@ printf '%s\n' "alpha a x86_64 6 16" "beta b x86_64 6 16" "gamma g arm64 10 16" >
 printf '%s\n' "port cmake" "npm pnpm" "unity 6000 abc @arch=x86_64" >"$config/tools"
 printf '%s\n' "#synced 2026-11-20 10:00 UTC" "#exit 0" "#base" "arch x86_64" "macos 15.5" \
   "#line port cmake" "port cmake @3.31.6_0" "#line npm pnpm" "npm pnpm@9.1" "npm left-pad missing" \
-  "#line unity 6000 abc" "unity-cli 1.0" "unity-hub 4.0" $'unity-editors 6000.3.28f1\tx86_64\t/Applications/Unity/Hub/Editor/6000.3.28f1/Unity.app' \
+  "#line unity 6000 abc" "unity-cli 1.0" "unity-hub 4.0" $'unity-editors 6000.3.28f1\tx86_64\t\t/Applications/Unity/Hub/Editor/6000.3.28f1/Unity.app' \
   "claude 2.0.1 (Claude Code)" "rustc rustc 1.90.0 (1159e78c4 2025-09-14)" "gem rake (13.2.1, 13.0.6)" \
-  "chrome Google Chrome for Testing 131.0.6778.85" "#option no-sleep" "pmset sleep 0" >"$state/manifests/alpha"
+  "chrome Google Chrome for Testing 131.0.6778.85 " "#option no-sleep" "pmset sleep 0" >"$state/manifests/alpha"
 long=$(printf 'x%.0s' $(seq 200))
 # Any job on a host can write its manifest: lines that are not a tool and its version never reach Claude.
 printf '%s\n' "#synced 2026-11-21 10:00 UTC" "#exit 3 port" "#base" "arch x86_64" "macos 15.5" \

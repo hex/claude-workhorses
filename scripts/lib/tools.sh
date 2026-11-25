@@ -54,20 +54,26 @@ recipe_path() {
   printf '%s\n' "$user"
 }
 
-# Whether line $1, which a host wrote, has the shape of a probe line: a lower-case name, then at most
-# seven words of letters, digits and ._@:/+,()- with a digit among them, or the word "missing" last;
-# 100 characters at most. A job on a host can write what a probe prints, so host text reaches Claude
-# only in this shape. Tabs count as spaces.
+# Whether line $1, which a host wrote, has the shape of a probe line once probe_line_shaped sets
+# probe_line to it with tabs as spaces, each run of spaces as one and none at either end: a lower-case
+# name, then at most seven words of letters, digits and ._@:/+,()- with a digit among them, or the
+# word "missing" last; 100 characters at most. A job on a host can write what a probe prints, so host
+# text reaches Claude only in this shape.
 probe_line_shaped() {
-  local line=${1//$'\t'/ } shape='^[a-z0-9][a-z0-9._+-]*( [A-Za-z0-9._@:/+,()-]+){1,7}$'
-  [ ${#line} -le 100 ] && [[ $line =~ $shape ]] && [[ ${line#* } =~ [0-9] || $line == *" missing" ]]
+  local shape='^[a-z0-9][a-z0-9._+-]*( [A-Za-z0-9._@:/+,()-]+){1,7}$'
+  probe_line=${1//$'\t'/ }
+  while [[ $probe_line == *"  "* ]]; do probe_line=${probe_line//  / }; done
+  probe_line=${probe_line# }
+  probe_line=${probe_line% }
+  [ ${#probe_line} -le 100 ] && [[ $probe_line =~ $shape ]] &&
+    [[ ${probe_line#* } =~ [0-9] || $probe_line == *" missing" ]]
 }
 
-# Prints the lines on stdin that probe_line_shaped takes, tabs as spaces.
+# Prints the lines on stdin that probe_line_shaped takes, in its spacing.
 shaped_probe_lines() {
   local line
   while IFS= read -r line || [ -n "$line" ]; do
-    ! probe_line_shaped "$line" || printf '%s\n' "${line//$'\t'/ }"
+    ! probe_line_shaped "$line" || printf '%s\n' "$probe_line"
   done
 }
 

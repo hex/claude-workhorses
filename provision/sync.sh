@@ -149,8 +149,10 @@ shaped_diff() {
   local line number=0
   while IFS= read -r line; do
     number=$((number + 1))
-    if [ $number -le 2 ] || [[ $line == "@@ "* ]] || probe_line_shaped "${line:1}"; then
+    if [ $number -le 2 ] || [[ $line == "@@ "* ]]; then
       printf '%s\n' "$line"
+    elif probe_line_shaped "${line:1}"; then
+      printf '%s\n' "${line:0:1}$probe_line"
     else
       printf '%s\n' "${line:0:1}(a line not shaped as a tool and its version)"
     fi
