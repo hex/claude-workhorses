@@ -217,10 +217,29 @@ SCRIPT
 # laptop disconnects. Before the job starts, it stores the copy's listing and the Watchman clock the
 # patch went by (none when $3 is empty), which the next run compares against. With a limit of $5
 # seconds (0: none), the job runs in its own process group, and past the limit the whole group gets
-# SIGTERM, then SIGKILL 10 seconds later; the run then exits 124, as gtimeout does.
+# SIGTERM, then SIGKILL 10 seconds later; the run then exits 124, as gtimeout does. If this shell dies
+# by signal first, the group gets the same before the lock goes.
 run_job="$list_copy"$'\n'$(cat <<'SCRIPT'
-lock=$HOME/$1.lock work=$HOME/$1
-trap 'rm -rf "$lock"' EXIT
+lock=$HOME/$1.lock work=$HOME/$1 limited=$HOME/$1.limit
+job="" timer="" job_ended=""
+# Waits up to 10 s for the job's process group to empty, then sends what is left SIGKILL.
+reap_job() {
+  local waited=0
+  while [ $waited -lt 10 ] && kill -0 -- "-$job" 2>/dev/null; do /bin/sleep 1; waited=$((waited + 1)); done
+  kill -s KILL -- "-$job" 2>/dev/null || true
+}
+# The way out, however this shell ends: a job still running is stopped before the lock goes. A signal
+# here would cut it short, and the laptop may be gone, so it takes none and writes nothing.
+cleanup() {
+  trap '' PIPE HUP INT TERM
+  [ -z "$timer" ] || kill -s KILL -- "-$timer" 2>/dev/null || true
+  if [ -n "$job" ] && [ -z "$job_ended" ]; then
+    kill -s TERM -- "-$job" 2>/dev/null || true
+    reap_job
+  fi
+  /bin/rm -rf "$lock" "$limited"
+}
+trap cleanup EXIT
 # A dropped connection ends this shell by signal, which skips the EXIT trap; exit through it instead.
 # After the laptop goes, the first write to the closed connection (bash reporting how the job ended)
 # raises SIGPIPE.
@@ -241,20 +260,26 @@ cd "$work/$2" || exit 1
 limit=$5
 shift 5
 [ "$limit" != 0 ] || { "$@"; exit; }
+# The timer leaves this file when the limit passes; it lies outside the lock, which a signal can remove first.
+/bin/rm -f "$limited"
 # Job control gives the job, and the timer, a process group of its own.
 set -m
 "$@" &
 job=$!
-(/bin/sleep "$limit" && /bin/mkdir "$lock/limit" && kill -s TERM -- "-$job" && /bin/sleep 10 && kill -s KILL -- "-$job") \
+(/bin/sleep "$limit" && : >"$limited" && kill -s TERM -- "-$job" && /bin/sleep 10 && kill -s KILL -- "-$job") \
   </dev/null >/dev/null 2>&1 &
 timer=$!
 set +m
 status=0
 wait "$job" || status=$?
+job_ended=yes
+# The job's first process can end while others it started ignore the SIGTERM; they get SIGKILL now.
+[ ! -e "$limited" ] || reap_job
 kill -s TERM -- "-$timer" 2>/dev/null || true
 # bash reports the timer it stopped on wait's stderr, which is the job's.
 wait "$timer" 2>/dev/null || true
-if [ -d "$lock/limit" ]; then
+timer=""
+if [ -e "$limited" ]; then
   echo "mirror.sh run: the command ran past its $limit s limit and was stopped" >&2
   exit 124
 fi

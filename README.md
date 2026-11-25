@@ -98,7 +98,9 @@ wh alpha --timeout 20m -- cargo test   # a named host
 ```
 
 The exit code is the command's. Past its limit, `wh` stops the job and everything it started
-(`SIGTERM`, then `SIGKILL` 10 seconds later) and exits 124, as `gtimeout` does. The host needs no
+(`SIGTERM`, then `SIGKILL` 10 seconds later) and exits 124, as `gtimeout` does. The lock on the
+host's copy goes only after that, and a job with a limit stops the same way if a signal ends the
+shell running it on the host first. The host needs no
 `gtimeout`. Exit 3 with `BLOCKED` on stderr means the command did not run, and the message says
 why. Exit 2 is a usage error, an unknown host, or a missing or bad hosts file.
 

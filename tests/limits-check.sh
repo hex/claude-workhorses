@@ -14,7 +14,13 @@ eval "$(sed -n "/^list_copy=\$(cat <<'SCRIPT'$/,/^)$/p; /^run_job=/,/^)$/p" "$mi
 [ -n "${run_job:-}" ] || { echo "FAIL: no run_job script in $mirror" >&2; exit 1; }
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/limits-check.XXXX")
-trap 'rm -rf "$scratch"' EXIT
+# A failing check can leave a job's processes behind; each writes its pid to a file in the copy.
+cleanup() {
+  local pid
+  for pid in $(cat "$scratch"/work/demo/*.pid 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+  rm -rf "$scratch"
+}
+trap cleanup EXIT
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 
@@ -65,6 +71,31 @@ sleep 1
 ! kill -0 "$(cat "$scratch/work/demo/child")" 2>/dev/null || fail "a job past its limit left its child running"
 [ ! -e "$scratch/work/demo.lock" ] || fail "a job past its limit left its lock"
 echo "ok   a job past its limit is stopped with its children, exits 124, says so and frees the lock"
+
+start=$(now)
+code=0
+job 1 sh -c '(trap "" TERM; exec sleep 60) & echo $! >immune.pid; sleep 60' || code=$?
+immune=$(cat "$scratch/work/demo/immune.pid")
+! kill -0 "$immune" 2>/dev/null || fail "a child that ignores SIGTERM outlived the run that stopped its job"
+[ "$code" = 124 ] || fail "a job whose child ignores SIGTERM exited $code, not 124"
+[ $(($(now) - start)) -le 15 ] || fail "a job whose child ignores SIGTERM took $(($(now) - start)) s to stop"
+[ ! -e "$scratch/work/demo.lock" ] || fail "a job whose child ignores SIGTERM left its lock"
+echo "ok   a child that ignores SIGTERM gets SIGKILL 10 s later, before the lock goes, even after the job itself has ended"
+
+# The connection to the laptop drops: the shell that runs the job gets SIGHUP.
+mkdir -p "$scratch/work/demo/" "$scratch/work/demo.lock"
+rm -f "$scratch/work/demo/leader.pid"
+HOME=$scratch /bin/bash -c "$run_job" _ work/demo . "" "node_modules" 30 sh -c 'echo $$ >leader.pid; sleep 60' 2>"$scratch/err" &
+runner=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ ! -s "$scratch/work/demo/leader.pid" ] || break; sleep 0.5; done
+[ -s "$scratch/work/demo/leader.pid" ] || fail "the job never started"
+kill -s HUP "$runner"
+code=0
+wait "$runner" || code=$?
+! kill -0 "$(cat "$scratch/work/demo/leader.pid")" 2>/dev/null || fail "the job outlived the shell that ran it, which exited $code on SIGHUP"
+[ "$code" = 129 ] || fail "the shell that ran the job exited $code on SIGHUP, not 129"
+[ ! -e "$scratch/work/demo.lock" ] || fail "the shell that ran the job left its lock on SIGHUP"
+echo "ok   when the shell that runs a job with a limit dies by signal, it stops the job before it frees the lock"
 
 start=$(now)
 code=0
