@@ -6,6 +6,9 @@ This file lists the notable changes to claude-workhorses. The format follows
 
 ## Unreleased
 
+### Added
+- `CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB` sets the largest first copy, in MB, that `wh` sends through Tailscale, 1024 by default. A value that is not a whole number from 1 to 9999999 stops `wh` with exit 2 and a message that names it. A blocked first copy names the limit.
+
 ### Changed
 - The session-start policy has Claude read the `owner` file of every `~/work/*.lock` on a host before deleting anything a job could read there, and wait while a lock it did not take is present. A lock taken by hand for an rsync job gets an `owner` file too.
 

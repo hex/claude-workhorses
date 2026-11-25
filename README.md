@@ -127,8 +127,10 @@ locks it, copies `.git`, patches the working tree, then runs the command:
   host once (`wh --timeout 20m -- pnpm install --frozen-lockfile`) and they stay between runs.
 - Git in the copy has your commits, branch and index. A linked worktree's copy is an ordinary
   repository holding the worktree's branch and index.
-- `wh` refuses a first copy of over 1 GB that would cross Tailscale. Make it from a network that
-  reaches the host directly.
+- `wh` refuses a first copy of over 1 GB that would cross Tailscale, counting `.git` and every file it
+  sends but nothing under the names above. Make it from a network that reaches the host directly, or
+  set `CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB` to another limit in MB, a whole number from 1 to
+  9999999.
 
 ### The badge and band
 
@@ -347,6 +349,7 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | Facts for Claude that no record shows | `~/.config/claude-workhorses/notes` |
 | Sudo passwords, for `sync.sh` | `~/.config/claude-workhorses/sudo-password`, an executable |
 | Another config folder | `CLAUDE_WORKHORSES_CONFIG_DIR`, read by `wh`, `sync.sh` and the policy |
+| The largest first copy `wh` sends through Tailscale | `CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB`, in MB, 1024 by default |
 | Each host's last record | `~/.local/state/claude-workhorses/manifests/<host>`, or `CLAUDE_WORKHORSES_STATE_DIR` |
 
 ## Troubleshooting

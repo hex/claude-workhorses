@@ -138,5 +138,13 @@ expect_wh "--timeout with no value is a usage error" "$usage" 2 --timeout
 expect_wh "two hosts are a usage error" "$usage" 2 alpha beta -- true
 expect_wh "a good limit, before or after the host, gets as far as the hosts file" \
 "claude-workhorses: no hosts file at $scratch/no-config/hosts; the README's First run section shows one" 2 alpha --timeout 30m -- true
+CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=2.5 expect_wh "a Tailscale first-copy limit that is not a whole number is refused" \
+"mirror.sh run: CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB takes a whole number of MB from 1 to 9999999, not \"2.5\"" 2 alpha -- true
+CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=0 expect_wh "a Tailscale first-copy limit of zero is refused" \
+"mirror.sh run: CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB takes a whole number of MB from 1 to 9999999, not \"0\"" 2 alpha -- true
+CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=10000000 expect_wh "a Tailscale first-copy limit too large for shell arithmetic is refused" \
+"mirror.sh run: CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB takes a whole number of MB from 1 to 9999999, not \"10000000\"" 2 alpha -- true
+CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=9999999 expect_wh "the largest Tailscale first-copy limit gets as far as the hosts file" \
+"claude-workhorses: no hosts file at $scratch/no-config/hosts; the README's First run section shows one" 2 alpha -- true
 
 echo "all limit checks passed"
