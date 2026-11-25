@@ -5,7 +5,7 @@ set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
 install() {
-  command -v npm >/dev/null || need npm "node and npm: list a recipe that installs them (port nodejs24 npm11, say) before it"
+  command -v npm >/dev/null || need npm "node and npm: list a recipe that installs them (port nodejs24 npm11 on a Mac, mise node@24 on Linux, say) before it"
   [ $# -gt 0 ] || { echo "npm: name at least one package" >&2; exit 1; }
   local name packages=()
   for name in "$@"; do

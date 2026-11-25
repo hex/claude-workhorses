@@ -8,7 +8,7 @@ set -euo pipefail
 gem_command() {
   local newest
   newest=$(ls /opt/local/bin/gem3.* 2>/dev/null | sort -V | tail -1 || true)
-  if [ -n "$newest" ]; then echo "$newest"; else command -v gem || need gem "a Ruby with gem: list one (port ruby34, say) before it"; fi
+  if [ -n "$newest" ]; then echo "$newest"; else command -v gem || need gem "a Ruby with gem: list one (port ruby34 on a Mac, mise ruby@3.4 on Linux, say) before it"; fi
 }
 
 install() {
