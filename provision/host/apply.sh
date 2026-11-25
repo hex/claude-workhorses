@@ -1,14 +1,34 @@
 #!/bin/bash
-# ABOUTME: Runs on a workhorse, detached: applies the host options in ./options, then the recipes in ./tools, in order.
-# ABOUTME: Stops at the first failure; writes run.status ("<exit> [<step>]") and the manifest, then frees the lock.
+# ABOUTME: Runs on a workhorse: "apply.sh start" reads the sudo password line on stdin and starts "apply.sh run" detached, which applies
+# ABOUTME: ./options, then the recipes in ./tools, in order, stops at the first failure, writes run.status ("<exit> [<step>]") and the manifest, and frees the lock.
 set -euo pipefail
 
 here=$HOME/workhorse
 state=$HOME/.local/share/claude-workhorses
 cd "$here"
 
-# The sudo password stays in this shell, unexported; only the steps that need sudo get it.
-sudo_pw=${SUDO_PW:-}
+# sync.sh's ssh runs "apply.sh start" with the password on stdin, so no variable carries it through
+# the login shell that reads ~/.zshenv. start marks the lock as taken by a run, then hands the
+# password to the detached run on descriptor 3, a pipe from the printf builtin: it never sits in an
+# environment variable, an argument or a file.
+case "${1:-}" in
+  start)
+    sudo_pw=""
+    IFS= read -r sudo_pw || true
+    # A file in the lock tells sync.sh that this run started, so it never removes the lock of a run that is going.
+    : >"$HOME/workhorse.lock/started"
+    rm -f run.status
+    nohup /bin/bash ./apply.sh run >run.log 2>&1 </dev/null 3< <(printf '%s\n' "$sudo_pw") &
+    exit 0 ;;
+  run) ;;
+  *) echo "usage: apply.sh start|run" >&2; exit 2 ;;
+esac
+
+# The password stays in this shell, unexported, and no file is ever sourced here; only the steps that
+# declare sudo get it.
+sudo_pw=""
+IFS= read -r sudo_pw <&3 || true
+exec 3<&-
 unset SUDO_PW SUDO_ASKPASS
 step=""
 
@@ -26,26 +46,31 @@ finish() {
   rmdir "$HOME/workhorse.lock"
 }
 trap finish EXIT
-# A file in the lock tells sync.sh that this run started, so it never removes the lock of a run that is going.
-: >"$HOME/workhorse.lock/started"
 
 # Whether file $1 declares, in its first lines, that it runs sudo.
 declares_sudo() { head -n 10 "$1" | grep -qx '# needs: sudo'; }
 
-# Runs $2... as step $1, with the sudo password in its environment only when $needs_sudo is yes.
+# Runs $2... as a step, in step_env, with the sudo password in its environment only when $1 is yes.
+# The subshell runs no code but this, and the step replaces it.
 run_step() {
   local needs_sudo=$1
   shift
-  if [ "$needs_sudo" = yes ]; then
-    SUDO_PW=$sudo_pw SUDO_ASKPASS=$HOME/.local/bin/askpass-env "$@"
-  else
-    "$@"
-  fi
+  (
+    # shellcheck disable=SC2163 # each record is NAME=value, exported as it stands
+    for record in ${step_env[@]+"${step_env[@]}"}; do export "$record" 2>/dev/null || true; done
+    if [ "$needs_sudo" = yes ]; then
+      export SUDO_PW="$sudo_pw" SUDO_ASKPASS="$HOME/.local/bin/askpass-env"
+    fi
+    exec "$@"
+  )
 }
 
-# Rebuilds env.sh from the base and every recipe's snippet, then loads it here for the next step.
+# Rebuilds env.sh from the base and every recipe's snippet, then reads the environment the next step
+# runs in into step_env, as NAME=value records. A separate bash, started fresh so it holds no variable
+# of this shell, with stdin from /dev/null and no descriptor but its output, sources env.sh and prints
+# every exported variable; this shell only reads its output as data.
 build_env() {
-  local snippet
+  local snippet record
   {
     cat ./env.sh
     for snippet in "$state"/env.d/*.sh; do
@@ -57,11 +82,13 @@ build_env() {
     echo 'export PATH'
   } >"$state/env.sh.new"
   mv "$state/env.sh.new" "$state/env.sh"
+  step_env=()
   # Snippets come from installers that were not written for set -eu, so they load without it.
-  set +eu
-  # shellcheck source=/dev/null
-  . "$state/env.sh"
-  set -eu
+  # shellcheck disable=SC2016 # the script is the inner bash's
+  while IFS= read -r -d '' record; do
+    [[ $record =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] && step_env+=("$record")
+  done < <(/bin/bash -c '. "$1" >&2; for name in $(compgen -e); do printf "%s=%s\0" "$name" "${!name}"; done' \
+    _ "$state/env.sh" </dev/null 3<&-)
 }
 
 # ~/.zshenv gets one line that sources env.sh, added once; the rest of the file stays the user's.

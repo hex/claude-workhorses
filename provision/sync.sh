@@ -76,12 +76,10 @@ start_sync() {
     return 1
   fi
   rm -rf "$stage"
-  # The password crosses in the ssh session's environment, never in a command line; apply.sh hands it
-  # only to the steps that need it.
-  LC_SUDO_PW="$sudo_pw" ssh -o BatchMode=yes -o SendEnv=LC_SUDO_PW "$target" '
-    export SUDO_PW="${LC_SUDO_PW:-}"; unset LC_SUDO_PW
-    rm -f ~/workhorse/run.status
-    nohup /bin/bash ~/workhorse/apply.sh > ~/workhorse/run.log 2>&1 < /dev/null &' || {
+  # The password crosses on the ssh session's stdin, from the printf builtin: never in an environment
+  # variable the host's login shell would hold while it reads ~/.zshenv, never in a command line.
+  # apply.sh hands it only to the steps that need it.
+  printf '%s\n' "$sudo_pw" | ssh -o BatchMode=yes "$target" '/bin/bash ~/workhorse/apply.sh start' || {
     release_lock "$host" "$target" "starting the run failed"
     return 1
   }

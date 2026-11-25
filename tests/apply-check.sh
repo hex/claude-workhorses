@@ -26,12 +26,13 @@ printf '#!/bin/sh\necho "rsync $*" >>"%s/calls"\n[ -f "%s/answers/copy-works" ]\
 export APPLY_CHECK_SCRATCH=$scratch
 cat >"$scratch/bin/ssh" <<'SH'
 #!/bin/bash
-echo "ssh LC_SUDO_PW=${LC_SUDO_PW:-unset} $*" >>"$APPLY_CHECK_SCRATCH/calls"
+# A password in any variable of ssh's environment is marked, so the checks below see it.
+if env | grep -q secret-pw-123; then echo "ssh PASSWORD-IN-ENV $*"; else echo "ssh $*"; fi >>"$APPLY_CHECK_SCRATCH/calls"
 # The target is the first word that is no option and no option's value.
 target=""
 for word in "$@"; do
   case "$word" in
-    (-o | BatchMode=* | ConnectTimeout=* | SendEnv=*) ;;
+    (-o | BatchMode=* | ConnectTimeout=*) ;;
     (*) target=$word; break ;;
   esac
 done
@@ -40,7 +41,7 @@ answers=$APPLY_CHECK_SCRATCH/answers
 [ ! -f "$answers/$target.unreachable" ] || exit 255
 # The command that starts apply.sh also names run.status, so it is matched first.
 case "$*" in
-  (*apply.sh*) [ -f "$answers/start-works" ]; exit ;;
+  (*apply.sh*) IFS= read -r line; echo "stdin $line" >>"$APPLY_CHECK_SCRATCH/calls"; [ -f "$answers/start-works" ]; exit ;;
   (*rmdir*) exit 0 ;;
   (*run.status*) answer=$answers/$target.status ;;
   (*manifest*) answer=$answers/$target.manifest ;;
@@ -94,18 +95,38 @@ stage_host beta "$scratch/stage-beta"
 wallpaper=Teal" ] || fail "beta's options file: '$(cat "$scratch/stage-beta/options")'"
 echo "ok   the staged options mark the ones that need sudo"
 
-# Runs the staged files as apply.sh does on a host, with the sudo password $1 (empty: none).
+# Runs the staged files as sync.sh does on a host: "apply.sh start" with the sudo password $1 (empty:
+# none) on stdin, then waits for the detached run to free the lock. Sets code to the run's exit code.
 apply() {
+  local waited=0
   rm -rf "$scratch/home/workhorse"
   cp -R "$stage" "$scratch/home/workhorse"
   mkdir "$scratch/home/workhorse.lock"
   : >"$scratch/home/calls"
-  code=0
-  HOME=$scratch/home SUDO_PW=$1 PATH="$scratch/bin:$PATH" /bin/bash "$scratch/home/workhorse/apply.sh" >"$scratch/apply.log" 2>&1 || code=$?
+  printf '%s\n' "$1" | HOME=$scratch/home PATH="$scratch/bin:$PATH" /bin/bash "$scratch/home/workhorse/apply.sh" start >"$scratch/apply.log" 2>&1 ||
+    fail "apply.sh start failed: $(cat "$scratch/apply.log")"
+  while [ -d "$scratch/home/workhorse.lock" ]; do
+    [ $waited -lt 300 ] || fail "the run kept its lock for 30 s: $(cat "$scratch/home/workhorse/run.log")"
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  cp "$scratch/home/workhorse/run.log" "$scratch/apply.log"
+  code=$(cut -d ' ' -f 1 "$scratch/home/workhorse/run.status")
 }
 
 printf 'export FOO=1' >"$scratch/home/.zshenv"
-apply pw
+# Any process on a host can write an env snippet; this one records every variable and every open
+# descriptor above stderr that it can see while env.sh loads it.
+mkdir -p "$scratch/home/.local/share/claude-workhorses/env.d"
+cat >"$scratch/home/.local/share/claude-workhorses/env.d/zz-planted.sh" <<'SH'
+{ set; env; } >>"$HOME/leak" 2>/dev/null
+for fd in 3 4 5 6 7 8 9; do { true <&"$fd"; } 2>/dev/null && echo "descriptor $fd is open" >>"$HOME/leak"; done
+SH
+apply s3cret-apply-pw
+grep -q 's3cret-apply-pw' "$scratch/home/leak" && fail "an env snippet saw the sudo password: $(grep 's3cret-apply-pw' "$scratch/home/leak")"
+grep -q '^descriptor' "$scratch/home/leak" && fail "an env snippet ran with an open descriptor: $(grep '^descriptor' "$scratch/home/leak" | sort -u)"
+[ -s "$scratch/home/leak" ] || fail "the planted env snippet never ran"
+echo "ok   an env snippet sees neither the sudo password nor any descriptor that could carry it"
 [ "$code" = 5 ] || fail "apply.sh exited $code, not the failing recipe's 5"
 [ "$(cat "$scratch/home/workhorse/run.status")" = "5 broken" ] || fail "run.status: '$(cat "$scratch/home/workhorse/run.status")'"
 [ ! -e "$scratch/home/workhorse.lock" ] || fail "apply.sh left the lock"
@@ -113,7 +134,7 @@ echo "ok   the run stops at the first failing recipe, records its exit code and 
 
 [ "$(cat "$scratch/home/calls")" = "sudo -A -v
 plain args=[@scope/pkg][a.b+c] pw=unset askpass=unset plain=unset
-rooted args=[x] pw=pw askpass=$scratch/home/.local/bin/askpass-env plain=1
+rooted args=[x] pw=s3cret-apply-pw askpass=$scratch/home/.local/bin/askpass-env plain=1
 broken args=[] pw=unset askpass=unset plain=1" ] ||
   fail "the steps ran as: '$(cat "$scratch/home/calls")'"
 grep -q '^after' "$scratch/home/calls" && fail "the recipe after the failing one ran"
@@ -155,6 +176,19 @@ apply ""
 [ "$(cat "$scratch/home/.zshenv")" = "$line" ] || fail ".zshenv from nothing: '$(cat "$scratch/home/.zshenv")'"
 echo "ok   a missing ~/.zshenv is created with the one line"
 
+# Host options run through options.sh; a stand-in records what each one sees instead of changing this Mac.
+printf '#!/bin/bash\n[ "$1" = apply ] || { echo "$2 probed"; exit 0; }\necho "option $2 pw=${SUDO_PW:-unset} askpass=${SUDO_ASKPASS:-unset}" >>"$HOME/calls"\n' >"$scratch/stage-beta/options.sh"
+: >"$scratch/stage-beta/tools"
+alpha_stage=$stage
+stage=$scratch/stage-beta
+apply s3cret-apply-pw
+stage=$alpha_stage
+[ "$code" = 0 ] || fail "a run of beta's options exited $code: $(tail -3 "$scratch/apply.log")"
+[ "$(cat "$scratch/home/calls")" = "sudo -A -v
+option no-sleep pw=s3cret-apply-pw askpass=$scratch/home/.local/bin/askpass-env
+option wallpaper=Teal pw=unset askpass=unset" ] || fail "beta's options ran as: '$(cat "$scratch/home/calls")'"
+echo "ok   a host option that needs sudo sees the password, and one that does not never does"
+
 # Runs sync.sh in a fresh bash with the stand-ins first on PATH and compares its stderr and exit code.
 expect_sync() {
   local label=$1 want=$2 want_exit=$3 out code=0
@@ -178,7 +212,7 @@ expect_sync "a host that needs sudo without a helper" "claude-workhorses: no exe
 beta: no sudo password; nothing was run" 1 beta
 [ ! -s "$scratch/calls" ] || fail "sync.sh contacted beta with no password: $(cat "$scratch/calls")"
 expect_sync "a host that needs no sudo" "alpha: a sync is already running (~/workhorse.lock exists)" 1 alpha
-[ "$(cat "$scratch/calls")" = "ssh LC_SUDO_PW=unset -o BatchMode=yes -o ConnectTimeout=10 a mkdir ~/workhorse.lock" ] ||
+[ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 a mkdir ~/workhorse.lock" ] ||
   fail "sync.sh's calls for alpha: $(cat "$scratch/calls")"
 echo "ok   a host whose lines and options need no sudo syncs without a sudo-password helper"
 
@@ -187,19 +221,16 @@ touch "$scratch/answers/lock-free" "$scratch/answers/copy-works" "$scratch/answe
 printf '#!/bin/sh\necho secret-pw-123\n' >"$config/sudo-password"
 chmod 700 "$config/sudo-password"
 expect_sync "a sync that starts" "beta: sync started; check with: $root/provision/sync.sh status beta" 0 beta
-grep -q 'secret-pw-123' "$scratch/calls" || fail "the run never received the password: $(cat "$scratch/calls")"
-while IFS= read -r call; do
-  # The stand-in logs the environment variable first; what follows it is the command line.
-  args=${call#ssh LC_SUDO_PW=* }
-  case "$args" in (*secret-pw-123*) fail "the password is in a command line: $call" ;; esac
-done <"$scratch/calls"
-grep -q '^ssh LC_SUDO_PW=secret-pw-123 .*SendEnv=LC_SUDO_PW' "$scratch/calls" || fail "the password does not reach the run that starts apply.sh: $(cat "$scratch/calls")"
-[ "$(grep -c 'LC_SUDO_PW=secret-pw-123' "$scratch/calls")" = 1 ] || fail "the password reaches more than the one ssh that starts the run: $(cat "$scratch/calls")"
-echo "ok   a started sync sends the password only in the environment of the ssh that starts apply.sh, never in a command line"
+grep -q '^ssh .*secret-pw-123' "$scratch/calls" && fail "the password is in an ssh command line: $(grep '^ssh .*secret-pw-123' "$scratch/calls")"
+grep -q '^ssh PASSWORD-IN-ENV' "$scratch/calls" && fail "the password is in ssh's environment: $(grep '^ssh PASSWORD-IN-ENV' "$scratch/calls")"
+[ "$(grep -B 1 -x 'stdin secret-pw-123' "$scratch/calls")" = "ssh -o BatchMode=yes b /bin/bash ~/workhorse/apply.sh start
+stdin secret-pw-123" ] || fail "the password does not reach the ssh that starts apply.sh on its stdin: $(cat "$scratch/calls")"
+[ "$(grep -c 'secret-pw-123' "$scratch/calls")" = 1 ] || fail "the password reaches more than the one ssh that starts the run: $(cat "$scratch/calls")"
+echo "ok   a started sync sends the password only on the stdin of the ssh that starts apply.sh, never in its environment or a command line"
 
 rm "$scratch/answers/start-works"
 expect_sync "a sync whose start fails" "beta: starting the run failed; nothing ran, and the lock is removed" 1 beta
-[ "$(tail -n 1 "$scratch/calls")" = "ssh LC_SUDO_PW=unset -o BatchMode=yes -o ConnectTimeout=10 b rmdir ~/workhorse.lock" ] ||
+[ "$(tail -n 1 "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 b rmdir ~/workhorse.lock" ] ||
   fail "a failed start did not remove the lock: $(cat "$scratch/calls")"
 rm "$scratch/answers/lock-free" "$scratch/answers/copy-works"
 touch "$scratch/answers/b.unreachable"
