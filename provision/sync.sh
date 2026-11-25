@@ -49,7 +49,7 @@ release_lock() {
   if ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" 'rmdir ~/workhorse.lock' 2>/dev/null; then
     echo "$host: $reason; nothing ran, and the lock is removed" >&2
   else
-    echo "$host: $reason, and ~/workhorse.lock stays: a run may have started; \`$0 status $host\` shows it, and if none runs, remove the lock on the host" >&2
+    echo "$host: $reason, and ~/workhorse.lock stays: a run may have started; \`$0 status $host\` shows it, and if none runs, \`ssh $target rm -r ~/workhorse.lock\` removes it" >&2
   fi
 }
 

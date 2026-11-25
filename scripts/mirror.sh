@@ -222,11 +222,14 @@ SCRIPT
 run_job="$list_copy"$'\n'$(cat <<'SCRIPT'
 lock=$HOME/$1.lock work=$HOME/$1 limited=$HOME/$1.limit
 job="" timer="" job_ended=""
-# Waits up to 10 s for the job's process group to empty, then sends what is left SIGKILL.
+# Waits up to 10 s for the job's process group to empty, then sends what is left SIGKILL and waits,
+# up to 5 s more, until the last of it is gone.
 reap_job() {
   local waited=0
   while [ $waited -lt 10 ] && kill -0 -- "-$job" 2>/dev/null; do /bin/sleep 1; waited=$((waited + 1)); done
-  kill -s KILL -- "-$job" 2>/dev/null || true
+  kill -s KILL -- "-$job" 2>/dev/null || return 0
+  waited=0
+  while [ $waited -lt 50 ] && kill -0 -- "-$job" 2>/dev/null; do /bin/sleep 0.1; waited=$((waited + 1)); done
 }
 # The way out, however this shell ends: a job still running is stopped before the lock goes. A signal
 # here would cut it short, and the laptop may be gone, so it takes none and writes nothing.
@@ -272,9 +275,9 @@ timer=$!
 set +m
 status=0
 wait "$job" || status=$?
-job_ended=yes
 # The job's first process can end while others it started ignore the SIGTERM; they get SIGKILL now.
 [ ! -e "$limited" ] || reap_job
+job_ended=yes
 kill -s TERM -- "-$timer" 2>/dev/null || true
 # bash reports the timer it stopped on wait's stderr, which is the job's.
 wait "$timer" 2>/dev/null || true
