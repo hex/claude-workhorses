@@ -4,7 +4,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
-## Unreleased
+## 2026.11.5
 
 ### Added
 - The built-in recipes run on Linux hosts, all but the five that need macOS: `npm`, `mise`, `uv`, `uv-tool`, `gem`, `claude`, `rustup`, `dotnet`, `bun`, `opencode`, `chrome-for-testing` and `bundletool`. The README's Linux section names the apt packages some of them need first.
@@ -18,6 +18,8 @@ This file lists the notable changes to claude-workhorses. The format follows
 ### Fixed
 - `uv`'s probe prints only the version, without the parenthetical a Mac's build adds (commit, date and target) or a Linux build's target, so one release reads the same from a Mac and a Linux host.
 - `mise`'s probe prints a tool once when its line names two of its versions.
+
+After updating, sync every host once: until a host syncs again, its old `uv` and `mise` probe lines differ from a synced host's, and `sync.sh diff` reports them.
 
 ## 2026.11.4
 
