@@ -52,7 +52,9 @@ valid_host_name() { [[ $1 =~ ^[a-z0-9][a-z0-9-]*$ ]]; }
 valid_ssh_target() { [[ $1 =~ ^[A-Za-z0-9_][A-Za-z0-9._@-]*$ ]]; }
 
 # Reads the hosts file into one array per column, in file order: host_names, host_ssh, host_arch,
-# host_cores, host_ram (GB) and host_options (the line's options, space-separated, in its order). One
+# host_cores, host_ram (GB) and host_options (the line's options, space-separated, in its order). It
+# also empties host_os, each host's OS (macos or linux), which the hosts file does not record:
+# sync.sh asks each host it syncs, and diff and the policy read it from manifests. One
 # host per line, fields split on whitespace; a # starts a comment. Every value is checked here,
 # because each one later reaches ssh's argv, a grep pattern, a file name or an AppleScript string.
 # Prints the first problem on stderr and fails.
@@ -60,7 +62,8 @@ load_hosts() {
   local file line number=0 name ssh arch cores ram rest options=() option seen i
   file="$(workhorses_config_dir)/hosts"
   host_names=() host_ssh=() host_arch=() host_cores=() host_ram=() host_options=()
-  host_lines=()
+  # shellcheck disable=SC2034 # host_os is read by tools.sh and filled by its callers
+  host_lines=() host_os=()
   if [ ! -f "$file" ]; then
     echo "claude-workhorses: no hosts file at $file; the README's First run section shows one" >&2
     return 1

@@ -1,7 +1,7 @@
 # ABOUTME: Reads the tools file, which says what each workhorse gets, and finds each line's recipe; for sync.sh and the policy.
 # ABOUTME: Every name, argument and filter is checked here, before anything reaches a host; source hosts.sh and run load_hosts first.
 # shellcheck shell=bash
-# host_names, host_arch, host_options and host_options_sudo come from hosts.sh.
+# host_names, host_arch, host_os, host_options and host_options_sudo come from hosts.sh.
 # shellcheck disable=SC2154
 
 # The recipes that ship with the plugin, and the folder for the user's own.
@@ -81,14 +81,15 @@ shaped_probe_lines() {
 recipe_declares_sudo() { head -n 10 "$1" | grep -qx '# needs: sudo'; }
 
 # Reads the tools file into one array per field, in file order: tool_recipe, tool_args (the
-# arguments, space-separated), tool_arch (empty: any), tool_hosts (space-separated names; empty:
-# any) and tool_path (the recipe file). A line is a recipe name, its
-# arguments, and at most one each of the filters @arch=<arch> and @hosts=<name>,<name>...; a #
-# starts a comment. A missing file is an empty one. Prints the first problem on stderr and fails.
+# arguments, space-separated), tool_arch (empty: any), tool_os (macos, linux or empty: any),
+# tool_hosts (space-separated names; empty: any) and tool_path (the recipe file). A line is a recipe
+# name, its arguments, and at most one each of the filters @arch=<arch>, @os=<os> and
+# @hosts=<name>,<name>...; a # starts a comment. A missing file is an empty one. Prints the first
+# problem on stderr and fails.
 load_tools() {
-  local file line number=0 words word recipe args arch hosts host path problem where i
+  local file line number=0 words word recipe args arch os hosts host path problem where i
   file="$(workhorses_config_dir)/tools"
-  tool_recipe=() tool_args=() tool_arch=() tool_hosts=() tool_path=()
+  tool_recipe=() tool_args=() tool_arch=() tool_os=() tool_hosts=() tool_path=()
   [ -f "$file" ] || return 0
   while IFS= read -r line || [ -n "$line" ]; do
     number=$((number + 1))
@@ -103,13 +104,16 @@ load_tools() {
       return 1
     fi
     path=$(recipe_path "$recipe") || { echo "$where $path" >&2; return 1; }
-    args="" arch="" hosts=""
+    args="" arch="" os="" hosts=""
     for word in "${words[@]:1}"; do
       case "$word" in
         @*=*)
           if [[ $word =~ ^@arch=(x86_64|arm64)$ ]]; then
             [ -z "$arch" ] || { echo "$where filter @arch for $recipe is given twice" >&2; return 1; }
             arch=${word#@arch=}
+          elif [[ $word =~ ^@os=(macos|linux)$ ]]; then
+            [ -z "$os" ] || { echo "$where filter @os for $recipe is given twice" >&2; return 1; }
+            os=${word#@os=}
           elif [[ $word =~ ^@hosts=[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]]; then
             [ -z "$hosts" ] || { echo "$where filter @hosts for $recipe is given twice" >&2; return 1; }
             hosts=$(tr , ' ' <<<"${word#@hosts=}")
@@ -118,7 +122,7 @@ load_tools() {
                 { echo "$where filter @hosts names \"$host\", which is not in the hosts file" >&2; return 1; }
             done
           else
-            echo "$where filter \"$word\" for $recipe is not @arch=x86_64|arm64 or @hosts=<name>,..." >&2
+            echo "$where filter \"$word\" for $recipe is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." >&2
             return 1
           fi ;;
         *)
@@ -128,23 +132,31 @@ load_tools() {
             return 1
           fi
           if [[ $word == @* && $word != */* ]]; then
-            echo "$where argument \"$word\" for $recipe starts with @ but is not a scoped package (@scope/name); a host filter is @arch=<arch> or @hosts=<names>" >&2
+            echo "$where argument \"$word\" for $recipe starts with @ but is not a scoped package (@scope/name); a host filter is @arch=<arch>, @os=<os> or @hosts=<names>" >&2
             return 1
           fi
           args+=${args:+ }$word ;;
       esac
     done
     i=${#tool_recipe[@]}
-    tool_recipe[i]=$recipe tool_args[i]=$args tool_arch[i]=$arch tool_hosts[i]=$hosts
+    tool_recipe[i]=$recipe tool_args[i]=$args tool_arch[i]=$arch tool_os[i]=$os tool_hosts[i]=$hosts
     tool_path[i]=$path
   done <"$file"
 }
 
-# Whether tools line $1 (an index into the arrays load_tools filled) targets host $2.
+# Whether tools line $1 (an index into the arrays load_tools filled) targets host $2. A line with
+# @os needs the host's OS in host_os; without it the line does not target the host, and stderr says so.
 tool_targets() {
   local i=$1 host=$2 index
   index=$(host_index "$host") || return 1
   [ -z "${tool_arch[i]}" ] || [ "${tool_arch[i]}" = "${host_arch[index]}" ] || return 1
+  if [ -n "${tool_os[i]}" ]; then
+    if [ -z "${host_os[index]:-}" ]; then
+      echo "claude-workhorses: the OS $host runs is not known, so the @os=${tool_os[i]} filter of ${tool_recipe[i]} cannot be checked" >&2
+      return 1
+    fi
+    [ "${tool_os[i]}" = "${host_os[index]}" ] || return 1
+  fi
   # shellcheck disable=SC2086 # the host list is names checked by load_tools, split on purpose
   [ -z "${tool_hosts[i]}" ] || is_one_of "$host" ${tool_hosts[i]}
 }

@@ -56,6 +56,34 @@ expect_tools "both filters must hold" \
 "alpha: bun" \
 "bun @arch=x86_64 @hosts=alpha,gamma"
 
+# The hosts file does not say which OS a host runs: sync.sh asks each host, diff and the policy read
+# its manifest. Here gamma runs Linux.
+host_os=(macos macos linux)
+expect_tools "@os picks the hosts that run that OS, together with the other filters" \
+"alpha: port cmake
+alpha: bun
+beta: port cmake
+beta: bun
+gamma: apt git
+gamma: bun" \
+"apt git @os=linux
+port cmake @os=macos
+uv @os=macos @hosts=gamma
+bun"
+
+expect_tools "@os given twice is refused" \
+"claude-workhorses: $config/tools line 1: filter @os for apt is given twice" \
+"apt git @os=linux @os=macos"
+
+host_os=(macos "" linux)
+printf '%s\n' "apt git @os=linux" "bun" >"$config/tools"
+load_tools
+out=$(host_tool_lines beta 2>&1)
+[ "$out" = "claude-workhorses: the OS beta runs is not known, so the @os=linux filter of apt cannot be checked
+bun" ] || fail "a host whose OS is not known: got '$out'"
+echo "ok   a line filtered by @os names a host whose OS is not known and leaves the line out"
+host_os=(macos macos macos)
+
 file=$config/tools
 for bad in Port ../port -x port.sh; do
   expect_tools "recipe name \"$bad\" is refused" \
@@ -76,15 +104,19 @@ for bad in -g 'a;b' '$(id)' 'x=y' "it's" '~/x' 'a*'; do
 done
 
 expect_tools "a word that starts with @ but is no scoped package or filter is refused" \
-"claude-workhorses: $file line 1: argument \"@arch\" for npm starts with @ but is not a scoped package (@scope/name); a host filter is @arch=<arch> or @hosts=<names>" \
+"claude-workhorses: $file line 1: argument \"@arch\" for npm starts with @ but is not a scoped package (@scope/name); a host filter is @arch=<arch>, @os=<os> or @hosts=<names>" \
 "npm @arch"
 
 expect_tools "an unknown filter is refused" \
-"claude-workhorses: $file line 1: filter \"@os=macos\" for bun is not @arch=x86_64|arm64 or @hosts=<name>,..." \
-"bun @os=macos"
+"claude-workhorses: $file line 1: filter \"@cpu=6\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
+"bun @cpu=6"
+
+expect_tools "an unknown OS is refused" \
+"claude-workhorses: $file line 1: filter \"@os=windows\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
+"bun @os=windows"
 
 expect_tools "an unknown architecture is refused" \
-"claude-workhorses: $file line 1: filter \"@arch=amd64\" for bun is not @arch=x86_64|arm64 or @hosts=<name>,..." \
+"claude-workhorses: $file line 1: filter \"@arch=amd64\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
 "bun @arch=amd64"
 
 expect_tools "a host the hosts file does not list is refused" \
@@ -92,7 +124,7 @@ expect_tools "a host the hosts file does not list is refused" \
 "bun @hosts=alpha,delta"
 
 expect_tools "an empty host list is refused" \
-"claude-workhorses: $file line 1: filter \"@hosts=\" for bun is not @arch=x86_64|arm64 or @hosts=<name>,..." \
+"claude-workhorses: $file line 1: filter \"@hosts=\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
 "bun @hosts="
 
 expect_tools "a filter given twice is refused" \

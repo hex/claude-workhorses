@@ -1,0 +1,29 @@
+#!/bin/bash
+# ABOUTME: Recipe: Debian and Ubuntu packages, by name: apt <package>... ; for Linux hosts, so give its line @os=linux.
+# ABOUTME: install refreshes the package lists and installs or upgrades the named packages. probe prints "apt <package> <version>" or "apt <package> missing".
+# needs: sudo
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  command -v apt-get >/dev/null || need apt "apt-get, which Debian and Ubuntu have: give the line @os=linux"
+  [ $# -gt 0 ] || { echo "apt: name at least one package" >&2; exit 1; }
+  local name
+  for name in "$@"; do
+    # A plain package name: apt-get would also read pkg=version and pkg/release.
+    [[ $name =~ ^[a-z0-9][a-z0-9.+-]+$ ]] || { echo "apt: \"$name\" is not a Debian package name" >&2; exit 1; }
+  done
+  sudo -A apt-get update -q
+  sudo -A env DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$@"
+}
+
+probe() {
+  local name version
+  for name in "$@"; do
+    # dpkg keeps a removed package's version while its config files stay, so the status must be installed too.
+    version=$(dpkg-query -W -f='${db:Status-Status} ${Version}' "$name" 2>/dev/null | sed -n 's/^installed //p' || true)
+    echo "apt $name ${version:-missing}"
+  done
+}
+
+"$@"
