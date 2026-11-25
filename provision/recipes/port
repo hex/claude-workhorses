@@ -1,6 +1,6 @@
 #!/bin/bash
 # ABOUTME: Recipe: MacPorts ports, by name: port <name>... ; needs the macports recipe listed before it.
-# ABOUTME: install installs the named ports and upgrades any of them that are outdated. probe prints "port <name> <version>" per name.
+# ABOUTME: install installs the named ports (the macports line upgrades outdated ones). probe prints "port <name> <version>" per name.
 # needs: sudo
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
@@ -8,11 +8,9 @@ set -euo pipefail
 install() {
   [ -x /opt/local/bin/port ] || need port "MacPorts: list macports before it"
   [ $# -gt 0 ] || { echo "port: name at least one port" >&2; exit 1; }
-  local name outdated
+  local name
   sudo -A /opt/local/bin/port -N install "$@"
   for name in "$@"; do
-    outdated=$(/opt/local/bin/port -q outdated "$name")
-    [ -z "$outdated" ] || sudo -A /opt/local/bin/port -N upgrade "$name"
     case "$name" in
       # git-lfs works only once git's config names its filters.
       git-lfs) /opt/local/bin/git-lfs install ;;

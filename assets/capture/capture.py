@@ -103,7 +103,7 @@ class Capture:
             raise RuntimeError("tmux -L svgcap already has sessions; refusing to touch them")
         facts = self.ssh("uname -m; sysctl -n hw.physicalcpu hw.memsize").split()
         arch, cores, memory = facts[0], facts[1], round(int(facts[2]) / 2**30)
-        (self.config / "hosts").write_text(f"{HOST} {ALIAS} {arch} {cores} {memory} dedicated Turquoise Green\n")
+        (self.config / "hosts").write_text(f"{HOST} {ALIAS} {arch} {cores} {memory}\n")
         self.versions["host"] = {"arch": arch, "cores": int(cores), "ram_gb": memory}
         self.versions["go"] = self.ssh("go version").strip()
         if self.name == "claude-band":

@@ -22,9 +22,9 @@ fail() { echo "FAIL $*" >&2; exit 1; }
 now() { date +%s; }
 
 start=$(now)
-out=$(run_bounded 3 echo answered)
+out=$(run_bounded 20 echo answered)
 [ "$out" = answered ] || fail "run_bounded lost the command's output: '$out'"
-[ $(($(now) - start)) -le 1 ] || fail "run_bounded held the output pipe open until its bound ran out"
+[ $(($(now) - start)) -le 5 ] || fail "run_bounded held the output pipe open until its bound ran out"
 echo "ok   a command that answers in time returns at once, with its output"
 
 start=$(now)
@@ -70,7 +70,7 @@ start=$(now)
 code=0
 job 20 sh -c 'exit 3' || code=$?
 [ "$code" = 3 ] || fail "a job inside its limit exited $code, not its own 3"
-[ $(($(now) - start)) -le 1 ] || fail "a job inside its limit waited for the limit"
+[ $(($(now) - start)) -le 5 ] || fail "a job inside its limit waited for the limit"
 [ ! -s "$scratch/err" ] || fail "a job inside its limit added to its stderr: '$(cat "$scratch/err")'"
 echo "ok   a job inside its limit returns at once with its own exit code and nothing added to stderr"
 

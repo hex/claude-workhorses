@@ -1,7 +1,7 @@
 ---
 description: Add Macs as workhorses - probe each ssh target into a hosts-file line, then run a first wh job with nothing installed
 argument-hint: <ssh target>... (an alias from ~/.ssh/config or user@host)
-allowed-tools: Bash(bash:*), Bash(mkdir:*), Bash(cat:*), Read, AskUserQuestion
+allowed-tools: Bash(bash:*), Bash(mkdir:*), Bash(wh:*), Read, Write, Edit, AskUserQuestion
 ---
 
 ## Context
@@ -31,7 +31,8 @@ This installs nothing on the hosts. With no arguments, ask the user for the ssh 
    `autologin` and the rest, listed in the plugin's `examples/hosts`) can go at the end of a line
    later, and that each one changes the Mac for every user of it. Add none unless the user asks.
 
-3. On yes, create the config folder with mode 700 when missing and append the lines. Write no
+3. On yes, create the config folder with `mkdir -m 700 -p` when missing, then add the lines at the
+   end of the hosts file with Edit, or Write when the file is new. Write no
    tools file: it starts empty, and the workhorse skill adds a line when a job needs a tool.
 
 4. From inside a git repository (the session's folder, or ask for one), run for each new host:
