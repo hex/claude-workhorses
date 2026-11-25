@@ -312,7 +312,7 @@ on the `PATH` through mise's shims, so `mise node@24 node@26` makes `node` the 2
 - `unzip` for `bun`'s installer, and `libatomic1` for node 26.
 - Chrome for Testing's libraries for `chrome-for-testing`; on Ubuntu 24.04: `libnss3`,
   `libatk-bridge2.0-0t64`, `libcups2t64`, `libxkbcommon0`, `libxcomposite1`, `libxdamage1`,
-  `libxrandr2`, `libgbm1`, `libpango-1.0-0` and `libasound2t64`.
+  `libxfixes3`, `libxrandr2`, `libgbm1`, `libpango-1.0-0`, `libcairo2` and `libasound2t64`.
 - A `java` for `bundletool`, such as `openjdk-21-jdk-headless`.
 
 A Windows PC serves through WSL2, with Ubuntu say:
