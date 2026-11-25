@@ -13,9 +13,16 @@ trap 'rm -rf "$probe"' EXIT
 
 # Prints every entry under the current folder with its type and, for a file, its mode and checksum;
 # node_modules is left out, as wh leaves it to each side. The same text on both sides means the copy matches.
-digest='find . -name node_modules -prune -o -print | LC_ALL=C sort | while IFS= read -r p; do
+# It runs on this Mac and on the host, which may run Linux: GNU stat and md5sum print the same mode
+# string and checksum as BSD stat and md5.
+digest='if [ "$(uname -s)" = Darwin ]; then
+  mode() { stat -f %Sp "$1"; }; sum() { md5 -q "$1"; }
+else
+  mode() { stat -c %A "$1"; }; sum() { md5sum <"$1" | cut -d " " -f 1; }
+fi
+find . -name node_modules -prune -o -print | LC_ALL=C sort | while IFS= read -r p; do
   if [ -L "$p" ]; then echo "$p -> $(readlink "$p")"
-  elif [ -f "$p" ]; then echo "$p $(stat -f %Sp "$p") $(md5 -q "$p")"
+  elif [ -f "$p" ]; then echo "$p $(mode "$p") $(sum "$p")"
   else echo "$p dir"; fi
 done'
 
@@ -121,7 +128,7 @@ ln -s file "$probe/link"
 expect file 0 "a new symlink arrives" 'readlink link'
 ln -sfh other "$probe/link"
 expect other 0 "a retargeted symlink arrives" 'readlink link'
-expect "" 0 "the mini retargets a symlink" 'ln -sfh junk link'
+expect "" 0 "the mini retargets a symlink" 'ln -sfn junk link'
 expect other 0 "the next run puts the laptop's symlink back" 'readlink link'
 rm "$probe/link"
 expect absent 0 "a symlink deleted on the laptop goes" 'test -L link && echo present || echo absent'
