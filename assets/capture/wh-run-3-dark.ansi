@@ -1,16 +1,16 @@
-$ wh -- gtimeout 5m go test -v ./...
-mirror.sh run: using alpha (load 1.53 of 6 cores, first copy there)
+$ wh --timeout 5m -- go test -v ./...
+mirror.sh run: using alpha (load 2.74 of 6 cores, first copy there)
 mirror.sh run: first copy here; the laptop sends every file
-mirror.sh run: full walk: first run in alpha:~/work/demo-9c28e8db; comparing every file's contents once
+mirror.sh run: full walk: first run in alpha:~/work/demo-3d6fbd4f; comparing every file's contents once
 mirror.sh run: patched 3 files from the laptop
 === RUN   TestAdd
 --- PASS: TestAdd (0.00s)
 === RUN   TestFib
 --- PASS: TestFib (0.00s)
 PASS
-ok  	demo	0.382s
+ok  	demo	0.279s
 $ echo $?
 0
 $ echo 'func TestSub(t *testing.T) { if Sub(5, 3) != 2 { t.Fatal("Sub(5, 3) != 2") } }' >> calc_test.go
-$ wh -- gtimeout 5m go test -v ./...
-mirror.sh run: using alpha (load 1.41 of 6 cores, it holds the copy)
+$ wh --timeout 5m -- go test -v ./...
+mirror.sh run: using alpha (load 2.76 of 6 cores, it holds the copy)

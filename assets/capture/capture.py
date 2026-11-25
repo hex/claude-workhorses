@@ -25,8 +25,8 @@ TMUX = shutil.which("tmux")
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 # The host's name in the hosts file and its ssh target; ssh-alias.sh sends alpha-mini to the real host.
 HOST, ALIAS = "alpha", "alpha-mini"
-TEST = "wh -- gtimeout 5m go test -v ./..."
-BENCH = "wh -- gtimeout 5m go test -bench=. ./..."
+TEST = "wh --timeout 5m -- go test -v ./..."
+BENCH = "wh --timeout 5m -- go test -bench=. ./..."
 EDIT = """echo 'func TestSub(t *testing.T) { if Sub(5, 3) != 2 { t.Fatal("Sub(5, 3) != 2") } }' >> calc_test.go"""
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 TITLES = {

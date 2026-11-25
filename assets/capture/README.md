@@ -8,8 +8,8 @@ WH_CAPTURE_SSH_TARGET=me@mini.example.test bash assets/capture/claude-band.sh
 ```
 
 The target is anything `ssh` takes, an alias from `~/.ssh/config` or `user@host`. The host needs
-`go` on the `PATH` its login shell sets. The laptop needs Python 3, tmux, git, jq, rsync, Watchman and
-`gtimeout`, and for `claude-band.sh` a logged-in `claude`.
+`go` on the `PATH` its login shell sets. The laptop needs Python 3, tmux, git, jq, rsync and Watchman,
+and for `claude-band.sh` a logged-in `claude`.
 
 ## What a capture does
 
@@ -28,14 +28,14 @@ Claude Code sends. It also drops the line some ssh configs print for each connec
 host's address.
 
 - `wh-run.sh` types into a plain `bash --noprofile --norc` shell. It runs
-  `wh -- gtimeout 5m go test -v ./...`, adds a test with one `echo`, and runs the same command again.
+  `wh --timeout 5m -- go test -v ./...`, adds a test with one `echo`, and runs the same command again.
   The capture fails unless the second run patched exactly one file. The shell prints no colors of
   its own, so one capture serves both themes, and the theme sets the default foreground and
   background.
 - `claude-band.sh` starts Claude Code once per theme, with `--plugin-dir` set to this checkout,
   `--setting-sources ""`, a settings file with the theme, and `workhorse-runs@skills-dir` turned
   off so an installed copy of the mod does not draw every line twice. It accepts the trust dialog for
-  the new folder and runs `! wh -- gtimeout 5m go test -bench=. ./...` in bash mode. Each frame must
+  the new folder and runs `! wh --timeout 5m -- go test -bench=. ./...` in bash mode. Each frame must
   hold exactly one band line and one badge while the run goes, and neither once it ends.
   `CLAUDE_CODE_SHELL` points at [shell.sh](shell.sh), so bash mode reads no personal startup files.
 
