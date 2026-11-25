@@ -27,6 +27,7 @@ EAR_RIGHT = ("388,0 344,0 326,50 329,64 344,104 380,104 390,60", "388,0 344,0 32
 TUFT = ("237,10 323,10 323,80 237,80", "237,10 323,10 323,66 237,66")
 BROW = (299, 166, 62, 11)
 EYES = ((229, 195), (329, 195))
+NOSTRILS = ((244.5, 387), (314.5, 387))
 LID = "#20a040"
 SKIN = "#26ae45"
 ANIMATION = (
@@ -36,6 +37,9 @@ ANIMATION = (
     ".ear-right{transform-origin:354px 90px;animation:ear-right 9s infinite}"
     ".tuft{transform-origin:280px 76px;animation:tuft 9s infinite}"
     ".brow{animation:brow 9s infinite}.brow-gap{opacity:0;animation:brow-gap 9s infinite}"
+    + "".join(f".nostril-{i}{{transform-origin:{x}px {y}px;animation:snort 9s infinite}}" for i, (x, y) in enumerate(NOSTRILS))
+    + "@keyframes snort{0%,43%,48.5%,65%,71%,100%{transform:scale(1)}44.5%,47%{transform:scale(1.18)}"
+    "45.8%{transform:scale(1.05)}67%,69.5%{transform:scale(1.15)}}"
     ".lid{transform-box:fill-box;transform-origin:top;transform:scaleY(0);animation:blink 9s infinite}"
     "@keyframes blink{0%,10%,12.4%,80%,82.4%,100%{transform:scaleY(0)}11.2%,81.2%{transform:scaleY(1)}}"
     "@keyframes ear-left{0%,25%,32%,48%,58%,100%{transform:rotate(0)}26.5%,29.5%{transform:rotate(8deg)}"
@@ -56,7 +60,9 @@ ANIMATION = (
     f'<clipPath id="tuft"><polygon points="{TUFT[0]}"/></clipPath>'
     f'<clipPath id="brow"><rect x="{BROW[0]}" y="{BROW[1]}" width="{BROW[2]}" height="{BROW[3]}"/></clipPath>'
     + "".join(f'<clipPath id="eye-{i}"><ellipse cx="{x}" cy="{y}" rx="26" ry="19"/></clipPath>' for i, (x, y) in enumerate(EYES))
+    + "".join(f'<clipPath id="nostril-{i}"><ellipse cx="{x}" cy="{y}" rx="17" ry="28"/></clipPath>' for i, (x, y) in enumerate(NOSTRILS))
     + "</defs>"
+    + "".join(f'<g clip-path="url(#nostril-{i})"><g class="horse-part nostril-{i}"><use href="#horse-art"/></g></g>' for i in range(len(NOSTRILS)))
     + '<g class="horse-part ear-left"><use href="#horse-art" clip-path="url(#ear-left)"/></g>'
     '<g class="horse-part ear-right"><use href="#horse-art" clip-path="url(#ear-right)"/></g>'
     '<g class="horse-part tuft"><use href="#horse-art" clip-path="url(#tuft)"/></g>'

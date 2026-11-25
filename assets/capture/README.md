@@ -63,8 +63,8 @@ python3 assets/capture/render.py assets/capture/claude-band.json assets/claude-b
 ```
 
 The wh-run capture becomes the README's banner, [assets/banner.svg](../banner.svg): `banner.py` renders
-it and draws the horse, [horse.webp](horse.webp), over its middle with a fade the color of the terminal. The horse blinks, flicks an ear, has its hair
-blown about and raises an eyebrow on a 9-second loop; with reduced motion it stays still.
+it and draws the horse, [horse.webp](horse.webp), over its middle with a fade the color of the terminal. The horse blinks, flicks an ear, snorts, has
+its hair blown about and raises an eyebrow with a smaller snort on a 9-second loop; with reduced motion it stays still.
 Rebuild it the same way:
 
 ```bash
