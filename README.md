@@ -351,6 +351,6 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
 | `git` fails on a new host | macOS's `git` stays a stub until the Command Line Tools arrive. Add the `command-line-tools` line. On Linux, install `git` (`apt git @os=linux`). |
 | `sync.sh` says a host "runs Linux, where host options do not apply" | Remove the options it names from that host's line in the hosts file. |
-| A run stops with "<recipe&gt; runs only on macOS" | That recipe's line reached a Linux host. Give it `@os=macos`. |
+| A run stops with `<recipe> runs only on macOS` | That recipe's line reached a Linux host. Give it `@os=macos`. |
 | `sync.sh status` says `stopped at <step>` | That recipe or option failed; the lines under it are the end of the host's `~/workhorse/run.log`. A recipe that needs another names it there. |
 | `sync.sh` says "no sudo password" | The line above it says why: the helper is missing, not executable, writable by others, failed, or printed nothing. |
