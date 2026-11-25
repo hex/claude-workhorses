@@ -39,6 +39,11 @@ recipe_path() {
     echo "no recipe \"$name\" in $(recipes_builtin_dir) or $(recipes_user_dir)"
     return 1
   fi
+  # The checks below would follow a symlink, and the copy would send whatever it points at.
+  if [ -L "$user" ]; then
+    echo "recipe $user is a symlink; put the file itself there"
+    return 1
+  fi
   problem=$(owned_by_user_alone "$(workhorses_config_dir)") &&
     problem=$(owned_by_user_alone "$(recipes_user_dir)") &&
     problem=$(owned_by_user_alone "$user") || { echo "$problem"; return 1; }

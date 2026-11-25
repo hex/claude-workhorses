@@ -18,11 +18,18 @@ while [ "${1:-}" != -- ]; do
         echo "wh: --timeout takes a whole number of seconds, minutes or hours (90s, 30m, 2h), not \"$2\"" >&2
         exit 2
       fi
-      case "${BASH_REMATCH[2]}" in
-        s) limit=${BASH_REMATCH[1]} ;;
-        m) limit=$((BASH_REMATCH[1] * 60)) ;;
-        h) limit=$((BASH_REMATCH[1] * 3600)) ;;
-      esac
+      # Shell arithmetic wraps past 19 digits, so the length is checked before any sum.
+      if [ ${#BASH_REMATCH[1]} -le 6 ]; then
+        case "${BASH_REMATCH[2]}" in
+          s) limit=${BASH_REMATCH[1]} ;;
+          m) limit=$((BASH_REMATCH[1] * 60)) ;;
+          h) limit=$((BASH_REMATCH[1] * 3600)) ;;
+        esac
+      fi
+      if [ ${#BASH_REMATCH[1]} -gt 6 ] || [ "$limit" -gt 604800 ]; then
+        echo "wh: --timeout is at most a week (168h), not \"$2\"" >&2
+        exit 2
+      fi
       shift 2 ;;
     *)
       [ "$host" = auto ] || usage

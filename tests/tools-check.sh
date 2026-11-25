@@ -129,6 +129,20 @@ expect_tools "a config folder others can write is refused, so nobody can swap th
 "claude-workhorses: $file line 1: $config is writable by others than you; chmod go-w it"
 chmod 700 "$config"
 
+# A symlink would send whatever it points at, the sudo-password helper say, to every host.
+printf '#!/bin/sh\necho pw\n' >"$config/sudo-password"
+chmod 700 "$config/sudo-password"
+ln -s ../sudo-password "$config/recipes/leak"
+expect_tools "a user recipe that is a symlink is refused" \
+"claude-workhorses: $file line 1: recipe $config/recipes/leak is a symlink; put the file itself there" \
+"leak"
+rm "$config/recipes/leak"
+mkdir "$config/recipes/folder"
+expect_tools "a user recipe that is a folder is refused" \
+"claude-workhorses: $file line 1: recipe $config/recipes/folder is not an executable file" \
+"folder"
+rmdir "$config/recipes/folder"
+
 cp "$config/recipes/my-tool" "$config/recipes/port"
 expect_tools "a user recipe may not take a built-in recipe's name" \
 "claude-workhorses: $file line 1: user recipe $config/recipes/port has the name of a built-in recipe; rename it" \

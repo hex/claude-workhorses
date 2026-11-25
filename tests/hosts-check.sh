@@ -76,8 +76,14 @@ expect_load "a host with no RAM column is refused" \
 "gamma g x86_64 6"
 
 expect_load "an option outside the known set is refused, naming the set" \
-"claude-workhorses: $config/hosts line 1: option \"dedicated\" for gamma is not one of: autologin, dock, firewall, git-identity, headless, key-only-ssh, maxfiles, no-sleep, no-spotlight, screensharing, tailscale, wallpaper=<name>, wifi-off" \
-"gamma g x86_64 6 16 dedicated"
+"claude-workhorses: $config/hosts line 1: option \"turbo\" for gamma is not one of: autologin, dock, firewall, git-identity, headless, key-only-ssh, maxfiles, no-sleep, no-spotlight, screensharing, tailscale, wallpaper=<name>, wifi-off" \
+"gamma g x86_64 6 16 turbo"
+
+for profile in dedicated shared; do
+  expect_load "a line in the format before 2026.11.2, with the $profile profile and a color, is named as such" \
+  "claude-workhorses: $config/hosts line 1: \"$profile\" for gamma is the profile column of the hosts format before 2026.11.2, which replaced the profile and color columns with host options; the plugin's examples/hosts shows the new format" \
+  "gamma g x86_64 6 16 $profile Turquoise Green"
+done
 
 expect_load "an option given twice is refused" \
 "claude-workhorses: $config/hosts line 1: option \"dock\" for gamma is given twice" \

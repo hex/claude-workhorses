@@ -1,7 +1,7 @@
 ---
 description: Add Macs as workhorses - probe each ssh target into a hosts-file line, then run a first wh job with nothing installed
 argument-hint: <ssh target>... (an alias from ~/.ssh/config or user@host)
-allowed-tools: Bash(bash:*), Bash(mkdir:*), Bash(wh:*), Read, Write, Edit, AskUserQuestion
+allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/probe-host.sh:*), Bash(mkdir:*), Bash(wh:*), Read, Write, Edit, AskUserQuestion
 ---
 
 ## Context

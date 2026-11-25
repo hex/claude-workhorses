@@ -98,6 +98,12 @@ load_hosts() {
       echo "$where RAM \"$ram\" for $name is not a whole number of GB" >&2
       return 1
     fi
+    # The format before 2026.11.2 had a profile and a wallpaper color where the options now go.
+    case "${options[0]:-}" in
+      dedicated | shared)
+        echo "$where \"${options[0]}\" for $name is the profile column of the hosts format before 2026.11.2, which replaced the profile and color columns with host options; the plugin's examples/hosts shows the new format" >&2
+        return 1 ;;
+    esac
     seen=" "
     for option in ${options[@]+"${options[@]}"}; do
       check_host_option "$option" "$where" "$name" || return 1

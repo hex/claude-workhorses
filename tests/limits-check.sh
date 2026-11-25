@@ -124,6 +124,12 @@ expect_wh "a limit that is not a whole number with s, m or h is refused" \
 "wh: --timeout takes a whole number of seconds, minutes or hours (90s, 30m, 2h), not \"5x\"" 2 --timeout 5x -- true
 expect_wh "a limit of zero is refused" \
 "wh: --timeout takes a whole number of seconds, minutes or hours (90s, 30m, 2h), not \"0m\"" 2 --timeout 0m -- true
+expect_wh "a limit over a week is refused" \
+"wh: --timeout is at most a week (168h), not \"169h\"" 2 --timeout 169h -- true
+expect_wh "a limit too large for shell arithmetic is refused, not wrapped" \
+"wh: --timeout is at most a week (168h), not \"1152921504606846976h\"" 2 --timeout 1152921504606846976h -- true
+expect_wh "a limit of a week gets as far as the hosts file" \
+"claude-workhorses: no hosts file at $scratch/no-config/hosts; the README's First run section shows one" 2 --timeout 168h -- true
 expect_wh "--timeout with no value is a usage error" "$usage" 2 --timeout
 expect_wh "two hosts are a usage error" "$usage" 2 alpha beta -- true
 expect_wh "a good limit, before or after the host, gets as far as the hosts file" \

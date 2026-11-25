@@ -90,7 +90,7 @@ one.
 
 `wh [host] [--timeout <limit>] -- <command...>` runs from anywhere inside a git repository. The
 command runs in the same subfolder of the copy. Bound every job with `--timeout`, in seconds,
-minutes or hours:
+minutes or hours, up to a week (`168h`):
 
 ```bash
 wh --timeout 30m -- pnpm test          # a free host, by load

@@ -26,7 +26,12 @@ stage_host() {
   mkdir "$stage/recipes"
   for i in "${!tool_recipe[@]}"; do
     tool_targets "$i" "$host" || continue
-    cp "${tool_path[i]}" "$stage/recipes/${tool_recipe[i]}"
+    # load_tools refused a symlinked recipe; one swapped in since is copied as a link, then refused.
+    cp -P "${tool_path[i]}" "$stage/recipes/${tool_recipe[i]}"
+    if [ -L "$stage/recipes/${tool_recipe[i]}" ]; then
+      echo "recipe ${tool_path[i]} became a symlink; nothing was sent" >&2
+      return 1
+    fi
     chmod 755 "$stage/recipes/${tool_recipe[i]}"
   done
   host_tool_lines "$host" >"$stage/tools"
