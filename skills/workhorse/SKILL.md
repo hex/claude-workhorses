@@ -39,7 +39,10 @@ wh alpha --timeout 20m -- cargo test   # a named host
   it, `wh` stops the job and everything it started and exits 124. The hosts need no `gtimeout`.
 - Use only the tools the session-start policy lists for the host. A runtime installed with the
   `mise` recipe runs as `wh --timeout 30m -- mise exec node@26 -- npm test`. On a Linux host, the
-  first version of each tool on its `mise` line is on the `PATH` directly: `node`, `go`, `ruby`.
+  first version of each tool on its `mise` line is on the `PATH` directly: `node`, `go`, `ruby`. The
+  policy counts `apt` packages named `lib*` without naming them, so for a job that needs a particular
+  library, check on the host first, `wh alpha --timeout 90s -- dpkg-query -W libssl-dev`, or ask the
+  user to add it.
 - Run it from a background shell (`run_in_background: true`) when it takes minutes, and wait for the
   exit notification instead of polling.
 
