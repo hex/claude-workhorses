@@ -2,7 +2,7 @@
 # ABOUTME: env_snippet saves a recipe's PATH and variables for every later shell; need names a missing prerequisite.
 # shellcheck shell=bash
 
-# The folder that holds env.sh, which ~/.zshenv sources, and the snippets apply.sh builds it from.
+# The folder that holds env.sh, which ~/.zshenv or ~/.bashrc sources, and the snippets apply.sh builds it from.
 workhorse_state=$HOME/.local/share/claude-workhorses
 
 # Saves stdin as recipe $1's environment snippet, sh syntax; apply.sh folds every snippet into env.sh.
