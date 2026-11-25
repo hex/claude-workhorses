@@ -1,0 +1,145 @@
+{
+  "title": "wh runs a repository's tests on a workhorse, then runs them again after an edit",
+  "description": "A terminal runs wh in a small Go repository. The first run picks the workhorse alpha, copies every file and runs the tests. After a one-line edit, the second run sends only the edited file. Each state lasts 2.5 seconds.",
+  "provenance": {
+    "checkout_head": "1dedbc8ffb903dee551a95f4e6095ff4aea92547",
+    "host": "alpha, a real workhorse; its ssh target stays outside the capture",
+    "versions": {
+      "host": {
+        "arch": "x86_64",
+        "cores": 6,
+        "ram_gb": 16
+      },
+      "go": "go version go1.27.4 darwin/amd64"
+    },
+    "commands": [
+      "wh -- gtimeout 5m go test -v ./...",
+      "echo 'func TestSub(t *testing.T) { if Sub(5, 3) != 2 { t.Fatal(\"Sub(5, 3) != 2\") } }' >> calc_test.go",
+      "wh -- gtimeout 5m go test -v ./..."
+    ],
+    "capture_commands": [
+      "bash assets/capture/wh-run.sh",
+      "tmux -L svgcap capture-pane -p -e"
+    ],
+    "crop": "Each file holds only the rows its frame shows, captured with -S and -E; all 110 columns remain.",
+    "themes": "One capture serves both themes; the shell prints no colors of its own.",
+    "terminal_defaults": {
+      "light": [
+        "#302a24",
+        "#fbf6e9"
+      ],
+      "dark": [
+        "#eeeeee",
+        "#191919"
+      ]
+    },
+    "home_path": "The current home directory prefix is replaced with ~ when capture files are written."
+  },
+  "frames": [
+    {
+      "label": "wh sends the tests to a workhorse",
+      "captures": {
+        "dark": {
+          "file": "wh-run-0-dark.ansi",
+          "crop": [
+            0,
+            1
+          ],
+          "sha256": "b7db8849e641612aa2da81dfe3695ac451335e0b7f8fa1cfc0c4152d74454799"
+        },
+        "light": {
+          "file": "wh-run-0-dark.ansi",
+          "crop": [
+            0,
+            1
+          ],
+          "sha256": "b7db8849e641612aa2da81dfe3695ac451335e0b7f8fa1cfc0c4152d74454799"
+        }
+      }
+    },
+    {
+      "label": "The first run copies every file",
+      "captures": {
+        "dark": {
+          "file": "wh-run-1-dark.ansi",
+          "crop": [
+            0,
+            5
+          ],
+          "sha256": "08866ee0688ec3084ab12e912f4abe2bdb12a37e85418371505a44b15abc4b69"
+        },
+        "light": {
+          "file": "wh-run-1-dark.ansi",
+          "crop": [
+            0,
+            5
+          ],
+          "sha256": "08866ee0688ec3084ab12e912f4abe2bdb12a37e85418371505a44b15abc4b69"
+        }
+      }
+    },
+    {
+      "label": "The tests pass, and wh exits with their exit code",
+      "captures": {
+        "dark": {
+          "file": "wh-run-2-dark.ansi",
+          "crop": [
+            0,
+            14
+          ],
+          "sha256": "e15235951ca0ba8f1593724fad2c4318ea83b45cdf97ee15036efcef989bd97a"
+        },
+        "light": {
+          "file": "wh-run-2-dark.ansi",
+          "crop": [
+            0,
+            14
+          ],
+          "sha256": "e15235951ca0ba8f1593724fad2c4318ea83b45cdf97ee15036efcef989bd97a"
+        }
+      }
+    },
+    {
+      "label": "An edit, then the same command",
+      "captures": {
+        "dark": {
+          "file": "wh-run-3-dark.ansi",
+          "crop": [
+            0,
+            16
+          ],
+          "sha256": "5c979570c87a82746922cdfedade703d2414900234a32677f35a04dbde9db436"
+        },
+        "light": {
+          "file": "wh-run-3-dark.ansi",
+          "crop": [
+            0,
+            16
+          ],
+          "sha256": "5c979570c87a82746922cdfedade703d2414900234a32677f35a04dbde9db436"
+        }
+      }
+    },
+    {
+      "label": "The second run sends only the edited file",
+      "captures": {
+        "dark": {
+          "file": "wh-run-4-dark.ansi",
+          "crop": [
+            0,
+            28
+          ],
+          "sha256": "8ffd89e97cb52d2ab54094036c7732cf517d5e2ab848465538662ed568712a2a"
+        },
+        "light": {
+          "file": "wh-run-4-dark.ansi",
+          "crop": [
+            0,
+            28
+          ],
+          "sha256": "8ffd89e97cb52d2ab54094036c7732cf517d5e2ab848465538662ed568712a2a"
+        }
+      }
+    }
+  ]
+}

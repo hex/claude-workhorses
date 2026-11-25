@@ -1,0 +1,123 @@
+{
+  "title": "The wh badge and band in Claude Code while a run goes",
+  "description": "Claude Code runs wh in bash mode. The band above the prompt names the run and its time; the footer badge counts the copy, then spins while the job runs, and both go when it ends. Each state lasts 2.5 seconds.",
+  "provenance": {
+    "checkout_head": "1dedbc8ffb903dee551a95f4e6095ff4aea92547",
+    "host": "alpha, a real workhorse; its ssh target stays outside the capture",
+    "versions": {
+      "host": {
+        "arch": "x86_64",
+        "cores": 6,
+        "ram_gb": 16
+      },
+      "go": "go version go1.27.4 darwin/amd64",
+      "claude": "2.1.332 (Claude Code)"
+    },
+    "commands": [
+      "! wh -- gtimeout 5m go test -bench=. ./..."
+    ],
+    "capture_commands": [
+      "bash assets/capture/claude-band.sh",
+      "tmux -L svgcap capture-pane -p -e"
+    ],
+    "crop": "Each file holds only the rows its frame shows, captured with -S and -E; all 110 columns remain.",
+    "themes": "Each theme is its own Claude Code session and run.",
+    "terminal_defaults": {
+      "light": [
+        "#302a24",
+        "#fbf6e9"
+      ],
+      "dark": [
+        "#eeeeee",
+        "#191919"
+      ]
+    },
+    "home_path": "The current home directory prefix is replaced with ~ when capture files are written."
+  },
+  "frames": [
+    {
+      "label": "The badge counts the copy to the workhorse",
+      "captures": {
+        "light": {
+          "file": "claude-band-0-light.ansi",
+          "crop": [
+            0,
+            11
+          ],
+          "sha256": "ab8e962acf0ec3684ff4de1dbc48a93d313610d742592b3f9f199aa68e2efc85"
+        },
+        "dark": {
+          "file": "claude-band-0-dark.ansi",
+          "crop": [
+            0,
+            10
+          ],
+          "sha256": "8eace11f4c2a46220d665e6743b97fd53fa265446f141281cafd7adb69e80996"
+        }
+      }
+    },
+    {
+      "label": "The badge spins while the job runs",
+      "captures": {
+        "light": {
+          "file": "claude-band-1-light.ansi",
+          "crop": [
+            0,
+            14
+          ],
+          "sha256": "91bc3f7b96fae5d03fd7dd763a570f10ef76974a679bb8b5d8ea03a8245af406"
+        },
+        "dark": {
+          "file": "claude-band-1-dark.ansi",
+          "crop": [
+            0,
+            13
+          ],
+          "sha256": "f94d76e5ea0ab02a780211c4598169550042816e79bbef7f5a695025dddf7282"
+        }
+      }
+    },
+    {
+      "label": "The band counts the run's time",
+      "captures": {
+        "light": {
+          "file": "claude-band-2-light.ansi",
+          "crop": [
+            0,
+            21
+          ],
+          "sha256": "05eced41db47cd059af6f8ff3087c051750041a7eebc41409fc6147ee9d241de"
+        },
+        "dark": {
+          "file": "claude-band-2-dark.ansi",
+          "crop": [
+            0,
+            21
+          ],
+          "sha256": "8f8e9e0d371d1f2b84637ad702a042b87e67fbbd4b0ff81bd49f8807f75756ed"
+        }
+      }
+    },
+    {
+      "label": "The run ends, and the band and badge go",
+      "captures": {
+        "light": {
+          "file": "claude-band-3-light.ansi",
+          "crop": [
+            0,
+            21
+          ],
+          "sha256": "7c3dcfc7793cacb52edcd8b0ecd5b3a88cf08c8ee4c9fcd4bdaafc865ee50dc7"
+        },
+        "dark": {
+          "file": "claude-band-3-dark.ansi",
+          "crop": [
+            0,
+            20
+          ],
+          "sha256": "469aaca060f2d1c8061a7b40ae47e2268e05b19fe1a8b82b95181935e516677f"
+        }
+      }
+    }
+  ]
+}

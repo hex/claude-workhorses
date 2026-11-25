@@ -1,0 +1,21 @@
+[38;5;211m[48;5;59m! [38;5;231mwh -- gtimeout 5m go test -bench=. ./...[39m
+[38;5;246m[49m  ⎿  mirror.sh run: using alpha (load 1.41 of 6 cores, first copy there)[39m
+     [38;5;246mmirror.sh run: first copy here; the laptop sends every file[39m
+     [38;5;246mmirror.sh run: full walk: first run in alpha:~/work/demo-d556deb2; comparing every file's contents once[39m
+     [38;5;246mmirror.sh run: patched 3 files from the laptop[39m
+     [38;5;246mgoos: darwin[39m
+     [38;5;246mgoarch: amd64[39m
+     [38;5;246mpkg: demo[39m
+     [38;5;246mcpu: Intel(R) Core(TM) i7-8700B CPU @ 3.20GHz[39m
+     [38;5;246mBenchmarkFib20-12          43267             27482 ns/op[39m
+     [38;5;246mBenchmarkFib25-12[39m
+     [38;5;246m(5s)[39m
+     [38;5;246m(ctrl+b ctrl+b (twice) to run in background)[39m
+[1m[38;5;35mwh alpha:[0m [3m[38;5;246mgo test -bench=. ./... (demo) · 0:05[0m                                                            [38;5;246m[-][39m
+
+[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;5;246m❯ [7m[39m [0m
+[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;220m⏵⏵ auto mode on[38;5;246m (shift+tab to cycle) · esc to interrupt[39m                                           [38;5;246m0 tokens[39m
+                                                                                          [38;5;246m◐ medium · /effort[39m
+                                                                                         [38;5;35m[1m[38;5;231m[48;5;35m⠏ wh - alpha 0:05[0m[38;5;35m[39m

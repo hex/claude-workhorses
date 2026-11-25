@@ -1,0 +1,14 @@
+$ wh -- gtimeout 5m go test -v ./...
+mirror.sh run: using alpha (load 1.53 of 6 cores, first copy there)
+mirror.sh run: first copy here; the laptop sends every file
+mirror.sh run: full walk: first run in alpha:~/work/demo-9c28e8db; comparing every file's contents once
+mirror.sh run: patched 3 files from the laptop
+=== RUN   TestAdd
+--- PASS: TestAdd (0.00s)
+=== RUN   TestFib
+--- PASS: TestFib (0.00s)
+PASS
+ok  	demo	0.382s
+$ echo $?
+0
+$
