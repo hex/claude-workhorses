@@ -44,7 +44,7 @@ wh alpha --timeout 20m -- cargo test   # a named host
   policy counts `apt` packages named `lib*` without naming them, so for a job that needs a particular
   library, check on the host first, `wh alpha --timeout 90s -- dpkg-query -W libssl-dev`, or ask the
   user to add it.
-- Run it from a background shell (`run_in_background: true`) when it takes minutes, and wait for the
+- Run it from a background shell (`run_in_background: true` in Claude Code) when it takes minutes, and wait for the
   exit notification instead of polling.
 
 ## When to use it
@@ -74,13 +74,13 @@ arguments per line, then optional filters, `@arch=x86_64` or `arm64`, `@os=macos
 1. Write the line. Prefer a built-in recipe from the table below. Arguments are letters, digits and
    `@._/+-`, and never start with `-`. A recipe that needs another names it when it fails; put the
    line it needs earlier in the file.
-2. Ask the user with `AskUserQuestion`, never in prose, before sync.sh runs. The question
-   shows the exact line, and the recommended option appends it and syncs the hosts it targets. When
-   no built-in recipe fits, write a user recipe instead: an executable in
-   `~/.config/claude-workhorses/recipes/<name>`, owned by the user, writable only by them, that
-   answers `install [args]` and `probe [args]` (probe prints `<name> <version>` lines and exits 0).
-   Show its full text in the question. A recipe that runs `sudo -A` must carry the line
-   `# needs: sudo`, and the question must say it runs as root on every host it targets.
+2. Ask the user with your tool for asking the user (`AskUserQuestion` in Claude Code), never in
+   prose, before sync.sh runs. The question shows the exact line, and the recommended option appends
+   it and syncs the hosts it targets. When no built-in recipe fits, write a user recipe instead: an
+   executable in `~/.config/claude-workhorses/recipes/<name>`, owned by the user, writable only by
+   them, that answers `install [args]` and `probe [args]` (probe prints `<name> <version>` lines and
+   exits 0). Show its full text in the question. A recipe that runs `sudo -A` must carry the
+   line `# needs: sudo`, and the question must say it runs as root on every host it targets.
 3. On yes, append the line, then run `bash <sync.sh> <host>...` for the hosts it targets (the policy
    names sync.sh's path). The sync runs detached on each host; `bash <sync.sh> status <host>` says
    `running`, or how it ended and which step stopped it, and stores the record the policy reads.

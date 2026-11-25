@@ -24,8 +24,8 @@ by hand.
   finishes in under 2 minutes locally.
 - A job that should offload but needs a tool the hosts lack or have in too old a version (a runtime,
   a browser, a command-line tool) does not fall back to this machine. Follow the workhorse skill's
-  missing-tool steps: show the user the exact tools line, or the recipe's full text, with
-  `AskUserQuestion`, never in prose, before sync.sh runs; the recommended option adds the
+  missing-tool steps: show the user the exact tools line, or the recipe's full text, with your tool
+  for asking the user (`AskUserQuestion` in Claude Code), never in prose, before sync.sh runs; the recommended option adds the
   line, syncs the hosts it targets and confirms with `bash @SYNC@ diff`, then offloads the job. Run
   locally only if the user declines, and say so. A job that needs arm64 output goes to an arm64 host
   or stays local; one that needs x86_64 goes to an x86_64 host. A job that needs macOS goes to a Mac
