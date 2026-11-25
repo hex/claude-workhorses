@@ -21,7 +21,7 @@ cat >"$scratch/bin/sudo" <<'SH'
 #!/bin/sh
 echo "sudo $*" >>"$HOME/calls"
 SH
-printf '#!/bin/sh\necho "rsync $*" >>"%s/calls"\nexit 1\n' "$scratch" >"$scratch/bin/rsync"
+printf '#!/bin/sh\necho "rsync $*" >>"%s/calls"\n[ -f "%s/answers/copy-works" ]\n' "$scratch" "$scratch" >"$scratch/bin/rsync"
 # The ssh stand-in answers from $scratch/answers/<target>.<status|manifest> when that file exists.
 export APPLY_CHECK_SCRATCH=$scratch
 cat >"$scratch/bin/ssh" <<'SH'
@@ -38,6 +38,8 @@ done
 case "$*" in
   (*run.status*) answer=$APPLY_CHECK_SCRATCH/answers/$target.status ;;
   (*manifest*) answer=$APPLY_CHECK_SCRATCH/answers/$target.manifest ;;
+  (*mkdir*) [ -f "$APPLY_CHECK_SCRATCH/answers/lock-free" ]; exit ;;
+  (*nohup*) exit 0 ;;
   (*) exit 1 ;;
 esac
 [ -f "$answer" ] && cat "$answer"
@@ -53,6 +55,10 @@ recipe plain "" "env_snippet plain <<<'export PLAIN_TOOL=1'"
 recipe rooted "# needs: sudo" ""
 recipe broken "" "exit 5"
 recipe after "" ""
+# Recipes that misbehave as installers can: one reads stdin, one leaves a snippet that reads an unset variable.
+recipe slurp "" "cat >/dev/null"
+printf '#!/bin/bash\n[ "$1" = install ] || { cat >/dev/null; echo "slurp-probe read"; exit 0; }\ncat >/dev/null\n' >"$config/recipes/slurp"
+recipe loose "" "env_snippet loose <<<'LOOSE_TOOL=\${LOOSE_UNSET_VARIABLE}x'"
 printf '#!/bin/sh\necho pw\n' >"$config/sudo-password"
 chmod 700 "$config/sudo-password"
 
@@ -127,6 +133,18 @@ $line" ] || fail ".zshenv after two runs: '$(cat "$scratch/home/.zshenv")'"
 grep -q '^sudo' "$scratch/home/calls" && fail "a run with no password called sudo"
 echo "ok   ~/.zshenv keeps its own lines and gets the source line once, on a new line; a run with no password never calls sudo"
 
+printf '%s\n' "slurp" "loose" "after" >"$stage/tools"
+cp "$config/recipes/slurp" "$config/recipes/loose" "$config/recipes/after" "$stage/recipes/"
+apply ""
+[ "$code" = 0 ] || fail "a run with a recipe that reads stdin and one with a loose snippet exited $code: $(tail -3 "$scratch/apply.log")"
+grep -q '^after' "$scratch/home/calls" || fail "a recipe that read stdin swallowed the lines after it"
+for block in slurp loose after; do
+  grep -qx "#line $block" "$scratch/home/workhorse/manifest" || fail "the manifest lacks the $block block: $(cat "$scratch/home/workhorse/manifest")"
+done
+apply ""
+[ "$code" = 0 ] || fail "the run after a loose snippet exited $code: $(tail -3 "$scratch/apply.log")"
+echo "ok   a recipe that reads stdin cannot eat the lines after it, and a snippet written without set -u in mind breaks no run"
+
 rm -f "$scratch/home/.zshenv"
 apply ""
 [ "$(cat "$scratch/home/.zshenv")" = "$line" ] || fail ".zshenv from nothing: '$(cat "$scratch/home/.zshenv")'"
@@ -160,6 +178,20 @@ expect_sync "a host that needs no sudo" "alpha: a sync is already running (~/wor
 echo "ok   a host whose lines and options need no sudo syncs without a sudo-password helper"
 
 mkdir "$scratch/answers"
+touch "$scratch/answers/lock-free" "$scratch/answers/copy-works"
+printf '#!/bin/sh\necho secret-pw-123\n' >"$config/sudo-password"
+chmod 700 "$config/sudo-password"
+expect_sync "a sync that starts" "beta: sync started; check with: $root/provision/sync.sh status beta" 0 beta
+grep -q 'secret-pw-123' "$scratch/calls" || fail "the run never received the password: $(cat "$scratch/calls")"
+while IFS= read -r call; do
+  # The stand-in logs the environment variable first; what follows it is the command line.
+  args=${call#ssh LC_SUDO_PW=* }
+  case "$args" in (*secret-pw-123*) fail "the password is in a command line: $call" ;; esac
+done <"$scratch/calls"
+grep -q '^ssh LC_SUDO_PW=secret-pw-123 .*SendEnv=LC_SUDO_PW' "$scratch/calls" || fail "the password does not reach the run that starts apply.sh: $(cat "$scratch/calls")"
+[ "$(grep -c 'LC_SUDO_PW=secret-pw-123' "$scratch/calls")" = 1 ] || fail "the password reaches more than the one ssh that starts the run: $(cat "$scratch/calls")"
+rm "$scratch/answers/lock-free" "$scratch/answers/copy-works"
+echo "ok   a started sync sends the password only in the environment of the ssh that starts apply.sh, never in a command line"
 printf '%s\n' "ended 5 broken" "=== broken" >"$scratch/answers/a.status"
 printf '%s\n' "#synced 2026-01-02 03:04 UTC" "#exit 5 broken" "#line plain ok" "plain v1" >"$scratch/answers/a.manifest"
 expect_sync "status of a host whose run ended" "=== alpha

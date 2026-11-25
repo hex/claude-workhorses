@@ -54,8 +54,11 @@ build_env() {
     echo 'export PATH'
   } >"$state/env.sh.new"
   mv "$state/env.sh.new" "$state/env.sh"
+  # Snippets come from installers that were not written for set -eu, so they load without it.
+  set +eu
   # shellcheck source=/dev/null
   . "$state/env.sh"
+  set -eu
 }
 
 # ~/.zshenv gets one line that sources env.sh, added once; the rest of the file stays the user's.
@@ -76,20 +79,22 @@ if [ -n "$sudo_pw" ]; then
 fi
 
 # ./options: one host option per line, then "sudo" when it needs the password; sync.sh checked them.
-while read -r option needs; do
+# The lists are read on descriptor 3 and each step gets /dev/null as stdin, so a step that reads stdin
+# cannot swallow the lines after it.
+while read -r option needs <&3; do
   step="option:$option"
   echo "=== option $option"
-  run_step "$([ "$needs" = sudo ] && echo yes || echo no)" ./options.sh apply "$option"
-done <./options
+  run_step "$([ "$needs" = sudo ] && echo yes || echo no)" ./options.sh apply "$option" </dev/null 3<&-
+done 3<./options
 
 # ./tools: one recipe and its arguments per line, already filtered for this host and checked by sync.sh.
 # The arguments reach the recipe as argv, never as shell text.
-while read -r -a words; do
+while read -r -a words <&3; do
   [ ${#words[@]} -gt 0 ] || continue
   step=${words[0]}
   [[ $step =~ ^[a-z0-9][a-z0-9-]*$ ]] && [ -f "./recipes/$step" ] || { echo "no recipe \"$step\" was sent" >&2; exit 1; }
   echo "=== ${words[*]}"
-  run_step "$(declares_sudo "./recipes/$step" && echo yes || echo no)" ./recipes/"$step" install "${words[@]:1}"
+  run_step "$(declares_sudo "./recipes/$step" && echo yes || echo no)" ./recipes/"$step" install "${words[@]:1}" </dev/null 3<&-
   build_env
-done <./tools
+done 3<./tools
 step=""
