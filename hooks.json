@@ -1,0 +1,11 @@
+{
+  "claude-workhorses": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "bash ./scripts/policy-agy.sh",
+        "timeout": 10
+      }
+    ]
+  }
+}
