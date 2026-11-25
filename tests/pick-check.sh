@@ -96,4 +96,24 @@ beta unexpected { 1.0 } six
 alpha unreachable
 delta ok 0.10 6 1 busy"
 
+# The probe's count of runs going, run in a scratch home under bash and under zsh, the login shells hosts have.
+eval "$(sed -n "/^count_runs='/p" "$mirror")"
+[ -n "${count_runs:-}" ] || { echo "FAIL: no count_runs in $mirror" >&2; exit 1; }
+home=$(mktemp -d)
+mkdir -p "$home/work/live.lock" "$home/work/dead.lock" "$home/work/copying.lock" "$home/work/abandoned.lock" "$home/work/repo"
+echo $$ >"$home/work/live.lock/pid"
+/bin/sh -c 'echo $$' >"$home/work/dead.lock/pid"
+touch -t 202001010000 "$home/work/abandoned.lock"
+for shell in bash zsh; do
+  command -v "$shell" >/dev/null || continue
+  got=$(HOME=$home "$shell" -c "$count_runs")
+  if [ "$got" != 2 ]; then
+    echo "FAIL $shell counts runs going: wanted 2 (a lock whose pid lives, and one still copying under an hour old), got '$got'" >&2
+    rm -rf "$home"
+    exit 1
+  fi
+  echo "ok   $shell counts a lock whose run lives and one still copying, not one whose run died or one an hour old without a pid"
+done
+rm -rf "$home"
+
 echo "all host choices are right"

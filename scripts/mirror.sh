@@ -134,6 +134,11 @@ choose_host() {
     }'
 }
 
+# The probe's count of runs going on a host, run by the host's login shell: the locks in ~/work whose
+# pid file names a live process, and those without one, a run still copying, under an hour old. A lock
+# left by a run that died without its cleanup does not count.
+count_runs='n=0; for l in $(find ~/work -maxdepth 1 -name "*.lock" -type d 2>/dev/null); do if [ -f "$l/pid" ]; then kill -0 "$(cat "$l/pid")" 2>/dev/null && n=$((n + 1)); elif [ -n "$(find "$l" -maxdepth 0 -mmin -60)" ]; then n=$((n + 1)); fi; done; echo $n'
+
 # Asks every workhorse at once for its load, its physical core count, its runs going and whether it holds the copy $1
 # (a path under ~), lets choose_host pick, and names the choice on stderr. A host that has not answered
 # within 2 seconds counts as unreachable: ssh's ConnectTimeout does not cover the name lookup, and a
@@ -147,7 +152,7 @@ pick_host() {
       # set -e would end this subshell on a failed probe before it wrote the status.
       local status=0
       run_bounded 2 ssh -o BatchMode=yes -o ConnectTimeout=2 "$(ssh_target "$host")" \
-        "if [ \"\$(uname -s)\" = Darwin ]; then /usr/sbin/sysctl -n vm.loadavg hw.physicalcpu; else cat /proc/loadavg; lscpu -p=core,socket | grep -v '^#' | sort -u | wc -l; fi; find ~/work -maxdepth 1 -name '*.lock' -type d 2>/dev/null | wc -l; if test -d ~/$(printf '%q' "$work.lock"); then echo busy; elif test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" \
+        "if [ \"\$(uname -s)\" = Darwin ]; then /usr/sbin/sysctl -n vm.loadavg hw.physicalcpu; else cat /proc/loadavg; lscpu -p=core,socket | grep -v '^#' | sort -u | wc -l; fi; $count_runs; if test -d ~/$(printf '%q' "$work.lock"); then echo busy; elif test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" \
         >"$answers/$host" 2>/dev/null || status=$?
       echo "$status" >"$answers/$host.status"
     } &
@@ -278,6 +283,8 @@ cleanup() {
   /bin/rm -rf "$lock" "$limited"
 }
 trap cleanup EXIT
+# The probe counts this run as going while this shell lives.
+echo $$ >"$lock/pid"
 # A dropped connection ends this shell by signal, which skips the EXIT trap; exit through it instead.
 # After the laptop goes, the first write to the closed connection (bash reporting how the job ended)
 # raises SIGPIPE.

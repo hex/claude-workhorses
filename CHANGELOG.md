@@ -4,6 +4,11 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixed
+- A lock left in `~/work` by a run that died without its cleanup no longer counts as a run going when `wh` picks a host. A run writes its process id into its lock, and the probe counts a lock only while that process lives, or, for a lock without one, a run still copying, for its first hour.
+
 ## 2026.11.7
 
 ### Changed
