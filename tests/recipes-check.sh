@@ -79,13 +79,14 @@ mise-go 1.27.4
 mise-ruby missing" ] || fail "mise's probe printed '$out'"
 echo "ok   mise's probe prints each tool's installed versions once, or missing"
 
-# uv names its build target, which differs between architectures and systems; the probe drops it so hosts compare.
+# One uv release prints a commit, date and target on a Mac and less or nothing after the version on
+# Linux; the probe keeps only the version, so a Mac and a Linux host on the same release compare.
 printf '%s\n' '#!/bin/bash' 'echo "$RECIPES_CHECK_UV"' >"$bin/uv"
-for version in "uv 0.13.9 (6b2d39dcc 2026-11-17 aarch64-apple-darwin)=uv uv 0.13.9 (6b2d39dcc 2026-11-17)" \
-  "uv 0.13.10 (x86_64-unknown-linux-gnu)=uv uv 0.13.10" "uv 0.13.10 (aarch64-unknown-linux-gnu)=uv uv 0.13.10"; do
-  out=$(RECIPES_CHECK_UV=${version%%=*} PATH=$path "$BASH" "$scratch/recipes/uv" probe)
-  [ "$out" = "${version#*=}" ] || fail "uv's probe of '${version%%=*}': wanted '${version#*=}', got '$out'"
+for version in "uv 0.13.10 (e3e7c1eac 2026-11-24 aarch64-apple-darwin)" "uv 0.13.10" \
+  "uv 0.13.10 (x86_64-unknown-linux-gnu)" "uv 0.13.10 (aarch64-unknown-linux-gnu)"; do
+  out=$(RECIPES_CHECK_UV=$version PATH=$path "$BASH" "$scratch/recipes/uv" probe)
+  [ "$out" = "uv uv 0.13.10" ] || fail "uv's probe of '$version': wanted 'uv uv 0.13.10', got '$out'"
 done
-echo "ok   uv's probe drops the build target, a Mac's or a Linux host's"
+echo "ok   uv's probe prints one release the same from a Mac and a Linux host"
 
 echo "all recipe checks passed"

@@ -9,9 +9,10 @@ install() {
 }
 
 probe() {
-  # The build target differs between architectures and systems, so it goes and hosts compare: a Mac's
-  # uv ends "(<commit> <date> aarch64-apple-darwin)", a Linux one's "(x86_64-unknown-linux-gnu)".
-  echo "uv $(uv --version 2>/dev/null | sed 's/ [a-z0-9_]*-apple-darwin//; s/ ([a-z0-9_]*-unknown-linux-[a-z]*)$//' || echo missing)"
+  # One release reads differently by system: a Mac's uv ends "(<commit> <date> aarch64-apple-darwin)",
+  # a Linux build has no commit and prints less or nothing after the version. Only the version stays,
+  # so hosts of either system and architecture compare.
+  echo "uv $(uv --version 2>/dev/null | sed 's/ (.*)$//' || echo missing)"
 }
 
 "$@"

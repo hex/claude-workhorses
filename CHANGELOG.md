@@ -16,7 +16,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 - A missing node or Ruby names the line that brings it on Linux too, `mise node@24` or `mise ruby@3.4`.
 
 ### Fixed
-- `uv`'s probe drops a Linux build's target, `(x86_64-unknown-linux-gnu)`, as it drops a Mac's, so hosts of either architecture compare.
+- `uv`'s probe prints only the version, without the parenthetical a Mac's build adds (commit, date and target) or a Linux build's target, so one release reads the same from a Mac and a Linux host.
 - `mise`'s probe prints a tool once when its line names two of its versions.
 
 ## 2026.11.4
