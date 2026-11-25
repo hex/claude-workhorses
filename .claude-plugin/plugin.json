@@ -1,6 +1,6 @@
 {
   "name": "claude-workhorses",
-  "version": "2026.11.1",
+  "version": "2026.11.2",
   "description": "Runs long jobs on your spare Macs. wh copies the current git repository to a workhorse, .git included, and runs the command there. Claude reads an offload policy, a table of your hosts and each host's tools at session start, a badge and a line above the prompt show each run, and sync.sh installs the tools you list on each workhorse.",
   "author": {
     "name": "hex",
