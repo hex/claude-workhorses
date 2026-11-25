@@ -1,0 +1,33 @@
+#!/bin/bash
+# ABOUTME: Recipe: MacPorts ports, by name: port <name>... ; needs the macports recipe listed before it.
+# ABOUTME: install installs the named ports and upgrades any of them that are outdated. probe prints "port <name> <version>" per name.
+# needs: sudo
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  [ -x /opt/local/bin/port ] || need port "MacPorts: list macports before it"
+  [ $# -gt 0 ] || { echo "port: name at least one port" >&2; exit 1; }
+  local name outdated
+  sudo -A /opt/local/bin/port -N install "$@"
+  for name in "$@"; do
+    outdated=$(/opt/local/bin/port -q outdated "$name")
+    [ -z "$outdated" ] || sudo -A /opt/local/bin/port -N upgrade "$name"
+    case "$name" in
+      # git-lfs works only once git's config names its filters.
+      git-lfs) /opt/local/bin/git-lfs install ;;
+      # ImageMagick 7 installs `magick` outside /opt/local/bin.
+      ImageMagick7) env_snippet port-imagemagick7 <<<'workhorse_path_add /opt/local/lib/ImageMagick7/bin' ;;
+    esac
+  done
+}
+
+probe() {
+  local name version
+  for name in "$@"; do
+    version=$(/opt/local/bin/port -q installed "$name" and active 2>/dev/null | sed 's/^ *[^ ]* //; s/ (active)$//' | head -1 || true)
+    echo "port $name ${version:-missing}"
+  done
+}
+
+"$@"

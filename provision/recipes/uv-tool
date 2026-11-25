@@ -1,0 +1,21 @@
+#!/bin/bash
+# ABOUTME: Recipe: Python command-line tools through uv: uv-tool <package>... ; needs the uv recipe listed before it.
+# ABOUTME: install installs or upgrades each to its latest release. probe prints "uv-tool <package> <version>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  command -v uv >/dev/null || need uv-tool "uv: list uv before it"
+  local name
+  for name in "$@"; do uv tool install --upgrade "$name"; done
+}
+
+probe() {
+  local name installed
+  installed=$(uv tool list 2>/dev/null || true)
+  for name in "$@"; do
+    echo "uv-tool $name $(awk -v n="$name" '$1 == n {print $2; exit}' <<<"$installed" | grep . || echo missing)"
+  done
+}
+
+"$@"

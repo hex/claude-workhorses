@@ -1,0 +1,16 @@
+#!/bin/bash
+# ABOUTME: Recipe: opencode, from its official installer into ~/.opencode.
+# ABOUTME: install takes no arguments; every run upgrades an installed copy. probe prints "opencode <version>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  if [ -x "$HOME/.opencode/bin/opencode" ]; then "$HOME/.opencode/bin/opencode" upgrade; else curl -fsSL https://opencode.ai/install | bash; fi
+  env_snippet opencode <<<'workhorse_path_add "$HOME/.opencode/bin"'
+}
+
+probe() {
+  echo "opencode $("$HOME/.opencode/bin/opencode" --version 2>/dev/null | head -1 | grep . || echo missing)"
+}
+
+"$@"

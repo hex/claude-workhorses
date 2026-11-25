@@ -1,0 +1,22 @@
+#!/bin/bash
+# ABOUTME: Recipe: the .NET SDK of one channel, dotnet <channel> (dotnet 10.0), from Microsoft's install script into ~/.dotnet.
+# ABOUTME: install adds the channel's SDK when ~/.dotnet has none of it. probe prints "dotnet <version>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  local channel=${1:?dotnet takes a channel, like 10.0}
+  if ! "$HOME/.dotnet/dotnet" --list-sdks 2>/dev/null | grep -q "^${channel}[.]"; then
+    curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel "$channel" --install-dir "$HOME/.dotnet"
+  fi
+  env_snippet dotnet <<'ENV'
+export DOTNET_ROOT="$HOME/.dotnet"
+workhorse_path_add "$HOME/.dotnet"
+ENV
+}
+
+probe() {
+  echo "dotnet $("$HOME/.dotnet/dotnet" --version 2>/dev/null || echo missing)"
+}
+
+"$@"

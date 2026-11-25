@@ -1,0 +1,31 @@
+#!/bin/bash
+# ABOUTME: Recipe: global npm packages, by name: npm <package>... ; needs node and npm from a recipe listed before it.
+# ABOUTME: install puts each package at its latest release unless the name pins one (pkg@1.2.3), under ~/.local. probe prints "npm <package>@<version>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  command -v npm >/dev/null || need npm "node and npm: list a recipe that installs them (port nodejs24 npm11, say) before it"
+  [ $# -gt 0 ] || { echo "npm: name at least one package" >&2; exit 1; }
+  local name packages=()
+  for name in "$@"; do
+    # A version is an @ after the first character: @scope/pkg has none, pkg@2 and @scope/pkg@2 have one.
+    if [[ ${name:1} == *@* ]]; then packages+=("$name"); else packages+=("$name@latest"); fi
+  done
+  npm config set prefix "$HOME/.local"
+  npm install -g "${packages[@]}"
+}
+
+probe() {
+  local name rest installed version
+  installed=$(npm ls -g --depth 0 2>/dev/null | sed -n 's/^[├└]── //p')
+  for name in "$@"; do
+    # The package's name without a pinned version: pkg@2 is pkg, @scope/pkg@2 is @scope/pkg.
+    rest=${name:1}
+    name=${name:0:1}${rest%%@*}
+    version=$(awk -v prefix="$name@" 'index($0, prefix) == 1 {print; exit}' <<<"$installed")
+    echo "npm ${version:-$name missing}"
+  done
+}
+
+"$@"

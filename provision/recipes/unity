@@ -1,0 +1,50 @@
+#!/bin/bash
+# ABOUTME: Recipe: Unity Hub, the unity CLI and one editor: unity <version> <changeset> [module...] (unity 6000.3.28f1 8f082d2fe476 android ios webgl).
+# ABOUTME: install adds the editor and modules for this Mac's architecture when missing; licensing is not handled. probe prints unity-cli, unity-editors and unity-hub lines.
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  local editor_version=${1:?unity takes an editor version} editor_changeset=${2:?unity takes the editor changeset} arch hub_arch
+  shift 2
+  arch=$(uname -m)
+  case "$arch" in x86_64) hub_arch=x64 ;; *) hub_arch=$arch ;; esac
+  local hub_dir hub_mount hub_signature installed module
+  if ! [ -d "/Applications/Unity Hub.app" ]; then
+    hub_dir=$(mktemp -d /tmp/hub.XXXX)
+    curl -fsSL -o "$hub_dir/hub.dmg" "https://public-cdn.cloud.unity3d.com/hub/prod/UnityHubSetup-$hub_arch.dmg"
+    hub_mount=$(hdiutil attach -nobrowse -readonly "$hub_dir/hub.dmg" | awk -F'\t' '/Apple_HFS|Apple_APFS/{print $NF}' | tail -1)
+    codesign --verify --deep --strict "$hub_mount/Unity Hub.app"
+    hub_signature=$(codesign -dv "$hub_mount/Unity Hub.app" 2>&1)
+    grep -q '^TeamIdentifier=9QW8UQUTAA$' <<<"$hub_signature"
+    ditto "$hub_mount/Unity Hub.app" "/Applications/Unity Hub.app"
+    hdiutil detach -quiet "$hub_mount"
+    rm -rf "$hub_dir"
+  fi
+  # SHELL=/bin/sh stops the installer from appending to ~/.zshenv; the env snippet below loads it instead.
+  if ! [ -x "$HOME/.unity/bin/unity" ]; then
+    curl -fsSL https://unity.com/install.sh | SHELL=/bin/sh bash
+  fi
+  # The env file is not written for set -u.
+  set +u; . "$HOME/.unity/env"; set -u
+  env_snippet unity <<<'if [ -f "$HOME/.unity/env" ]; then . "$HOME/.unity/env"; fi'
+  if ! [ -d "/Applications/Unity/Hub/Editor/$editor_version" ]; then
+    unity --non-interactive install "$editor_version" -c "$editor_changeset" -a "$arch" ${1+-m "$@"} --cm --accept-eula --set-default
+  fi
+  # A half-finished install leaves the editor folder behind, so check the modules too.
+  installed=$(unity --non-interactive editors -i 2>&1)
+  for module in "$@"; do
+    [ "$module" != webgl ] || module=Web
+    grep -qi "$module" <<<"$installed" || { echo "unity: $editor_version has no $module module" >&2; exit 1; }
+  done
+  "/Applications/Unity/Hub/Editor/$editor_version/Unity.app/Contents/MacOS/Unity" -version
+}
+
+probe() {
+  set +u; [ ! -f "$HOME/.unity/env" ] || . "$HOME/.unity/env"; set -u
+  echo "unity-cli $(unity --version 2>/dev/null | head -1 | grep . || echo missing)"
+  echo "unity-editors $(unity --non-interactive --format tsv --no-header editors -i 2>/dev/null | cut -f1,3,7 | grep . || echo missing)"
+  echo "unity-hub $(defaults read '/Applications/Unity Hub.app/Contents/Info' CFBundleShortVersionString 2>/dev/null || echo missing)"
+}
+
+"$@"

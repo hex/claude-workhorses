@@ -1,0 +1,24 @@
+#!/bin/bash
+# ABOUTME: Recipe: Chrome for Testing for headless browser tests, with ~/.local/bin/chrome and CHROME_BIN pointing at it.
+# ABOUTME: install takes no arguments; every run fetches the current stable build; needs npx from a recipe before it. probe prints "chrome <version>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  command -v npx >/dev/null || need chrome-for-testing "npx: list a recipe that installs node and npm before it"
+  local chrome_dir="$HOME/.local/share/chrome-for-testing" chrome_line chrome_bin
+  # The installer prints "chrome@<build> <path to the binary>"; the path holds spaces.
+  chrome_line=$(npx --yes @puppeteer/browsers@latest install chrome@stable --path "$chrome_dir" | grep '^chrome@' | tail -1)
+  chrome_bin=${chrome_line#* }
+  [ -x "$chrome_bin" ] || { echo "Chrome for Testing printed no runnable binary: \"$chrome_line\"" >&2; exit 1; }
+  mkdir -p "$HOME/.local/bin"
+  printf '#!/bin/sh\nexec "%s" "$@"\n' "$chrome_bin" >"$HOME/.local/bin/chrome"
+  chmod +x "$HOME/.local/bin/chrome"
+  env_snippet chrome-for-testing <<<'export CHROME_BIN="$HOME/.local/bin/chrome"'
+}
+
+probe() {
+  echo "chrome $("$HOME/.local/bin/chrome" --version 2>/dev/null || echo missing)"
+}
+
+"$@"

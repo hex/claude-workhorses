@@ -1,0 +1,44 @@
+#!/bin/bash
+# ABOUTME: Recipe: Apple's Command Line Tools (git, clang, make). install takes no arguments; a re-run leaves an installed copy as it is.
+# ABOUTME: probe prints "command-line-tools <version>".
+# needs: sudo
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  xcode-select -p >/dev/null 2>&1 && return 0
+  # This marker makes softwareupdate list the Command Line Tools package.
+  local marker=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress label update_pid
+  touch "$marker"
+  label=$(softwareupdate -l 2>/dev/null | sed -n 's/^\* Label: \(Command Line Tools for Xcode-.*\)$/\1/p' | sort -V | tail -1)
+  if [ -z "$label" ]; then
+    rm -f "$marker"
+    echo "softwareupdate lists no Command Line Tools package" >&2
+    exit 1
+  fi
+  # softwareupdate can wedge on this install for good, even across reboots. If it fails or runs past
+  # 30 minutes, install Apple's packages directly.
+  sudo -A softwareupdate -i "$label" --verbose &
+  update_pid=$!
+  for _ in $(seq 360); do
+    kill -0 "$update_pid" 2>/dev/null || break
+    sleep 5
+  done
+  if kill -0 "$update_pid" 2>/dev/null; then
+    echo "softwareupdate is still installing '$label' after 30 minutes; installing the packages directly" >&2
+    kill "$update_pid"
+    wait "$update_pid" || true
+    "$(dirname "$0")/../clt-direct.sh"
+  elif ! wait "$update_pid"; then
+    echo "softwareupdate failed to install '$label'; installing the packages directly" >&2
+    "$(dirname "$0")/../clt-direct.sh"
+  fi
+  rm -f "$marker"
+  xcode-select -p >/dev/null || { echo "the Command Line Tools are still missing after the install" >&2; exit 1; }
+}
+
+probe() {
+  echo "command-line-tools $(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | sed -n 's/^version: //p' | grep . || echo missing)"
+}
+
+"$@"

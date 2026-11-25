@@ -1,0 +1,15 @@
+#!/bin/bash
+# ABOUTME: Recipe: Claude Code, from its official installer into ~/.local/bin.
+# ABOUTME: install takes no arguments; every run updates an installed copy to the latest release. probe prints "claude <version>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  if [ -x "$HOME/.local/bin/claude" ]; then "$HOME/.local/bin/claude" update; else curl -fsSL https://claude.ai/install.sh | bash; fi
+}
+
+probe() {
+  echo "claude $("$HOME/.local/bin/claude" --version 2>/dev/null | head -1 | grep . || echo missing)"
+}
+
+"$@"

@@ -1,0 +1,31 @@
+#!/bin/bash
+# ABOUTME: Recipe: Ruby gems with their commands, by name: gem <name>... ; uses the newest MacPorts gem3.x, else the gem on the PATH.
+# ABOUTME: install installs each into ~/.local/share/gem, commands in ~/.local/bin, and updates it. probe prints "gem <name> (<versions>)".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+# The newest MacPorts gem (gem3.4 from ruby34), else the gem on the PATH.
+gem_command() {
+  local newest
+  newest=$(ls /opt/local/bin/gem3.* 2>/dev/null | sort -V | tail -1 || true)
+  if [ -n "$newest" ]; then echo "$newest"; else command -v gem || need gem "a Ruby with gem: list one (port ruby34, say) before it"; fi
+}
+
+install() {
+  local gem
+  gem=$(gem_command)
+  export GEM_HOME="$HOME/.local/share/gem"
+  "$gem" install --no-document --bindir "$HOME/.local/bin" "$@"
+  "$gem" update --no-document --bindir "$HOME/.local/bin" "$@"
+  env_snippet gem <<<'export GEM_HOME="$HOME/.local/share/gem"'
+}
+
+probe() {
+  local gem name
+  gem=$(gem_command 2>/dev/null) || { for name in "$@"; do echo "gem $name missing"; done; return 0; }
+  for name in "$@"; do
+    echo "gem $(GEM_HOME=$HOME/.local/share/gem "$gem" list -e "$name" 2>/dev/null | grep "^$name " || echo "$name missing")"
+  done
+}
+
+"$@"

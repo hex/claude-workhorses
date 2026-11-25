@@ -1,0 +1,15 @@
+#!/bin/bash
+# ABOUTME: Recipe: uv, the Python package manager, from its official installer into ~/.local/bin.
+# ABOUTME: install takes no arguments and leaves a uv already on the PATH as it is. probe prints "uv <version>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh
+}
+
+probe() {
+  echo "uv $(uv --version 2>/dev/null | sed 's/ [a-z0-9_]*-apple-darwin//' || echo missing)"
+}
+
+"$@"

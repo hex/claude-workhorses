@@ -1,0 +1,21 @@
+#!/bin/bash
+# ABOUTME: Recipe: runtimes through mise: mise <tool@version>... ; needs mise on the PATH (port mise, say) from a line before it.
+# ABOUTME: install installs each tool@version; run one with mise exec <tool@version> -- <command>. probe prints "mise-<tool> <installed versions>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  command -v mise >/dev/null || need mise "mise: list a recipe that installs it (port mise, say) before it"
+  [ $# -gt 0 ] || { echo "mise: name at least one tool@version" >&2; exit 1; }
+  mise install "$@"
+}
+
+probe() {
+  local spec tool
+  for spec in "$@"; do
+    tool=${spec%@*}
+    echo "mise-$tool $(mise ls --installed "$tool" 2>/dev/null | awk '{print $2}' | paste -sd ' ' - | grep . || echo missing)"
+  done
+}
+
+"$@"

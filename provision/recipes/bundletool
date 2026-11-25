@@ -1,0 +1,23 @@
+#!/bin/bash
+# ABOUTME: Recipe: Google's bundletool jar at one version, bundletool <version> (bundletool 1.18.3), with a ~/.local/bin/bundletool command.
+# ABOUTME: install downloads the version once; the command runs it with the java on the PATH. probe prints "bundletool <jar>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  local version=${1:?bundletool takes a version, like 1.18.3} jar
+  jar="$HOME/.local/share/bundletool/bundletool-all-$version.jar"
+  if ! [ -f "$jar" ]; then
+    mkdir -p "$(dirname "$jar")"
+    curl -fsSL -o "$jar" "https://github.com/google/bundletool/releases/download/$version/bundletool-all-$version.jar"
+  fi
+  mkdir -p "$HOME/.local/bin"
+  printf '#!/bin/sh\nexec java -jar "%s" "$@"\n' "$jar" >"$HOME/.local/bin/bundletool"
+  chmod +x "$HOME/.local/bin/bundletool"
+}
+
+probe() {
+  echo "bundletool $(ls "$HOME/.local/share/bundletool" 2>/dev/null | paste -sd ' ' - | grep . || echo missing)"
+}
+
+"$@"

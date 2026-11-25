@@ -1,0 +1,44 @@
+#!/bin/bash
+# ABOUTME: Recipe: MacPorts, from its signed installer for this macOS release (15 or 27), building with the Command Line Tools.
+# ABOUTME: install takes no arguments; every run updates the ports tree and upgrades every outdated port. probe prints "macports <version>".
+# needs: sudo
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  xcode-select -p >/dev/null 2>&1 || need macports "the Command Line Tools: list command-line-tools before it"
+  # Homebrew refuses Intel Macs and, on a shared Mac, belongs to the owner's account, so packages come
+  # from MacPorts, whose installer is built for each macOS release.
+  local macports_pkg macports_signature macports_conf setting
+  case "$(sw_vers -productVersion | cut -d. -f1)" in
+    15) macports_pkg=MacPorts-2.12.7-15-Sequoia.pkg ;;
+    27) macports_pkg=MacPorts-2.12.7-27-GoldenGate.pkg ;;
+    *) echo "macports: no MacPorts installer chosen for macOS $(sw_vers -productVersion)" >&2; exit 1 ;;
+  esac
+  if ! [ -x /opt/local/bin/port ]; then
+    curl -fsSL -o "/tmp/$macports_pkg" "https://github.com/macports/macports-base/releases/download/v2.12.7/$macports_pkg"
+    macports_signature=$(pkgutil --check-signature "/tmp/$macports_pkg")
+    grep -q 'Developer ID Installer: Joshua Root (QTA3A3B7F3)' <<<"$macports_signature"
+    sudo -A installer -pkg "/tmp/$macports_pkg" -target /
+    rm -f "/tmp/$macports_pkg"
+  fi
+  # Ports build with the Command Line Tools. A shared Mac's owner may keep an Xcode.app older than the
+  # macOS release, and MacPorts refuses to build with it; ignoring Xcode keeps every workhorse alike.
+  macports_conf=/opt/local/etc/macports/macports.conf
+  for setting in "developer_dir /Library/Developer/CommandLineTools" "xcodeversion none" "xcodebuildcmd none"; do
+    grep -qx "$setting" "$macports_conf" || echo "$setting" | sudo -A tee -a "$macports_conf" >/dev/null
+  done
+  sudo -A /opt/local/bin/port -N selfupdate
+  # Upgrade what is already installed too, so hosts synced on different days still match.
+  if [ -n "$(/opt/local/bin/port -q outdated)" ]; then sudo -A /opt/local/bin/port -N upgrade outdated; fi
+  env_snippet macports <<'ENV'
+workhorse_path_add /opt/local/sbin
+workhorse_path_add /opt/local/bin
+ENV
+}
+
+probe() {
+  echo "macports $(/opt/local/bin/port version 2>/dev/null | sed 's/^Version: //' || echo missing)"
+}
+
+"$@"

@@ -1,0 +1,22 @@
+#!/bin/bash
+# ABOUTME: Recipe: macos-harness, which drives app windows, under Python 3.12 through uv, plus its skill for Claude on the host.
+# ABOUTME: install takes no arguments and upgrades it to its latest release; needs the uv recipe before it. probe prints "macos-harness <uv tool list line>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  command -v uv >/dev/null || need macos-harness "uv: list uv before it"
+  uv tool install --upgrade --python 3.12 macos-harness
+  # Agents on the host drive app UIs through macos-harness; give Claude its skill.
+  mkdir -p "$HOME/.claude/skills/macos-harness"
+  macos-harness skill >"$HOME/.claude/skills/macos-harness/SKILL.md"
+  # Over SSH, macOS charges macos-harness's permissions to sshd-keygen-wrapper, not to the python that
+  # `macos-harness doctor` names. Granting them takes a click on the Mac's screen.
+  echo "macos-harness over SSH needs Accessibility and Screen & System Audio Recording: in Privacy & Security on this Mac's screen, grant both to /usr/libexec/sshd-keygen-wrapper" >&2
+}
+
+probe() {
+  echo "macos-harness $(uv tool list 2>/dev/null | grep '^macos-harness' || echo missing)"
+}
+
+"$@"

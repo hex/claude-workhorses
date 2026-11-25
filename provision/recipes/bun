@@ -1,0 +1,16 @@
+#!/bin/bash
+# ABOUTME: Recipe: bun, from its official installer into ~/.bun.
+# ABOUTME: install takes no arguments; every run upgrades an installed copy. probe prints "bun <version>".
+set -euo pipefail
+. "$(dirname "$0")/../recipe-lib.sh"
+
+install() {
+  if [ -x "$HOME/.bun/bin/bun" ]; then "$HOME/.bun/bin/bun" upgrade; else curl -fsSL https://bun.sh/install | bash; fi
+  env_snippet bun <<<'workhorse_path_add "$HOME/.bun/bin"'
+}
+
+probe() {
+  echo "bun $("$HOME/.bun/bin/bun" --version 2>/dev/null || echo missing)"
+}
+
+"$@"
