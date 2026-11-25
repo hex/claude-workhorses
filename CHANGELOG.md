@@ -4,7 +4,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
-## Unreleased
+## 2026.11.6
 
 ### Added
 - `CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB` sets the largest first copy, in MB, that `wh` sends through Tailscale, 1024 by default. A value that is not a whole number from 1 to 9999999 stops `wh` with exit 2 and a message that names it. A blocked first copy names the limit.
