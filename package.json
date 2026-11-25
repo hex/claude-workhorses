@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./server": "./opencode/server.js"
+    "./server": "./server.js"
   },
   "pi": {
     "extensions": [

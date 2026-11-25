@@ -1,12 +1,12 @@
-// ABOUTME: OpenCode plugin: registers the workhorse skill and adds the workhorse policy, which Claude Code and Codex
-// ABOUTME: get from the SessionStart hook, to the system prompt of each top-level session.
+// ABOUTME: OpenCode plugin, at the root because OpenCode loads a local plugin folder from its server.js: registers the
+// ABOUTME: workhorse skill and adds the policy that Claude Code and Codex get from SessionStart to each top-level session.
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const root = dirname(fileURLToPath(import.meta.url));
 const skillPath = join(root, "skills", "workhorse", "SKILL.md");
 const policyScript = join(root, "scripts", "policy.sh");
 
