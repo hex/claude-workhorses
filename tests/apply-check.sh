@@ -247,15 +247,19 @@ the end of its run.log, text the host wrote:
 | [2Jgone
 manifest stored: $scratch/state/manifests/alpha" 1 status alpha
 cmp -s "$scratch/answers/a.manifest" "$scratch/state/manifests/alpha" || fail "the stored manifest differs from the host's"
-printf '%s\n' "running" >"$scratch/answers/b.status"
+printf '%s\n' "running" "=== plain" >"$scratch/answers/b.status"
 expect_sync "status of a host still running" "=== beta
-running" 0 status beta
+running
+the end of its run.log, text the host wrote:
+| === plain" 0 status beta
 [ ! -e "$scratch/state/manifests/beta" ] || fail "status stored a manifest for a run still going"
 touch "$scratch/answers/a.unreachable"
 expect_sync "status of a host that does not answer, then one still running" "=== alpha
 unreachable (ssh exit 255)
 === beta
-running" 1 status alpha beta
+running
+the end of its run.log, text the host wrote:
+| === plain" 1 status alpha beta
 rm "$scratch/answers/a.unreachable"
 echo "ok   status names where a run stopped, reports every host, fails when a run failed or a host does not answer, and stores the manifest of a run that ended, and only then"
 

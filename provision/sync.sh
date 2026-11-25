@@ -108,8 +108,8 @@ show_status() {
     echo "unreachable (ssh exit $code)"
     return 1
   fi
-  case "$answer" in
-    "ended 0"*) echo "exit=0" ;;
+  case "$(head -n 1 <<<"$answer")" in
+    "ended 0") echo "exit=0" ;;
     ended*)
       read -r _ code step <<<"$answer"
       [[ $code =~ ^[0-9]+$ ]] || code=unknown
