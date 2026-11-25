@@ -293,7 +293,7 @@ that account.
 ### Linux and WSL hosts
 
 A Linux host needs sshd, your ssh key, `rsync`, `git` for git commands, and bash or zsh as the
-workhorse user's login shell. `wh` uses the system's `find`, `stat`, `awk` and `lscpu`, which
+workhorse user's login shell. `wh` uses the system's `find`, `awk`, `sort` and `lscpu`, which
 Debian and Ubuntu ship. `/claude-workhorses:setup` probes it like a Mac: `uname -m` for the
 architecture (`aarch64` becomes `arm64`), physical cores from `lscpu`, and RAM from `MemTotal`,
 rounded to the nearest GB. Host options are Mac settings and do not apply. The `apt` recipe
@@ -304,9 +304,9 @@ A Windows PC serves through WSL2, with Ubuntu say:
 - Run sshd inside WSL and make it reachable from your machine, then put the route in
   `~/.ssh/config` and name that alias in the hosts file.
 - The work copies live under `~/work` in the WSL user's home, on the Linux filesystem. Never move
-  them to `/mnt/c` or link them there: files under `/mnt/c` cross into Windows on every access, and
-  a copy there runs far slower and loses the file modes and times `wh` compares.
-- WSL2 gets every core of the PC, and by default half its memory; the probe reports what WSL2 has.
+  them to `/mnt/c`, the Windows drive, or link them there: Microsoft's WSL guidance keeps the files
+  Linux tools work on in the Linux filesystem, for speed.
+- The probe reports the cores and memory WSL2 has, which Windows sets for the WSL2 machine.
 
 ### Configuration
 
