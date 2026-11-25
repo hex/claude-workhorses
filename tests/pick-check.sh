@@ -27,6 +27,8 @@ expect_answer "a Mac's answer gives its 1-minute load and physical cores" "gamma
   gamma 0 "{ 1.39 1.37 1.32 } 6 copy "
 expect_answer "a Linux host's answer gives the 1-minute load of /proc/loadavg and physical cores" "delta ok 0.52 6 none" \
   delta 0 "0.52 0.40 0.30 1/215 1245 6 none "
+expect_answer "a Linux host that counts no cores, as when lscpu is missing, is unexpected" \
+  "delta unexpected 0.52 0.40 0.30 1/215 1245 0 none " delta 0 "0.52 0.40 0.30 1/215 1245 0 none "
 expect_answer "a host whose ssh failed is unreachable" "beta unreachable" beta 255 ""
 expect_answer "an answer of another shape is unexpected" "beta unexpected Linux 12 none " beta 0 "Linux 12 none "
 

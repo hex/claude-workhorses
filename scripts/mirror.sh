@@ -98,7 +98,7 @@ probe_answer() {
     "{ "*) read -r _ load _ _ _ cores copy <<<"$answer" ;;
     *) read -r load _ _ _ _ cores copy <<<"$answer" ;;
   esac
-  if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[0-9]+$ && $copy =~ ^(copy|none)$ ]]; then
+  if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[1-9][0-9]*$ && $copy =~ ^(copy|none)$ ]]; then
     echo "$host ok $load $cores $copy"
   else
     echo "$host unexpected $answer"
