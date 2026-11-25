@@ -17,7 +17,8 @@ It runs, in order:
 | `tests/apply-check.sh` | What `sync.sh` stages for a host (never the config folder), how `provision/host/apply.sh` runs it with `HOME` in a throwaway folder (arguments as argv, sudo only for recipes that declare it, a stop at the first failure, a step that reads stdin or an env snippet that reads an unset variable breaking nothing, a snippet that exits stopping the run at its env step, `apply.sh start` returning while the run goes on, one line added to `~/.zshenv` no matter how often it runs, or on Linux with bash to the top of `~/.bashrc`, above its interactive guard, and a login shell other than bash or zsh stopping the run at its env step), that the sudo password travels only on the stdin of the ssh that starts the run and that an env snippet planted on the host can read neither it nor a descriptor that could carry it, that a host option gets the password only when it needs sudo, that a run that fails to start frees the lock, that `sync.sh` asks each host's OS before any password, lock or stage, stages the `apt` line only for a Linux host and refuses host options on one, and a line for a macOS-only recipe on one, that a bad file stops `sync.sh` before any ssh, that `status` reports every host, marks the end of `run.log` as host text and stores a finished run's manifest, and that `diff` compares each line only among its hosts, the OS read from each manifest, shows host text only as probe lines, and fails on a tool a host reports missing. |
 | `tests/apt-check.sh` | The `apt` recipe, run against stand-ins for `sudo`, `apt-get`, `apt-cache` and `dpkg-query`, refuses a name that ends in `-` or `+` before `apt-get` runs and a name no package has exactly before the install, and installs waiting up to 5 minutes for apt's lock and keeping conffiles edited on the host; its probe prints one line a package, one installed for two architectures included. |
 | `tests/recipes-check.sh` | The macOS-only recipes (`command-line-tools`, `macports`, `port`, `macos-harness`, `unity`), run with a stand-in `uname` that says Linux, stop with a message naming `@os=macos` before they run any command. On a Mac, `mise` only installs the line's versions; on Linux it installs mise into `~/.local/bin` when no mise is on the `PATH` (and updates that copy on later runs), and makes the line's versions the global ones. The `env.sh` that `apply.sh` builds puts mise's shims ahead of the system's folders, behind `~/.local/bin` and the folders of snippets that sort after `mise`'s, such as rustup's `~/.cargo/bin`. `mise`'s probe prints each tool once, even when a line names two of its versions. `uv`'s probe prints one release the same from a Mac and a Linux host, dropping everything after the version. |
-| `tests/policy-check.sh` | The session-start policy renders the host table and each host's tools from stored manifests (one line per recipe, apt libraries counted and named only when missing; only lines shaped as a tool and its version under a recipe shaped as a recipe name, the rest counted; header values in their own shapes, a Linux release included; capped; stale hosts named, with `@os` lines matched to each record's OS), appends the notes file, names this install's scripts, runs no ssh, and says so in one line when the hosts or tools file is missing or bad. |
+| `tests/policy-check.sh` | The session-start policy renders the host table and each host's tools from stored manifests (one line per recipe, apt libraries counted and named only when missing; only lines shaped as a tool and its version under a recipe shaped as a recipe name, the rest counted; header values in their own shapes, a Linux release included; capped; stale hosts named, with `@os` lines matched to each record's OS), appends the notes file, names this install's `wh` and scripts, runs no ssh, and says so in one line when the hosts or tools file is missing or bad; Antigravity's hook carries the whole policy in its JSON step. |
+| `tests/manifests-check.sh` | The Claude Code, Codex, Antigravity and npm manifests name the same version. |
 | `claude plugin test .` | The workhorse-runs mod's tests, `mods/workhorse-runs/hooks/register.test.tsx`. |
 
 CI runs the same script on Ubuntu and macOS, the macOS job under `/bin/bash` 3.2.
@@ -25,6 +26,20 @@ CI runs the same script on Ubuntu and macOS, the macOS job under `/bin/bash` 3.2
 No check runs a recipe's `install` or a host option on the machine itself: they change the host they
 run on. `apt-check` and `recipes-check` run recipes with stand-ins for the tools they call. Run each recipe's
 `probe` by hand when you change it; probes only read.
+
+## The policy in each agent
+
+```bash
+bash tests/agents-check.sh
+```
+
+It runs Claude Code, Codex, pi and OpenCode, each with this checkout as its plugin, in throwaway
+config folders, pointed at a local server that records each request and answers it with an error,
+so no agent reaches a model and nothing leaves the machine. Each passes when a request it sent holds a
+token found only in the notes of the check's own config. An agent that is not installed prints a
+`skip:` line. Codex runs with `--dangerously-bypass-hook-trust` in its throwaway `CODEX_HOME`; your
+own Codex still asks you to trust the hook in `/hooks`. Antigravity offers no way to name another
+server, so `policy-check` checks its hook's output instead.
 
 ## Type check
 

@@ -175,4 +175,9 @@ grep -qxF "The tools file is not usable, so the tools section is left out: claud
   fail "a bad tools file: got '$out'"
 echo "ok   a bad tools file is named in one line"
 
+plain=$("$BASH" "$root/scripts/policy.sh")
+step=$("$BASH" "$root/scripts/policy-agy.sh" | jq -r '.injectSteps[0].systemMessage.systemMessage')
+[ "$step" = "$plain" ] || fail "Antigravity's hook does not carry the policy as its JSON step: got '${step:0:200}'"
+echo "ok   Antigravity's hook carries the whole policy in the JSON step agy reads"
+
 echo "all policy checks passed"
