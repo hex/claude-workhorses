@@ -71,6 +71,14 @@ shims=$(env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/sh -c '. "$1"; . "$2"; print
 [ "${shims%%:*}" = "$HOME/.local/share/mise/shims" ] || fail "after mise's env snippet, PATH is '$shims'"
 echo "ok   on Linux, mise installs itself, then updates itself, sets the line's versions as the defaults and puts its shims first on the PATH"
 
+# The probe prints a line for each tool, once however many of its versions the line names.
+printf '%s\n' '#!/bin/bash' 'case "$3" in node) printf "node  24.22.3\nnode  26.13.1\n" ;; go) echo "go  1.27.4" ;; esac' >"$HOME/.local/bin/mise"
+out=$(PATH=$path "$BASH" "$scratch/recipes/mise" probe node@24 node@26 go@1.27 ruby@3.4)
+[ "$out" = "mise-node 24.22.3 26.13.1
+mise-go 1.27.4
+mise-ruby missing" ] || fail "mise's probe printed '$out'"
+echo "ok   mise's probe prints each tool's installed versions once, or missing"
+
 # uv names its build target, which differs between architectures and systems; the probe drops it so hosts compare.
 printf '%s\n' '#!/bin/bash' 'echo "$RECIPES_CHECK_UV"' >"$bin/uv"
 for version in "uv 0.13.9 (6b2d39dcc 2026-11-17 aarch64-apple-darwin)=uv uv 0.13.9 (6b2d39dcc 2026-11-17)" \

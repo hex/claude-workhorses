@@ -24,9 +24,12 @@ install() {
 }
 
 probe() {
-  local spec tool
+  local spec tool seen=" "
   for spec in "$@"; do
     tool=${spec%@*}
+    # A line may name a tool twice, node@24 node@26, and its line lists every installed version.
+    case "$seen" in *" $tool "*) continue ;; esac
+    seen+="$tool "
     echo "mise-$tool $(mise ls --installed "$tool" 2>/dev/null | awk '{print $2}' | paste -sd ' ' - | grep . || echo missing)"
   done
 }
