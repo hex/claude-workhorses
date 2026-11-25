@@ -47,14 +47,14 @@ fi
 
 echo "New version: $NEW_VERSION"
 
-# Update the Claude Code, Codex and Antigravity manifests
-for manifest in "$PLUGIN_JSON" .codex-plugin/plugin.json .antigravity-plugin/plugin.json; do
+# Update the Claude Code, Codex, Antigravity and npm manifests
+for manifest in "$PLUGIN_JSON" .codex-plugin/plugin.json .antigravity-plugin/plugin.json package.json; do
     jq --arg v "$NEW_VERSION" '.version = $v' "$manifest" > "${manifest}.tmp"
     mv "${manifest}.tmp" "$manifest"
 done
 
 # Commit and tag
-git add .claude-plugin/plugin.json .codex-plugin/plugin.json .antigravity-plugin/plugin.json
+git add .claude-plugin/plugin.json .codex-plugin/plugin.json .antigravity-plugin/plugin.json package.json
 git commit -m "Bump version to ${NEW_VERSION}"
 git tag "v${NEW_VERSION}"
 

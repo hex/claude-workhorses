@@ -1,5 +1,6 @@
 {
   "name": "claude-workhorses",
+  "version": "2026.11.8",
   "private": true,
   "type": "module",
   "exports": {
