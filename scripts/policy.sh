@@ -74,9 +74,10 @@ bullets() {
 
 tools_section() {
   local manifests host file recorded=() common="" lines heading exit_code step os release synced left_out stale=()
-  # A Linux release as /etc/os-release's PRETTY_NAME gives it: a name of one or two words, a version
-  # that starts with a digit, then perhaps LTS and a codename. "Ubuntu 24.04.5 LTS", "Debian GNU/Linux 12 (bookworm)".
-  local linux_release='^[A-Z][A-Za-z]*( [A-Z][A-Za-z/]*)? [0-9][0-9.]*( LTS)?( [(][a-z]+[)])?$'
+  # A Linux release as /etc/os-release's PRETTY_NAME gives it, of 40 characters at most: a known
+  # distribution, a version that starts with a digit, then perhaps LTS and a codename or edition.
+  # "Ubuntu 24.04.5 LTS", "Debian GNU/Linux 12 (bookworm)", "Fedora Linux 41 (Workstation Edition)".
+  local linux_release='^(Ubuntu|Debian GNU/Linux|Fedora Linux) [0-9][0-9.]*( LTS)?( [(]([a-z]+|[A-Z][a-z]+ Edition)[)])?$'
   if ! load_tools 2>/dev/null; then
     echo "The tools file is not usable, so the tools section is left out: $(load_tools 2>&1 || true)"
     return 0
@@ -111,7 +112,7 @@ tools_section() {
     synced=$(manifest_header "$file" synced '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC$')
     if [ "$os" = linux ]; then
       release=$(awk '/^#/ {on = ($0 == "#base"); next} on' "$file" | sed -n 's/^linux //p' | head -n 1)
-      [[ $release =~ $linux_release ]] || release=unknown
+      [[ ${#release} -le 40 && $release =~ $linux_release ]] || release=unknown
       heading="$host (Linux $release, synced ${synced:-at an unknown time}"
     else
       release=$(awk '/^#/ {on = ($0 == "#base"); next} on' "$file" | sed -n 's/^macos //p' | head -n 1)

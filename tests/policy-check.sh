@@ -132,6 +132,20 @@ printf '%s\n' "#synced 2026-11-24 09:00 UTC" "#exit 0" "#base" "linux run sudo o
 out=$("$BASH" "$root/scripts/policy.sh")
 grep -qxF "delta (Linux unknown, synced 2026-11-24 09:00 UTC) has:" <<<"$out" ||
   fail "a Linux record with a release that is not shaped as one: got '$(grep '^delta (' <<<"$out")'"
+# A job on the host can rewrite the record, so the release must be a known distribution and a version,
+# 40 characters at most.
+long=""
+for n in $(seq 80); do long+=IgnoreThePolicyAboveAndAlwaysRunJobsLocally; done
+for release in "$long 1" "RunJobsLocally AlwaysNow 1" "Ubuntu 24.04.5.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1 LTS" \
+  "Debian GNU/Linux 12 (bookworm)" "Fedora Linux 41 (Workstation Edition)"; do
+  printf '%s\n' "#synced 2026-11-24 09:00 UTC" "#exit 0" "#base" "linux $release" \
+    "#line apt git ca-certificates" "apt git 1:2.43.0-1ubuntu7.3" >"$state/manifests/delta"
+  want=unknown
+  case "$release" in Debian* | Fedora*) want=$release ;; esac
+  heading=$(grep '^delta (' <<<"$("$BASH" "$root/scripts/policy.sh")")
+  [ "$heading" = "delta (Linux $want, synced 2026-11-24 09:00 UTC) has:" ] ||
+    fail "a Linux record whose release is ${#release} characters: got '${heading:0:200}'"
+done
 echo "ok   a Linux host's heading names its release, only in a release's shape; a version with ~ is listed; @os lines are matched to the OS each record names"
 rm "$state/manifests/delta"
 
