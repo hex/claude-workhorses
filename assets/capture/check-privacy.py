@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ABOUTME: Fails when a capture file holds an address, a host or user name, a home path, an email or plan text.
-# ABOUTME: Usage: check-privacy.py [file...]; with no files it checks every file under assets/. Prints file:line and the kind, never the match.
+# ABOUTME: Usage: check-privacy.py [file...]; with no files it checks what git would commit under assets/. Prints file:line and the kind, never the match.
 
 import os
 import re
@@ -70,7 +70,10 @@ def main(args):
     if args:
         files = [Path(arg) for arg in args]
     else:
-        files = sorted(p for p in (ROOT / "assets").rglob("*") if p.is_file() and p.suffix != ".png")
+        # What git would commit under assets/: tracked files and untracked ones it does not ignore.
+        listed = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "assets"],
+                                cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines()
+        files = sorted(ROOT / name for name in set(listed) if not name.endswith(".png") and (ROOT / name).is_file())
     files = [path for path in files if path.resolve() != SELF]
     hits = [hit for path in files for hit in scan(path, kinds)]
     for hit in hits:
