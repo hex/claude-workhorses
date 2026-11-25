@@ -15,6 +15,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from banner import build as build_banner
 from render import THEMES, render
 
 
@@ -331,7 +332,10 @@ class Capture:
         for path in files[2:]:
             shutil.copyfile(path, CAPTURE / path.name)
         shutil.copyfile(manifest, CAPTURE / manifest.name)
-        shutil.copyfile(svg, ROOT / "assets" / svg.name)
+        if self.name == "wh-run":
+            (ROOT / "assets/banner.svg").write_text(build_banner(svg.read_text()))
+        else:
+            shutil.copyfile(svg, ROOT / "assets" / svg.name)
 
 
 if __name__ == "__main__":

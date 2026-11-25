@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.png" alt="" width="160">
+  <img src="assets/banner.svg" alt="The claude-workhorses horse in front of a terminal where wh picks the workhorse alpha, copies a small Go module to it and runs its tests, then after a one-line edit sends only the edited file and runs them again">
 </p>
 
 <h1 align="center">claude-workhorses</h1>
@@ -10,8 +10,6 @@ A Claude Code plugin that runs long jobs on your spare Macs. `wh` copies the git
 in to a workhorse, brings the copy level with your machine (`.git` included), and runs the command
 there. The test suite or the build runs on the workhorse, and your laptop stays free for the work in
 front of you.
-
-![wh picks the workhorse alpha, copies a small Go module to it and runs its tests, then after a one-line edit sends only the edited file and runs them again](assets/wh-run.svg)
 
 [![Tests](https://github.com/hex/claude-workhorses/actions/workflows/tests.yml/badge.svg)](https://github.com/hex/claude-workhorses/actions/workflows/tests.yml)
 

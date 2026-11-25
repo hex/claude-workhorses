@@ -59,10 +59,16 @@ hyperlinks become plain text. An SVG must stay under 80 KB.
 Rebuild an SVG from the saved frames, with no host and no model call:
 
 ```bash
-python3 assets/capture/render.py assets/capture/wh-run.json assets/wh-run.svg
+python3 assets/capture/render.py assets/capture/claude-band.json assets/claude-band.svg
 ```
 
-The README header is the icon, [assets/icon.png](../icon.png), beside the plugin name; it has no capture.
+The wh-run capture becomes the README's banner, [assets/banner.svg](../banner.svg): `banner.py` renders
+it and draws the horse, [horse.webp](horse.webp), over its middle with a fade the color of the terminal.
+Rebuild it the same way:
+
+```bash
+python3 -B assets/capture/banner.py
+```
 
 ## Cleanup
 
