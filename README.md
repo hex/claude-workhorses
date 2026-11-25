@@ -304,7 +304,7 @@ A Windows PC serves through WSL2, with Ubuntu say:
 - Run sshd inside WSL and make it reachable from your machine, then put the route in
   `~/.ssh/config` and name that alias in the hosts file.
 - The work copies live under `~/work` in the WSL user's home, on the Linux filesystem. Never move
-  them to `/mnt/c`, the Windows drive, or link them there: Microsoft's WSL guidance keeps the files
+  them to `/mnt/c`, the Windows drive, or link them there. Microsoft's WSL guidance keeps the files
   Linux tools work on in the Linux filesystem, for speed.
 - The probe reports the cores and memory WSL2 has, which Windows sets for the WSL2 machine.
 
