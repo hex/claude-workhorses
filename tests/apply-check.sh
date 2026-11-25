@@ -314,6 +314,12 @@ for line in "command-line-tools" "macports" "port git" "macos-harness" "unity 60
   [ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 g uname -s" ] ||
     fail "sync.sh went past the OS question for $line on a Linux host: $(cat "$scratch/calls")"
 done
+# The line's own @os=macos keeps it from a Linux host, and that host's sync goes on.
+printf '%s\n' "port git @os=macos" >"$config/tools"
+expect_sync "a macOS-only line with @os=macos and a Linux host" "gamma: a sync is already running (~/workhorse.lock exists)" 1 gamma
+[ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 g uname -s
+ssh -o BatchMode=yes -o ConnectTimeout=10 g mkdir ~/workhorse.lock" ] ||
+  fail "sync.sh's calls for gamma with an @os=macos line: $(cat "$scratch/calls")"
 rm "$scratch/answers/g.os"
 printf '%s\n' "macos-harness" >"$config/tools"
 expect_sync "a macOS-only line on a Mac" "alpha: a sync is already running (~/workhorse.lock exists)" 1 alpha

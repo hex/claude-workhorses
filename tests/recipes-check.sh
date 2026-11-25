@@ -1,6 +1,6 @@
 #!/bin/bash
 # ABOUTME: Checks how the built-in recipes treat the system they run on, against stand-ins that log their calls: the macOS-only
-# ABOUTME: recipes refuse Linux before they change anything, mise differs by system as documented, and uv's probe drops the target. No host is contacted.
+# ABOUTME: recipes refuse Linux before they change anything, mise differs by system as documented, its shims sit on the PATH apply.sh builds where the README says, and uv's probe keeps only the version. No host is contacted.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd -P)
