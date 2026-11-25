@@ -43,7 +43,8 @@ install() {
 probe() {
   set +u; [ ! -f "$HOME/.unity/env" ] || . "$HOME/.unity/env"; set -u
   echo "unity-cli $(unity --version 2>/dev/null | head -1 | grep . || echo missing)"
-  echo "unity-editors $(unity --non-interactive --format tsv --no-header editors -i 2>/dev/null | cut -f1,3,7 | grep . || echo missing)"
+  # Version and architecture only: the module list holds text such as "SDK & NDK" that the policy's shape filter drops.
+  unity --non-interactive --format tsv --no-header editors -i 2>/dev/null | cut -f1,3 | sed 's/^/unity-editors /' | grep . || echo "unity-editors missing"
   echo "unity-hub $(defaults read '/Applications/Unity Hub.app/Contents/Info' CFBundleShortVersionString 2>/dev/null || echo missing)"
 }
 
