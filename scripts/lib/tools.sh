@@ -49,6 +49,23 @@ recipe_path() {
   printf '%s\n' "$user"
 }
 
+# Whether line $1, which a host wrote, has the shape of a probe line: a lower-case name, then at most
+# seven words of letters, digits and ._@:/+,()- with a digit among them, or the word "missing" last;
+# 100 characters at most. A job on a host can write what a probe prints, so host text reaches Claude
+# only in this shape. Tabs count as spaces.
+probe_line_shaped() {
+  local line=${1//$'\t'/ } shape='^[a-z0-9][a-z0-9._+-]*( [A-Za-z0-9._@:/+,()-]+){1,7}$'
+  [ ${#line} -le 100 ] && [[ $line =~ $shape ]] && [[ ${line#* } =~ [0-9] || $line == *" missing" ]]
+}
+
+# Prints the lines on stdin that probe_line_shaped takes, tabs as spaces.
+shaped_probe_lines() {
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    ! probe_line_shaped "$line" || printf '%s\n' "${line//$'\t'/ }"
+  done
+}
+
 # Whether recipe file $1 says, in its first lines, that it runs sudo: a line "# needs: sudo".
 recipe_declares_sudo() { head -n 10 "$1" | grep -qx '# needs: sudo'; }
 

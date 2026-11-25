@@ -158,7 +158,10 @@ with its macOS release and sync date. The hook reads only files on your machine;
 a host. With no hosts file, or one it cannot use, it says so in one line instead.
 
 The list comes from the record `sync.sh status` stores, so a host never synced has none, and a host
-whose tools lines changed since its last sync shows as out of date. For what no record shows (no
+whose tools lines changed since its last sync shows as out of date. A host writes its own record,
+and any job on it can change it, so the hook passes on only lines shaped as a tool name and its
+version, presents them as data, and counts the rest. `sync.sh status` marks the end of a run's log
+as the host's text, and `sync.sh diff` shows a host's lines in the same shape. For what no record shows (no
 code signing, a tool that needs a license), write `~/.config/claude-workhorses/notes`. The hook
 appends it as written. The `workhorse` skill covers how to run `wh` well: exit codes, first runs,
 git in the copy, and the steps for adding a tool.

@@ -105,10 +105,20 @@ show_status() {
   fi
   case "$answer" in
     "ended 0"*) echo "exit=0" ;;
-    ended*) read -r _ code step <<<"$answer"; echo "exit=$code, stopped at $step"; result=1 ;;
-    *) head -n 1 <<<"$answer" ;;
+    ended*)
+      read -r _ code step <<<"$answer"
+      [[ $code =~ ^[0-9]+$ ]] || code=unknown
+      [[ $step =~ ^[a-z0-9][A-Za-z0-9:=_-]*$ ]] || step="an unreadable step"
+      echo "exit=$code, stopped at $step"
+      result=1 ;;
+    "running" | "never synced") head -n 1 <<<"$answer" ;;
   esac
-  tail -n +2 <<<"$answer"
+  # The end of run.log is whatever the run's steps printed on the host: it is marked as the host's
+  # text, and loses its control characters.
+  if [ -n "$(tail -n +2 <<<"$answer")" ]; then
+    echo "the end of its run.log, text the host wrote:"
+    tail -n +2 <<<"$answer" | LC_ALL=C tr -d '\000-\010\013-\037\177' | cut -c1-200 | sed 's/^/| /'
+  fi
   [[ $answer == ended* ]] || return 0
   manifests="$(workhorses_state_dir)/manifests"
   mkdir -p "$manifests" || return 1
@@ -128,17 +138,36 @@ manifest_block() {
   awk -v want="#line $2" '$0 == want {on = 1; next} /^#/ {on = 0} on' "$1"
 }
 
+# Prints diff -u output from stdin with each line a host wrote replaced by a placeholder unless it has
+# a probe line's shape. The two header lines name a host and a tools line, both checked locally.
+shaped_diff() {
+  local line number=0
+  while IFS= read -r line; do
+    number=$((number + 1))
+    if [ $number -le 2 ] || [[ $line == "@@ "* ]] || probe_line_shaped "${line:1}"; then
+      printf '%s\n' "$line"
+    else
+      printf '%s\n' "${line:0:1}(a line not shaped as a tool and its version)"
+    fi
+  done
+}
+
 # Exit 0 only when every host answers and, for each tools line, every host the line targets reports
-# the same probe output as the first of them.
+# the same probe output as the first of them, and none reports the tool missing or its probe failed.
+# Hosts are compared on what they wrote; what is shown of it has a probe line's shape.
 diff_hosts() {
-  local manifests host status=0 i line first block lines=0
+  local manifests host status=0 i line first block lines=0 code report
   manifests=$(mktemp -d "${TMPDIR:-/tmp}/workhorse-manifest.XXXX")
   for host in "${host_names[@]}"; do
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$(ssh_target "$host")" '/bin/bash ~/workhorse/manifest.sh' >"$manifests/$host"; then
-      echo "$host: unreachable, not compared" >&2
-      rm -f "$manifests/$host"
-      status=1
-    fi
+    code=0
+    ssh -o BatchMode=yes -o ConnectTimeout=10 "$(ssh_target "$host")" '/bin/bash ~/workhorse/manifest.sh' >"$manifests/$host" || code=$?
+    case $code in
+      0) continue ;;
+      255) echo "$host: unreachable (ssh exit 255), not compared" >&2 ;;
+      *) echo "$host: has no manifest.sh to run (ssh exit $code): sync it first; not compared" >&2 ;;
+    esac
+    rm -f "$manifests/$host"
+    status=1
   done
   for i in "${!tool_recipe[@]}"; do
     line="${tool_recipe[i]}${tool_args[i]:+ ${tool_args[i]}}"
@@ -151,9 +180,14 @@ diff_hosts() {
         status=1
         continue
       fi
+      # A tool every host lacks would match everywhere, so each host's report is checked on its own.
+      while IFS= read -r report; do
+        echo "$host: the probe for \"$line\" reports: $report"
+        status=1
+      done < <(grep -E ' (missing|probe-failed [0-9]+)$' "$manifests/$host.block" | shaped_probe_lines)
       if [ -z "$first" ]; then first=$host; continue; fi
       block=$(diff -u --label "$first: $line" --label "$host: $line" "$manifests/$first.block" "$manifests/$host.block") ||
-        { echo "$block"; status=1; }
+        { shaped_diff <<<"$block"; status=1; }
     done
     for host in "${host_names[@]}"; do rm -f "$manifests/$host.block"; done
   done

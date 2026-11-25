@@ -11,7 +11,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 - The hosts file drops the profile and color columns. Host options at the end of a line (`no-sleep`, `maxfiles`, `wallpaper=Turquoise_Green`, `autologin` and the rest) replace what the dedicated profile used to apply. None is on by default.
 - `sync.sh` appends one marked line to `~/.zshenv` instead of replacing the file, and sets a git identity only with the `git-identity` option. It asks for a sudo password only when a host's options or recipes need one, sends it on the ssh session's stdin instead of an environment variable, and only those steps see it: env snippets and `~/.zshenv` do not.
 - A sync stops at the first failing step, and `sync.sh status` names it, reports every host even when one does not answer, and exits non-zero when a host does not answer or its last run failed. A sync whose run fails to start says so and removes the host's lock. `sync.sh diff` compares each tools line among the hosts it targets.
-- The session-start policy lists each host's tools from the record `sync.sh status` stores, and appends `~/.config/claude-workhorses/notes`.
+- The session-start policy lists each host's tools from the record `sync.sh status` stores, and appends `~/.config/claude-workhorses/notes`. Only record lines shaped as a tool and its version reach it, framed as data the host reported, with a count of the lines left out. `sync.sh diff` fails when a host reports a tool missing, even if every host does.
 - `wh --timeout 30m -- <command>` bounds a job on the host and exits 124 past the limit. Neither your machine nor a workhorse needs `gtimeout` any more.
 
 ### Added
