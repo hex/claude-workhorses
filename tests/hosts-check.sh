@@ -19,7 +19,7 @@ expect_load() {
   [ $# -lt 3 ] || printf '%s\n' "$3" >"$config/hosts"
   set +e
   out=$(load_hosts 2>&1 && for i in "${!host_names[@]}"; do
-    echo "${host_names[$i]}|${host_ssh[$i]}|${host_arch[$i]}|${host_cores[$i]}|${host_ram[$i]}|${host_profile[$i]}|${host_colour[$i]}"
+    echo "${host_names[$i]}|${host_ssh[$i]}|${host_arch[$i]}|${host_cores[$i]}|${host_ram[$i]}|${host_options[$i]}"
   done)
   code=$?
   set -e
@@ -30,13 +30,13 @@ expect_load() {
   echo "ok   $label"
 }
 
-expect_load "hosts load in file order; comments and blank lines are skipped; a color keeps its spaces" \
-"gamma|gamma@gamma-mini.example.test|x86_64|6|16|dedicated|Turquoise Green
-alpha|ws-alpha|arm64|10|16|shared|-" \
-"# name ssh arch cores ram profile colour
+expect_load "hosts load in file order; comments and blank lines are skipped; options are kept in order" \
+"gamma|gamma@gamma-mini.example.test|x86_64|6|16|no-sleep wallpaper=Turquoise_Green autologin
+alpha|ws-alpha|arm64|10|16|" \
+"# name ssh arch cores ram options
 
-gamma gamma@gamma-mini.example.test x86_64 6 16 dedicated Turquoise Green   # the office one
-alpha   ws-alpha  arm64 10 16 shared -"
+gamma gamma@gamma-mini.example.test x86_64 6 16 no-sleep wallpaper=Turquoise_Green  autologin  # the office one
+alpha   ws-alpha  arm64 10 16"
 
 expect_load "an empty file is refused" \
 "claude-workhorses: $config/hosts lists no hosts" \
@@ -44,53 +44,73 @@ expect_load "an empty file is refused" \
 
 expect_load "a name with capitals or other characters is refused" \
 "claude-workhorses: $config/hosts line 1: host name \"Gamma\" is not lower-case letters, digits and dashes" \
-"Gamma g x86_64 6 16 dedicated Turquoise Green"
+"Gamma g x86_64 6 16"
 
 expect_load "a name used twice is refused" \
 "claude-workhorses: $config/hosts line 2: host name \"gamma\" is already on line 1" \
-"gamma g x86_64 6 16 dedicated Turquoise Green
-gamma h x86_64 6 16 dedicated Electric Blue"
+"gamma g x86_64 6 16
+gamma h x86_64 6 16"
 
 expect_load "an ssh target that ssh would read as an option is refused" \
 "claude-workhorses: $config/hosts line 1: ssh target \"-oProxyCommand=x\" for gamma is not an ssh alias or user@host" \
-"gamma -oProxyCommand=x x86_64 6 16 dedicated Turquoise Green"
+"gamma -oProxyCommand=x x86_64 6 16"
 
 expect_load "an ssh target with shell characters is refused" \
 "claude-workhorses: $config/hosts line 1: ssh target \"g;ls\" for gamma is not an ssh alias or user@host" \
-"gamma g;ls x86_64 6 16 dedicated Turquoise Green"
+"gamma g;ls x86_64 6 16"
 
 expect_load "an unknown architecture is refused" \
 "claude-workhorses: $config/hosts line 1: arch \"amd64\" for gamma is not x86_64 or arm64" \
-"gamma g amd64 6 16 dedicated Turquoise Green"
+"gamma g amd64 6 16"
 
 expect_load "cores that are not a whole number are refused" \
 "claude-workhorses: $config/hosts line 1: cores \"6.5\" for gamma is not a whole number" \
-"gamma g x86_64 6.5 16 dedicated Turquoise Green"
+"gamma g x86_64 6.5 16"
 
 expect_load "RAM that is not a whole number of GB is refused" \
 "claude-workhorses: $config/hosts line 1: RAM \"16GB\" for gamma is not a whole number of GB" \
-"gamma g x86_64 6 16GB dedicated Turquoise Green"
+"gamma g x86_64 6 16GB"
 
-expect_load "an unknown profile is refused" \
-"claude-workhorses: $config/hosts line 1: profile \"spare\" for gamma is not dedicated or shared" \
-"gamma g x86_64 6 16 spare Turquoise Green"
+expect_load "a host with no RAM column is refused" \
+"claude-workhorses: $config/hosts line 1: RAM \"\" for gamma is not a whole number of GB" \
+"gamma g x86_64 6"
 
-expect_load "a dedicated host without a color is refused" \
-"claude-workhorses: $config/hosts line 1: color \"\" for gamma is not a wallpaper color name (letters and spaces)" \
+expect_load "an option outside the known set is refused, naming the set" \
+"claude-workhorses: $config/hosts line 1: option \"dedicated\" for gamma is not one of: autologin, dock, firewall, git-identity, headless, key-only-ssh, maxfiles, no-sleep, no-spotlight, screensharing, tailscale, wallpaper=<name>, wifi-off" \
 "gamma g x86_64 6 16 dedicated"
 
-expect_load "a color that could break out of the wallpaper script is refused" \
-"claude-workhorses: $config/hosts line 1: color \"Blue\" to x\" for gamma is not a wallpaper color name (letters and spaces)" \
-'gamma g x86_64 6 16 dedicated Blue" to x'
+expect_load "an option given twice is refused" \
+"claude-workhorses: $config/hosts line 1: option \"dock\" for gamma is given twice" \
+"gamma g x86_64 6 16 dock no-sleep dock"
 
-expect_load "a shared host keeps its owner's wallpaper, so its color is -" \
-"claude-workhorses: $config/hosts line 1: color \"Electric Blue\" for alpha must be - on a shared host, which keeps its owner's wallpaper" \
-"alpha a arm64 10 16 shared Electric Blue"
+expect_load "wallpaper takes a name, written with _ for each space; digits are allowed" \
+"gamma|g|x86_64|6|16|wallpaper=Gold_2" \
+"gamma g x86_64 6 16 wallpaper=Gold_2"
+
+expect_load "wallpaper with no name is refused" \
+"claude-workhorses: $config/hosts line 1: wallpaper \"\" for gamma is not a Solid Colors name (letters and digits, _ for a space)" \
+"gamma g x86_64 6 16 wallpaper="
+
+expect_load "a wallpaper twice is refused like any other option" \
+"claude-workhorses: $config/hosts line 1: option \"wallpaper\" for gamma is given twice" \
+"gamma g x86_64 6 16 wallpaper=Teal wallpaper=Cyan"
+
+expect_load "a wallpaper name that could break out of the wallpaper script is refused" \
+"claude-workhorses: $config/hosts line 1: wallpaper \"Blue\"\" for gamma is not a Solid Colors name (letters and digits, _ for a space)" \
+'gamma g x86_64 6 16 wallpaper=Blue"'
+
+expect_load "an option is a word, never a file pattern" \
+"claude-workhorses: $config/hosts line 1: option \"*\" for gamma is not one of: autologin, dock, firewall, git-identity, headless, key-only-ssh, maxfiles, no-sleep, no-spotlight, screensharing, tailscale, wallpaper=<name>, wifi-off" \
+"gamma g x86_64 6 16 *"
+
+expect_load "a value on an option that takes none is refused" \
+"claude-workhorses: $config/hosts line 1: option \"dock=yes\" for gamma is not one of: autologin, dock, firewall, git-identity, headless, key-only-ssh, maxfiles, no-sleep, no-spotlight, screensharing, tailscale, wallpaper=<name>, wifi-off" \
+"gamma g x86_64 6 16 dock=yes"
 
 rm -f "$config/hosts"
 expect_load "a missing hosts file names the path to create" \
 "claude-workhorses: no hosts file at $config/hosts; the README's First run section shows one"
-printf '%s\n' "gamma g x86_64 6 16 dedicated Turquoise Green" >"$config/hosts"
+printf '%s\n' "gamma g x86_64 6 16" >"$config/hosts"
 
 # Asks sudo_password for host gamma and compares stdout+stderr and the exit code.
 expect_password() {

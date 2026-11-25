@@ -29,10 +29,10 @@ replace() {
 
 host_table() {
   local i
-  echo "| Host | ssh | Arch | Cores | RAM | Profile |"
-  echo "|------|-----|------|-------|-----|---------|"
+  echo "| Host | ssh | Arch | Cores | RAM |"
+  echo "|------|-----|------|-------|-----|"
   for i in "${!host_names[@]}"; do
-    echo "| ${host_names[$i]} | ${host_ssh[$i]} | ${host_arch[$i]} | ${host_cores[$i]} | ${host_ram[$i]} GB | ${host_profile[$i]} |"
+    echo "| ${host_names[$i]} | ${host_ssh[$i]} | ${host_arch[$i]} | ${host_cores[$i]} | ${host_ram[$i]} GB |"
   done
 }
 

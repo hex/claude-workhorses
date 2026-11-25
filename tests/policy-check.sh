@@ -16,19 +16,19 @@ out=$("$BASH" "$root/scripts/policy.sh")
   fail "a missing hosts file: got '$out'"
 echo "ok   with no hosts file, one line says so"
 
-printf '%s\n' "gamma g x86_64 6 16 spare Turquoise Green" >"$config/hosts"
+printf '%s\n' "gamma g x86_64 6 16 dock dock" >"$config/hosts"
 out=$("$BASH" "$root/scripts/policy.sh")
-[ "$out" = "claude-workhorses: the hosts file is not usable, so wh cannot run: claude-workhorses: $config/hosts line 1: profile \"spare\" for gamma is not dedicated or shared" ] ||
+[ "$out" = "claude-workhorses: the hosts file is not usable, so wh cannot run: claude-workhorses: $config/hosts line 1: option \"dock\" for gamma is given twice" ] ||
   fail "a bad hosts file: got '$out'"
 echo "ok   with a bad hosts file, one line names the problem"
 
-printf '%s\n' "gamma gamma@gamma-mini.example.test x86_64 6 16 dedicated Turquoise Green" "alpha ws-alpha arm64 10 24 shared -" >"$config/hosts"
+printf '%s\n' "gamma gamma@gamma-mini.example.test x86_64 6 16 no-sleep wallpaper=Teal" "alpha ws-alpha arm64 10 24" >"$config/hosts"
 out=$("$BASH" "$root/scripts/policy.sh")
 table=$(grep '^|' <<<"$out")
-[ "$table" = "| Host | ssh | Arch | Cores | RAM | Profile |
-|------|-----|------|-------|-----|---------|
-| gamma | gamma@gamma-mini.example.test | x86_64 | 6 | 16 GB | dedicated |
-| alpha | ws-alpha | arm64 | 10 | 24 GB | shared |" ] || fail "the host table: got '$table'"
+[ "$table" = "| Host | ssh | Arch | Cores | RAM |
+|------|-----|------|-------|-----|
+| gamma | gamma@gamma-mini.example.test | x86_64 | 6 | 16 GB |
+| alpha | ws-alpha | arm64 | 10 | 24 GB |" ] || fail "the host table: got '$table'"
 echo "ok   the host table lists every host in file order"
 
 grep -qF "\`bash $root/provision/sync.sh\`" <<<"$out" || fail "the policy does not name $root/provision/sync.sh"

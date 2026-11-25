@@ -1,12 +1,26 @@
 # The claude-workhorses hosts file: copy it to ~/.config/claude-workhorses/hosts and edit it.
-# One host per line: name, ssh target, arch, cores, RAM in GB, profile, wallpaper color.
+# One host per line: name, ssh target, arch, cores, RAM in GB, then any host options.
 # - name: lower-case letters, digits and dashes; wh and sync.sh take it as the host's name.
 # - ssh target: an alias from ~/.ssh/config or user@host. ~/.ssh/config decides the route.
 # - arch: x86_64 or arm64. cores and RAM: whole numbers, shown to Claude in the host table.
-# - profile: dedicated (the Mac is the workhorse's alone) or shared (its owner uses it too).
-# - color: a dedicated host's solid-colour wallpaper, a file name from
-#   /System/Library/Desktop Pictures/Solid Colors without .png; - on a shared host.
+# - options: none by default. Each changes the Mac for every user of it, so give them only to a Mac
+#   that exists to run jobs. sync.sh applies them; removing one later undoes nothing.
+#     autologin      log the workhorse user in at boot; stores its password in /etc/kcpassword
+#     dock           trim the Dock to Terminal, Activity Monitor and System Settings
+#     firewall       macOS firewall on, in stealth mode, signed apps allowed
+#     git-identity   a neutral global git name and email for test suites that commit
+#     headless       no screensaver and no Siri
+#     key-only-ssh   ssh logins by key only
+#     maxfiles       raise the open-file limit to 65536/200000, now and at every boot
+#     no-sleep       never sleep; restart after a power cut; wake on LAN
+#     no-spotlight   Spotlight indexing off on every volume
+#     screensharing  let the workhorse user in over Screen Sharing
+#     tailscale      install Tailscale (log in on the Mac's screen)
+#     wallpaper=NAME a solid-colour wallpaper from /System/Library/Desktop Pictures/Solid Colors,
+#                    with _ for each space: wallpaper=Turquoise_Green
+#     wifi-off       Wi-Fi off while Ethernet is up, so traffic takes the cable
+#   Options marked in the README as needing sudo make sync.sh ask your sudo-password helper.
 # The first host listed wins a tie when wh picks one by load.
-alpha  alpha-mini             x86_64  6   16  dedicated  Turquoise Green
-beta   beta-mini              x86_64  6   16  dedicated  Electric Blue
-gamma  me@gamma.example.test  arm64   10  16  shared     -
+alpha  alpha-mini             x86_64  6   16  no-sleep maxfiles headless wallpaper=Turquoise_Green
+beta   beta-mini              x86_64  6   16  no-sleep maxfiles headless wallpaper=Electric_Blue
+gamma  me@gamma.example.test  arm64   10  16
