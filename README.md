@@ -156,17 +156,20 @@ how to make them again.
 At the start of every session, a hook gives Claude the offload policy: when to offload, when to stay
 local, a table of your hosts with their ssh target, architecture, cores and RAM, and the tools each
 host had at its last sync. It lists the tools every host has once, then what each host has on its own,
-with its macOS or Linux release and sync date. The hook reads only files on your machine; it never contacts
-a host. With no hosts file, or one it cannot use, it says so in one line instead.
+with its macOS or Linux release and sync date. Each recipe gets one line, its tools and versions after
+it: `- mise: node 24.22.3 26.13.1, go 1.27.4`. It counts the apt packages whose name starts with
+`lib` as libraries and names only the missing ones. The hook reads only files on your machine; it never
+contacts a host. With no hosts file, or one it cannot use, it says so in one line instead.
 
 The list comes from the record `sync.sh status` stores, so a host never synced has none, and a host
 whose tools lines changed since its last sync shows as out of date. A host writes its own record,
 and any job on it can change it, so the hook passes on only lines shaped as a tool name and its
-version, presents them as data, and counts the rest. `sync.sh status` marks the end of a run's log
-as the host's text, and `sync.sh diff` shows a host's lines in the same shape. For what no record shows (no
-code signing, a tool that needs a license), write `~/.config/claude-workhorses/notes`. The hook
-appends it as written. The `workhorse` skill covers how to run `wh` well: exit codes, first runs,
-git in the copy, and the steps for adding a tool.
+version under a recipe shaped as a recipe name, presents them as data, and counts the rest. A
+recipe's line stops at 2000 characters and a host's list at 6000, each saying how much it cut.
+`sync.sh status` marks the end of a run's log as the host's text, and `sync.sh diff` shows a host's
+lines in the same shape. For what no record shows (no code signing, a tool that needs a license),
+write `~/.config/claude-workhorses/notes`. The hook appends it as written. The `workhorse` skill
+covers how to run `wh` well: exit codes, first runs, git in the copy, and the steps for adding a tool.
 
 ### Provisioning
 
@@ -243,8 +246,9 @@ that names the `@os=macos` filter their line lacks.
 #### Your own recipes
 
 A recipe is an executable that answers `install [args]` and `probe [args]`. `probe` prints one
-`<name> <version>` line per tool and exits 0; the policy's tool list shows those lines. Put
-yours in `~/.config/claude-workhorses/recipes/<name>`. The name is lower-case letters, digits and
+`<name> <version>` line per tool and exits 0; the policy's tool list shows those lines on the
+recipe's line, each without the recipe's name and the space or dash after it. Put yours in
+`~/.config/claude-workhorses/recipes/<name>`. The name is lower-case letters, digits and
 dashes, and may not be a built-in recipe's name. `sync.sh` refuses a recipe unless you own it, its
 folder and the config folder, and nobody else can write any of them, because it runs on every host
 its line targets. A recipe that runs `sudo -A` says so with the line `# needs: sudo` near its top;
