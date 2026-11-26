@@ -126,7 +126,8 @@ for lock in "$batch_work" other-1234abcd esc-11111111 decoy-22222222; do echo $$
 echo "$me pid $stand_in since 2026-11-26 15:53:42: gtimeout 45m make test" >"$locks/$batch_work.lock/owner"
 echo "$me pid $stand_in since 2026-11-26 15:53:42: harmless looking" >"$locks/decoy-22222222.lock/owner"
 printf 'other-mac pid 412 since 2026-11-26 09:05:01: make\ttest\n' >"$locks/other-1234abcd.lock/owner"
-printf '%s pid 999 since 2026-11-26 10:00:00: printf \033[31mred\033[0m \302\233done\r\n' "$me" >"$locks/esc-11111111.lock/owner"
+# Escape sequences, C1 and CR, and the characters that reorder or hide text: U+202E, U+200B, U+FEFF, U+2066.
+printf '%s pid 999 since 2026-11-26 10:00:00: printf \033[31mred\033[0m \302\233d\342\200\256o\342\200\213n\357\273\277e\342\201\246\r\n' "$me" >"$locks/esc-11111111.lock/owner"
 
 twice_lock=$(printf 'lock\t%s\t%s pid %s since 2026-11-26 16:00:00: make twice' "$batch_work" "$me" "$stand_in")
 

@@ -759,14 +759,17 @@ list_runs() {
 # array of start lines, each with the name of its folder's work copy added as work) list for this host
 # under this lock's name has the folder it started from, the Claude Code session that started it (null
 # when its start line names none) and can be stopped with wh stop; only the first such run of a pid
-# does, so a host that lists a lock twice gets one Stop. What a host sends is data: control characters never reach the report.
+# does, so a host that lists a lock twice gets one Stop. What a host sends is data: control characters,
+# and the characters that reorder or hide text (bidi controls, zero-width characters), never reach the report.
 host_report() {
   local host=$1 answers=$2 me=$3 mine=$4 state load cores
   read -r _ state load cores _ <<<"$(probe_answer "$host" "$(cat "$answers/$host.status")" \
     "$(sed -n '1,2p' "$answers/$host" | tr '\n' ' ')0 none ")"
   jq -nc --arg host "$host" --arg state "$state" --arg load "$load" --arg cores "$cores" \
     --rawfile answer "$answers/$host" --arg me "$me" --argjson mine "$mine" '
-    def plain: gsub("[\\t\\n\\r]"; " ") | gsub("[\\x{0}-\\x{1f}\\x{7f}-\\x{9f}]"; "") | sub("^ +"; "") | sub(" +$"; "");
+    def plain: gsub("[\\t\\n\\r]"; " ")
+      | gsub("[\\x{0}-\\x{1f}\\x{7f}-\\x{9f}\\x{200b}-\\x{200f}\\x{202a}-\\x{202e}\\x{2066}-\\x{2069}\\x{feff}]"; "")
+      | sub("^ +"; "") | sub(" +$"; "");
     def owned: "^(?<machine>[A-Za-z0-9._-]+) pid (?<pid>[0-9]{1,10}) since (?<since>[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}): (?<command>.*)$";
     def run: (.owner | capture(owned)? // null) as $owner
       | if $owner == null then {work, machine: null, pid: null, since: null, command: .owner, dir: null, session: null, stoppable: false}

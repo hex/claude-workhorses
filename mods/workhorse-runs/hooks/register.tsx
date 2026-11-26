@@ -173,8 +173,9 @@ const hostsView = atom({ plugin: 'workhorses', key: 'hostsView' } as const, { ch
   shape: 'hosts-view-1',
 })
 
-// Control characters, C1 included, which a terminal would act on rather than show.
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g
+// Control characters, C1 included, which a terminal would act on rather than show, and the characters that
+// reorder or hide text: bidi controls and zero-width characters.
+const UNPRINTABLE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g
 
 type Fields = Record<string, unknown>
 
@@ -182,7 +183,7 @@ type Fields = Record<string, unknown>
 // wrong type fails, naming the line. Every string comes out as plain text.
 function parseHostLine(line: string): HostView {
   const fail = (why: string): never => {
-    throw new Error(`wh hosts --json: ${why} in line ${line.replace(CONTROL, '')}`)
+    throw new Error(`wh hosts --json: ${why} in line ${line.replace(UNPRINTABLE, '')}`)
   }
   const fields = (value: unknown, keys: readonly string[]): Fields => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return fail('not an object')
@@ -190,7 +191,7 @@ function parseHostLine(line: string): HostView {
     if (found.join() !== [...keys].sort().join()) return fail('unexpected fields')
     return value as Fields
   }
-  const text = (value: unknown): string => (typeof value === 'string' ? value.replace(CONTROL, '') : fail('a field that is not text'))
+  const text = (value: unknown): string => (typeof value === 'string' ? value.replace(UNPRINTABLE, '') : fail('a field that is not text'))
   const count = (value: unknown): number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fail('a field that is not a whole number')
   const orNull = <T,>(value: unknown, read: (value: unknown) => T): T | null => (value === null ? null : read(value))
@@ -312,7 +313,7 @@ async function askHosts($: EngineInterface, refresh: Refresh): Promise<void> {
   }
   const nowMs = await $.clock.now()
   // stderr and an error's message are as untrusted as the report: plain text, like every other string.
-  const said = error?.replace(CONTROL, '') ?? null
+  const said = error?.replace(UNPRINTABLE, '') ?? null
   await update($, hostsView, (view: HostsView): HostsView => (hosts === undefined ? { ...view, error: said } : { checkedAt: nowMs, hosts, error: null }))
 }
 
