@@ -19,7 +19,7 @@ It runs, in order:
 | `tests/apt-check.sh` | The `apt` recipe, run against stand-ins for `sudo`, `apt-get`, `apt-cache` and `dpkg-query`, refuses a name that ends in `-` or `+` before `apt-get` runs and a name no package has exactly before the install, and installs waiting up to 5 minutes for apt's lock and keeping conffiles edited on the host; its probe prints one line a package, one installed for two architectures included. |
 | `tests/recipes-check.sh` | The macOS-only recipes (`command-line-tools`, `macports`, `port`, `macos-harness`, `unity`), run with a stand-in `uname` that says Linux, stop with a message naming `@os=macos` before they run any command. On a Mac, `mise` only installs the line's versions; on Linux it installs mise into `~/.local/bin` when no mise is on the `PATH` (and updates that copy on later runs), and makes the line's versions the global ones. The `env.sh` that `apply.sh` builds puts mise's shims ahead of the system's folders, behind `~/.local/bin` and the folders of snippets that sort after `mise`'s, such as rustup's `~/.cargo/bin`. `mise`'s probe prints each tool once, even when a line names two of its versions. `uv`'s probe prints one release the same from a Mac and a Linux host, dropping everything after the version. |
 | `tests/policy-check.sh` | The session-start policy renders the host table and each host's tools from stored manifests (one line per recipe, apt libraries counted and named only when missing; only lines shaped as a tool and its version under a recipe shaped as a recipe name, the rest counted; header values in their own shapes, a Linux release included; capped; stale hosts named, with `@os` lines matched to each record's OS), appends the notes file, names this install's `wh` and scripts, runs no ssh, and says so in one line when the hosts or tools file is missing or bad; Antigravity's hook carries the whole policy in its JSON step. Copilot returns the same policy in `additionalContext`, or the error if the policy script fails. |
-| `tests/manifests-check.sh` | The Claude Code, Codex, GitHub Copilot CLI, Antigravity and npm manifests name the same version. Copilot's manifest points to a version 1 hook file with a `sessionStart` command. |
+| `tests/manifests-check.sh` | The Claude Code, Codex, GitHub Copilot CLI, Antigravity, Kimi Code and npm manifests name the same version. Copilot's manifest points to a version 1 hook file with a `sessionStart` command. |
 | `claude plugin test .` | The workhorse-runs mod's tests, `mods/workhorse-runs/hooks/register.test.tsx`. |
 
 CI runs the same script on Ubuntu and macOS, the macOS job under `/bin/bash` 3.2.
@@ -27,6 +27,23 @@ CI runs the same script on Ubuntu and macOS, the macOS job under `/bin/bash` 3.2
 No check runs a recipe's `install` or a host option on the machine itself: they change the host they
 run on. `apt-check` and `recipes-check` run recipes with stand-ins for the tools they call. Run each recipe's
 `probe` by hand when you change it; probes only read.
+
+## Check the npx installs
+
+```bash
+python3 tests/npx-check.py
+```
+
+The check needs network access for npx, Node.js, Python 3, jq, and the Grok and Copilot CLIs on
+`PATH`. It runs `plugins@1.3.9` against this checkout, with a fresh home for each target and one
+fictional host. To check a single target, pass its ID, for example `python3 tests/npx-check.py cursor`.
+
+It follows each install registration to the skill on disk. For Claude Code it also checks the mod
+entry point. For Claude Code, Codex, Cursor, Copilot CLI and VS Code it runs the installed hook
+command and compares the context field or stdout with the installed policy. For Grok it checks
+the native component inventory. For Kimi it checks the startup skill. The check removes the
+temporary homes and npm cache on exit. It runs separately from `tests/run.sh` and does not open
+an agent session.
 
 ## The policy in each agent
 

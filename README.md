@@ -6,7 +6,7 @@
 
 <p align="center">Long jobs run on your spare Macs while this one stays free.</p>
 
-A plugin for Claude Code, Codex, pi, OpenCode, Antigravity and GitHub Copilot CLI that runs long jobs on your spare Macs, or on Linux machines, a Windows PC's
+A plugin for Claude Code, Codex, pi, OpenCode, Antigravity, GitHub Copilot CLI, Cursor, VS Code, Grok Build and Kimi Code that runs long jobs on your spare Macs, or on Linux machines, a Windows PC's
 Windows Subsystem for Linux (WSL2) included. `wh` copies the git repository you are in to a workhorse, brings the copy level with your machine (`.git` included), and runs the command
 there. The test suite or the build runs on the workhorse, and your laptop stays free for the work in
 front of you.
@@ -20,12 +20,45 @@ front of you.
 | Claude Code on your Mac | `wh` on the path of every command Claude runs, the offload policy and your host table at the start of every session, the `workhorse` skill, and the badge and band. |
 | Codex, pi, OpenCode or Antigravity on your Mac | The offload policy and your host table in every session, which give `wh`'s full path, and the `workhorse` skill. No badge, band or `/workhorses:setup`: those are Claude Code's. |
 | GitHub Copilot CLI on your Mac | The offload policy and your host table at the start of an interactive session, and the `workhorse` skill. |
+| Cursor or VS Code on your Mac | The workhorse skill and the startup policy when you enable plugin hooks. Cursor also needs third-party imports. |
+| Grok Build or Kimi Code on your Mac | The workhorse skill. Kimi also loads the skill text at startup. Neither agent adds the current host table to model context from the startup hook. |
 | Your own terminal | `wh` by its full path, or linked into a folder on your `PATH`. Its runs show in the badge and band of a Claude Code session whose folder holds the repository or sits inside it. |
 | The workhorses | Spare Macs, Intel or Apple silicon, with Remote Login on, or Linux machines with sshd. `wh` reaches them over ssh and needs nothing installed on a Mac; see [Linux and WSL hosts](#linux-and-wsl-hosts) for Linux. `sync.sh` gives each one the tools you list. |
 
 ## Install
 
-You need:
+```bash
+npx plugins add hex/workhorses
+```
+
+For a new install, npx offers the agents it detects. If you already installed workhorses from a
+marketplace, keep that install. Running npx for the same agent can leave you with two copies.
+To pick just one target, add its ID, for example `npx plugins add hex/workhorses --target github-copilot`.
+
+Use the native installer for pi, OpenCode and Antigravity.
+
+| Agent | Install |
+| --- | --- |
+| pi | `pi install git:github.com/hex/workhorses` |
+| OpenCode | `opencode plugin add github:hex/workhorses`, or the path of a clone under `plugins` in `opencode.json` |
+| Antigravity | `agy plugin install <folder>` on a clone of this repository |
+
+Rerun the same npx command to update the selected targets. Claude Code and Cursor share one plugin
+cache. Codex refreshes its `plugins-cli` copy. For GitHub Copilot CLI, VS Code and Kimi Code,
+npx refreshes the directories it registered. `copilot plugin update` does not refresh that copy.
+For a Grok Build install from GitHub, npx calls `grok plugin update workhorses` on the next add.
+
+Codex asks you to trust the startup hook in `/hooks`. GitHub Copilot CLI reads the policy only in
+interactive sessions. `copilot -p` skips the hook.
+
+### Marketplace alternatives
+
+| Agent | Install |
+| --- | --- |
+| Claude Code | Run `/plugin marketplace add hex/claude-marketplace`, then `/plugin install workhorses`. |
+| Codex | Run `codex plugin marketplace add hex/claude-marketplace`, then `codex plugin add workhorses@hex-plugins`. |
+
+### Requirements
 
 - macOS on the machine you work on, with `jq`, `rsync` and `ssh`.
   [Watchman](https://facebook.github.io/watchman/) makes later runs faster. Without it, every run
@@ -33,21 +66,6 @@ You need:
 - One or more Macs as workhorses, Intel or Apple silicon, with Remote Login on and your ssh key
   accepted by the workhorse user, or Linux hosts as [Linux and WSL hosts](#linux-and-wsl-hosts)
   describes.
-
-```text
-/plugin marketplace add hex/claude-marketplace
-/plugin install workhorses
-```
-
-In another agent:
-
-| Agent | Install |
-| --- | --- |
-| Codex | `codex plugin marketplace add hex/claude-marketplace`, then `codex plugin add workhorses@hex-plugins`. Codex runs the plugin's session-start hook only once you trust it in `/hooks`. |
-| pi | `pi install git:github.com/hex/workhorses` |
-| OpenCode | `opencode plugin add github:hex/workhorses`, or the path of a clone under `plugins` in `opencode.json` |
-| Antigravity | `agy plugin install <folder>` on a clone of this repository |
-| GitHub Copilot CLI | `npx plugins add hex/workhorses --target github-copilot`. Only interactive sessions read the policy. `copilot -p` skips the hook. Rerun the same npx command to update because `copilot plugin update` does not refresh the copy. Keep `--target`: without it, npx installs into every agent it finds, beside the installs above. |
 
 Each one reads the same hosts file and tools records as Claude Code, so set up the workhorses once.
 

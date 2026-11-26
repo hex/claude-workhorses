@@ -4,6 +4,13 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+- One npx command installs the workhorse skill for Claude Code, Codex, Cursor, GitHub Copilot CLI,
+  VS Code, Grok Build and Kimi Code. Cursor and VS Code can read the startup policy. Kimi loads
+  the workhorse skill at session start.
+
 ## 2026.11.13
 
 ### Added
