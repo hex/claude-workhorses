@@ -169,25 +169,36 @@ choose_host() {
 # .lock, and its owner file with newlines and tabs made spaces (empty without an owner file).
 count_runs='n=0; for l in $(find ~/work -maxdepth 1 -name "*.lock" -type d 2>/dev/null); do if [ -f "$l/pid" ]; then kill -0 "$(cat "$l/pid")" 2>/dev/null || continue; elif [ -z "$(find "$l" -maxdepth 0 -mmin -60)" ]; then continue; fi; n=$((n + 1)); if [ "${list:-}" = 1 ]; then w=${l##*/}; printf "lock\t%s\t%s\n" "${w%.lock}" "$(if [ -f "$l/owner" ]; then tr "\n\t" "  " <"$l/owner"; fi)"; fi; done; echo $n'
 
-# Asks every workhorse at once for its load, its physical core count, its runs going and whether it holds the copy $1
-# (a path under ~), lets choose_host pick, and names the choice on stderr. A host that has not answered
-# within 2 seconds counts as unreachable: ssh's ConnectTimeout does not cover the name lookup, and a
-# .local name that nobody answers takes 5 seconds to fail. Linux counts physical cores as the distinct
-# core and socket pairs lscpu lists, since nproc counts each core's hyperthreads.
-pick_host() {
-  local work=$1 answers host answer load cores runs copy probes="" chosen reasons
-  answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-pick.XXXX")
+# A host's load line, then its physical core count, run by the host's login shell. Linux counts
+# physical cores as the distinct core and socket pairs lscpu lists, since nproc counts each core's
+# hyperthreads.
+load_and_cores='if [ "$(uname -s)" = Darwin ]; then /usr/sbin/sysctl -n vm.loadavg hw.physicalcpu; else cat /proc/loadavg; lscpu -p=core,socket | grep -v "^#" | sort -u | wc -l; fi'
+
+# Runs shell text $2 on every workhorse at once, each ssh stopped after $1 seconds, and leaves each
+# host's answer in folder $3: its output in <host> and the ssh's exit code in <host>.status. A host
+# that has not answered by then counts as unreachable: ssh's ConnectTimeout does not cover the name
+# lookup, and a .local name that nobody answers takes 5 seconds to fail.
+probe_hosts() {
+  local seconds=$1 script=$2 answers=$3 host
   for host in "${all_hosts[@]}"; do
     {
       # set -e would end this subshell on a failed probe before it wrote the status.
       local status=0
-      run_bounded 2 ssh -o BatchMode=yes -o ConnectTimeout=2 "$(ssh_target "$host")" \
-        "if [ \"\$(uname -s)\" = Darwin ]; then /usr/sbin/sysctl -n vm.loadavg hw.physicalcpu; else cat /proc/loadavg; lscpu -p=core,socket | grep -v '^#' | sort -u | wc -l; fi; $count_runs; if test -d ~/$(printf '%q' "$work.lock"); then echo busy; elif test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" \
+      run_bounded "$seconds" ssh -o BatchMode=yes -o ConnectTimeout="$seconds" "$(ssh_target "$host")" "$script" \
         >"$answers/$host" 2>/dev/null || status=$?
       echo "$status" >"$answers/$host.status"
     } &
   done
   wait
+}
+
+# Asks every workhorse at once, for at most 2 seconds, for its load, its physical core count, its runs
+# going and whether it holds the copy $1 (a path under ~), lets choose_host pick, and names the choice
+# on stderr.
+pick_host() {
+  local work=$1 answers host answer load cores runs copy probes="" chosen reasons
+  answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-pick.XXXX")
+  probe_hosts 2 "$load_and_cores; $count_runs; if test -d ~/$(printf '%q' "$work.lock"); then echo busy; elif test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" "$answers"
   for host in "${all_hosts[@]}"; do
     answer=$(tr '\n' ' ' <"$answers/$host")
     probes+="$(probe_answer "$host" "$(cat "$answers/$host.status")" "$answer")"$'\n'
