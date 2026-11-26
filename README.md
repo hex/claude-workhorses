@@ -229,12 +229,12 @@ mod reads that log and shows the runs started from the session's folder:
 - `/workhorses` opens a pane with every host's load and the runs going on it, from `wh hosts --json`.
   A run this machine started shows the folder it started from and has a Stop button that runs
   `wh stop`. A run this Claude Code session started comes first, marked `this session`; the mark
-  goes by session id, so another session's run from the same folder never gets it. The pane asks again when it opens, when you press Refresh, and every 60 seconds while
-  the pane is on screen. Nothing opens it unasked.
+  goes by session id, so another session's run from the same folder never gets it. The pane asks again when it opens, when you press Refresh, and about once a minute while
+  the pane is on screen, not a tab behind another pane. Nothing opens it unasked.
 
 The mod makes no network calls of its own and writes no files. Only its Stop buttons and the
-`/workhorses` pane run `wh`, which reaches the hosts over ssh; with the pane closed, the mod runs no
-`wh hosts`. It reads the log once a second. While it shows a
+`/workhorses` pane run `wh`, which reaches the hosts over ssh; with the pane closed or behind another
+pane, the mod runs no `wh hosts`. It reads the log once a second. While it shows a
 run, it runs `ps -o pid=,command= -p <pids>` every 15 seconds and drops a run whose `mirror.sh` has
 gone without writing its end line. A run it saw going gets a toast that says so.
 

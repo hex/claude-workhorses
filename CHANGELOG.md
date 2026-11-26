@@ -15,8 +15,9 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   `CLAUDE_CODE_SESSION_ID`; a run started elsewhere has no session.
 - `/workhorses` opens a pane of the same report. Each run this machine started shows its folder and a
   Stop button, and the runs this Claude Code session started come first, marked by session id, never
-  by folder. It refreshes when opened, on Refresh, and every 60 seconds only while
-  the pane is on screen, so a session with the pane closed opens no ssh connection for it.
+  by folder. It refreshes when opened, on Refresh, and about once a minute only while the pane is
+  on screen (not a tab behind another pane), so a session with the pane closed or hidden opens no
+  ssh connection for it.
 
 ### Changed
 - `hosts` is a `wh` command, so the hosts file refuses it as a host name, as it refuses `ps` and `stop`.
