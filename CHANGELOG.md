@@ -4,6 +4,20 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+- `wh hosts` shows each workhorse's 1-minute load and the runs going on it, from any machine: this
+  machine's with their folder and the number `wh stop` takes, others' with the machine that started
+  them. A host that does not answer within 5 seconds shows as unreachable. `wh hosts --json` prints one
+  object per host.
+- `/workhorses` opens a pane of the same report, with this session's runs first and a Stop button for
+  each run this machine started. It refreshes when opened, on Refresh, and every 60 seconds only while
+  the pane is on screen, so a session with the pane closed opens no ssh connection for it.
+
+### Changed
+- `hosts` is a `wh` command, so the hosts file refuses it as a host name, as it refuses `ps` and `stop`.
+
 ## 2026.11.14
 
 ### Added

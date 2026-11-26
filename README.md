@@ -118,6 +118,7 @@ All supported agents read the same workhorses hosts file and tool records, so yo
 | Let `wh` pick the host with room, or name one | [Choosing a host](#choosing-a-host) |
 | Send only what changed since the last run | [What gets copied](#what-gets-copied) |
 | See each run above the prompt and in the footer while it goes | [The badge and band](#the-badge-and-band) |
+| See every workhorse's load and the runs going on it, from any session | [Seeing every host](#seeing-every-host) |
 | Tell Claude when to offload, and which hosts it has | [The offload policy and the skill](#the-offload-policy-and-the-skill) |
 | Give each workhorse the tools you list, and check they still match | [Provisioning](#provisioning) |
 | Keep the hosts file, the tools file and the sudo helper somewhere else | [Configuration](#configuration) |
@@ -153,6 +154,29 @@ it still copies leaves a partial copy, which the next run completes.
 `Ctrl-C` on a run's `wh`, or closing its terminal, stops the job on the host the same way, and `wh`
 exits 130 or 129. The run log records each of these as stopped. The band's Stop button runs
 `wh stop`.
+
+### Seeing every host
+
+`wh hosts` asks every host at once for its 1-minute load and the runs going there, and prints a line
+per host in the hosts file's order, then a line per run:
+
+```
+cayde  load 0.10 of 6 cores, idle
+xur    load 2.58 of 6 cores, 2 runs
+       3875  ~/house/.claude/worktrees/ai-batch  since 15:53  gtimeout 45m make test
+       from other-mac pid 412 since 2026-11-26 15:53:42: make test
+eris   unreachable
+```
+
+A run is a lock in the host's `~/work` that a live process holds, or one under an hour old that is
+still copying. A run this machine started leads with the number `wh stop` takes and the folder it
+started from. A run from another machine names that machine and its pid there. A host that does not
+answer within 5 seconds is unreachable, and a host whose answer is not a probe's shows that answer.
+`wh hosts --json` prints one JSON object per host instead, which the [workhorses pane](#the-badge-and-band)
+reads. Both strip control characters from what a host sends, so it prints as plain text.
+
+`wh hosts` exits 0 when hosts are unreachable, since the report says so. It exits 2 on any argument
+other than `--json`, and on a missing or bad hosts file.
 
 ### Choosing a host
 
@@ -201,9 +225,14 @@ mod reads that log and shows the runs started from the session's folder:
   runs `wh stop` for that run; click it, or press ctrl+x tab to reach it and enter to press it. A
   stop that fails says why in a toast.
 - A run that took over 2 minutes, or ended `BLOCKED`, ends with a toast.
+- `/workhorses` opens a pane with every host's load and the runs going on it, from `wh hosts --json`,
+  with the runs of this session's folder first. A run this machine started has a Stop button that
+  runs `wh stop`. The pane asks again when it opens, when you press Refresh, and every 60 seconds while
+  the pane is on screen. Nothing opens it unasked.
 
-The mod makes no network calls and writes no files; only its Stop button runs `wh stop`, which
-reaches the host over ssh. It reads the log once a second. While it shows a
+The mod makes no network calls of its own and writes no files. Only its Stop buttons and the
+`/workhorses` pane run `wh`, which reaches the hosts over ssh; with the pane closed, the mod runs no
+`wh hosts`. It reads the log once a second. While it shows a
 run, it runs `ps -o pid=,command= -p <pids>` every 15 seconds and drops a run whose `mirror.sh` has
 gone without writing its end line. A run it saw going gets a toast that says so.
 
