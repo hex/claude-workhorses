@@ -12,7 +12,7 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   the workhorse skill at session start.
 
 ### Fixed
-- The startup policy fits four package inventories and 1.65 KB of notes within 8,500 JSON bytes. Larger policies give the command to read the full text.
+- The startup policy fits four package inventories and 1.65 KB of notes within 8,500 JSON bytes. Claude Code, Cursor and VS Code omit tool lists first and notes next when needed. Other policy consumers receive the whole condensed text.
 
 ## 2026.11.13
 

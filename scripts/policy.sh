@@ -186,24 +186,33 @@ notes_section() {
   cat "$notes"
 }
 
+# In section mode each part is a JSON string. Notes cannot introduce a section boundary.
+section() {
+  if [ "$mode" = --sections ]; then jq -Rsc .; else cat; fi
+}
+
 render_policy() {
-  local hosts_file line
+  local hosts_file
   hosts_file="$(workhorses_config_dir)/hosts"
   if [ ! -f "$hosts_file" ]; then
-    echo "workhorses: no workhorses are configured (no hosts file at $hosts_file), so wh cannot run; the plugin's README shows how to add one."
+    echo "workhorses: no workhorses are configured (no hosts file at $hosts_file), so wh cannot run; the plugin's README shows how to add one." | section
     return 0
   fi
   if ! load_hosts 2>/dev/null; then
-    echo "workhorses: the hosts file is not usable, so wh cannot run: $(load_hosts 2>&1 || true)"
+    echo "workhorses: the hosts file is not usable, so wh cannot run: $(load_hosts 2>&1 || true)" | section
     return 0
   fi
 
+  printf '# Workhorses\n\n' | section
+  host_table | section
+  { echo; render_rules; echo; } | section
+  tools_section | section
+  { echo; notes_section; } | section
+}
+
+render_rules() {
+  local line
   while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      @HOSTS@) host_table; continue ;;
-      @TOOLS@) tools_section; continue ;;
-      @NOTES@) notes_section; continue ;;
-    esac
     line=$(replace "$line" @SYNC@ "$sync")
     line=$(replace "$line" @CONFIG@ "$(workhorses_config_dir)")
     line=$(replace "$line" @WH@ "$root/bin/wh")
@@ -212,14 +221,10 @@ render_policy() {
 }
 
 full=0
-case ${1:-} in
-  --full) full=1; render_policy; exit ;;
-  "") ;;
-  *) echo "usage: policy.sh [--full]" >&2; exit 2 ;;
+mode=${1:-}
+case $mode in
+  --full) full=1 ;;
+  ""|--sections) ;;
+  *) echo "usage: policy.sh [--full | --sections]" >&2; exit 2 ;;
 esac
-
-printf -v notice 'Workhorse policy exceeds the 8500-byte startup budget. Read the full policy before choosing a host:\nbash %q --full' "$root/scripts/policy.sh"
-render_policy | jq -Rrs -L "$root/scripts/lib" --arg notice "$notice" '
-  include "session-start";
-  rtrimstr("\n") |
-  if (session_start | tojson | utf8bytelength) + 1 > 8500 then $notice else . end'
+render_policy

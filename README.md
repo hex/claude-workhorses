@@ -224,9 +224,9 @@ version under a recipe shaped as a recipe name, presents them as data, and count
 recipe's line stops at 2000 characters and a host's list at 6000, each saying how much it cut.
 `sync.sh status` marks the end of a run's log as the host's text, and `sync.sh diff` shows a host's
 lines in the same shape. For what no record shows (no code signing, a tool that needs a license),
-write `~/.config/workhorses/notes`. The hook includes the notes in full when the session-start
-JSON fits in 8,500 bytes. Otherwise it returns a short notice with the absolute command to read
-the full policy. From the plugin directory, run `bash scripts/policy.sh --full` for all validated
+write `~/.config/workhorses/notes`. The plain policy includes the complete notes. Claude Code, Cursor and VS Code limit
+their startup JSON to 8,500 bytes. When needed, their hook drops the tool lists first and the
+notes next. A notice above the host table names the omissions and gives the full-policy command. From the plugin directory, run `bash scripts/policy.sh --full` for all validated
 tool versions and the complete notes. The last sync records also remain in the manifests directory
 named in the policy. The `workhorse` skill
 covers how to run `wh` well: exit codes, first runs, git in the copy, and the steps for adding a tool.

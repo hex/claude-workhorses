@@ -1,7 +1,8 @@
 #!/bin/bash
-# ABOUTME: Prints the SessionStart response that Claude Code, Cursor and VS Code consume.
-# ABOUTME: The context is the same policy that the plain-text hook prints.
+# ABOUTME: Fits the Claude Code, Cursor and VS Code startup context into 8500 JSON bytes.
+# ABOUTME: Drops the tools first, then notes, so host selection and offload rules take priority.
 set -euo pipefail
 
-here=$(dirname "$0")
-bash "$here/policy.sh" | jq -Rsc -L "$here/lib" 'include "session-start"; rtrimstr("\n") | session_start'
+here=$(cd "$(dirname "$0")" && pwd -P)
+printf -v command 'bash %q --full' "$here/policy.sh"
+bash "$here/policy.sh" --sections | jq -sc --arg command "$command" -f "$here/lib/session-start.jq"

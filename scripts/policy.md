@@ -1,7 +1,3 @@
-# Workhorses
-
-@HOSTS@
-
 Use a workhorse to keep this machine free when an unattended job takes over 5 minutes,
 the 1-minute load exceeds the local core count, or the job writes over 5 GB. Stay local
 for jobs under 2 minutes or those needing more RAM than the hosts have, a GPU or code signing.
@@ -32,7 +28,3 @@ Bring back only logs and reports. Edit locally. Keep shared git copies and depen
 Remove only this session's non-git copy. Before deleting files a job could use, check
 ~/work/*.lock and their owner files; wait for other sessions' locks to clear. Ask before
 sudo or installing outside the remote directory.
-
-@TOOLS@
-
-@NOTES@

@@ -7,6 +7,7 @@ set -uo pipefail
 if ! policy=$(bash "$(dirname "$0")/policy.sh" 2>&1 && printf .); then
   policy="workhorses: $(dirname "$0")/policy.sh failed, so the workhorse policy is missing: $policy"
 else
-  policy=${policy%$'\n.'}
+  policy=${policy%.}
+  policy=${policy%$'\n'}
 fi
-jq -n --arg text "$policy" '{injectSteps: [{systemMessage: {systemMessage: $text}}]}'
+printf '%s' "$policy" | jq -Rs '{injectSteps: [{systemMessage: {systemMessage: .}}]}'

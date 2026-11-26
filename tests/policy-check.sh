@@ -46,14 +46,35 @@ fail() { echo "FAIL $*" >&2; exit 1; }
   echo "ok   four-host session-start JSON is $bytes bytes and includes the notes in full"
 
   # JSON escaping can push a policy over budget even when the plain text fits.
-  awk 'BEGIN { for (i=0; i<1800; i++) printf "%c", 34; print ""; print "Last oversize note." }' >>"$WORKHORSES_CONFIG_DIR/notes"
+  awk -v count="$(((8500 - bytes) / 2 + 150))" 'BEGIN { for (i=0; i<count; i++) printf "%c", 34; print ""; print "Last oversize note." }' >>"$WORKHORSES_CONFIG_DIR/notes"
   "$BASH" "$root/scripts/policy-session-start.sh" >"$json"
   command=$(printf 'bash %q --full' "$root/scripts/policy.sh")
-  jq -e --arg command "$command" '
-    .hookSpecificOutput.additionalContext |
-    startswith("Workhorse policy exceeds the 8500-byte startup budget.") and endswith($command)
-  ' "$json" >/dev/null || fail "oversize hook did not give the full-policy command"
-  [ "$(wc -c <"$json")" -le 1500 ] || fail "oversize notice falls outside the preview"
+  check_core() {
+    [ "$(wc -c <"$json")" -le 8500 ] || fail "oversize hook exceeds its byte budget"
+    jq -e --arg wh "$root/bin/wh" --arg command "$command" --arg omitted "$1" '
+      .hookSpecificOutput.additionalContext as $text |
+      ($text | startswith("# Workhorses")) and
+      ($text | split("\n") | any(.[]; contains($omitted) and contains($command))) and
+      ($text | split($command)[0] | utf8bytelength) + ($command | utf8bytelength) <= 1500 and
+      ($text | contains($wh) and contains("unattended job takes over 5 minutes")) and
+      all(["alpha", "beta", "gamma", "delta"][]; . as $host |
+        $text | contains("| " + $host + " |")) and
+      ($text | contains("alpha-tool") | not)
+    ' "$json" >/dev/null || fail "oversize hook lost the host table, rules or recovery notice"
+  }
+  check_core "Tool lists omitted"
+  jq -e --rawfile notes "$WORKHORSES_CONFIG_DIR/notes" '
+    .hookSpecificOutput.additionalContext | endswith($notes | rtrimstr("\n"))
+  ' "$json" >/dev/null || fail "hook dropped notes that still fit"
+  awk 'BEGIN { for (i=0; i<9000; i++) printf "x"; print ""; print "Final oversize note." }' >>"$WORKHORSES_CONFIG_DIR/notes"
+  "$BASH" "$root/scripts/policy-session-start.sh" >"$json"
+  check_core "Tool lists and notes omitted"
+  jq -e '.hookSpecificOutput.additionalContext | contains("Last oversize note.") | not' "$json" >/dev/null ||
+    fail "hook retained partial notes"
+  "$BASH" "$root/scripts/policy.sh" >"$config/plain"
+  grep -qF "alpha-tool" "$config/plain" || fail "plain policy lost the tool list"
+  tail -n "$(wc -l <"$WORKHORSES_CONFIG_DIR/notes")" "$config/plain" |
+    cmp - "$WORKHORSES_CONFIG_DIR/notes" || fail "plain policy lost oversize notes"
   "$BASH" "$root/scripts/policy.sh" --full >"$config/full"
   grep -qF "autoconf 1:24.04.5-1ubuntu0.3~24.04.1" "$config/full" ||
     fail "full policy lost the recorded Debian version"
