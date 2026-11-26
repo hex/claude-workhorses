@@ -1,10 +1,11 @@
 // ABOUTME: Watches the workhorse run log that mirror.sh writes and shows the wh runs started from this session's folder.
 // ABOUTME: While one runs, a green wh badge sits in the prompt footer, its arrows swapping while the copy syncs, then a spinner while the job runs;
-// ABOUTME: the band above the prompt names each run with a Stop button, and a toast marks a long or BLOCKED end.
+// ABOUTME: the band above the prompt names each run with a Stop button, and a toast marks a long or BLOCKED end;
+// ABOUTME: /workhorses opens a pane of each workhorse's load and the runs going on it, from wh hosts --json.
 import { atom, read, update } from 'claude-code'
-import type { Register, Timer } from 'claude-code'
+import type { EngineInterface, Register, Timer } from 'claude-code'
 
-import type { Badge, RunLines } from '../types'
+import type { Badge, HostRun, HostView, HostsView, RunLines } from '../types'
 
 const LOG = '.local/state/workhorse/runs.jsonl'
 // Each second, so the badge's count of the copy ticks by one.
@@ -156,7 +157,207 @@ export function bandLines(active: Iterable<Start>, copying: ReadonlySet<string>,
   }))
 }
 
+// The /workhorses pane's id. The hooks spell the command out: claude plugin validate counts a command.run hook as
+// answering its own command only when the registration and the matcher name it literally.
+const PANE_ID = 'workhorses'
+// wh hosts gives each host 5 seconds; the rest is jq and margin.
+const HOSTS_TIMEOUT_MS = 15_000
+// While the pane is placed, its age line moves on every tick and wh hosts runs once a minute. Nothing runs
+// ssh while it is not: this mod loads in every session.
+const PANE_TICK_MS = 10_000
+const HOSTS_REFRESH_MS = 60_000
+
+// Change the tag when HostsView's type changes: the atom then declines what an earlier version stored.
+const hostsView = atom({ plugin: 'workhorses', key: 'hostsView' } as const, { checkedAt: null, hosts: [], error: null } as HostsView, {
+  shape: 'hosts-view-1',
+})
+
+// Control characters, C1 included, which a terminal would act on rather than show.
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g
+
+type Fields = Record<string, unknown>
+
+// Reads one line of wh hosts --json, strictly: an unknown state, a missing or extra field, or a field of the
+// wrong type fails, naming the line. Every string comes out as plain text.
+export function parseHostLine(line: string): HostView {
+  const fail = (why: string): never => {
+    throw new Error(`wh hosts --json: ${why} in line ${line.replace(CONTROL, '')}`)
+  }
+  const fields = (value: unknown, keys: readonly string[]): Fields => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return fail('not an object')
+    const found = Object.keys(value).sort()
+    if (found.join() !== [...keys].sort().join()) return fail('unexpected fields')
+    return value as Fields
+  }
+  const text = (value: unknown): string => (typeof value === 'string' ? value.replace(CONTROL, '') : fail('a field that is not text'))
+  const count = (value: unknown): number =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fail('a field that is not a whole number')
+  const orNull = <T,>(value: unknown, read: (value: unknown) => T): T | null => (value === null ? null : read(value))
+  const run = (value: unknown): HostRun => {
+    const doc = fields(value, ['work', 'machine', 'pid', 'since', 'command', 'dir', 'stoppable'])
+    const work = text(doc.work)
+    const command = text(doc.command)
+    if (doc.stoppable === true) {
+      return { work, machine: text(doc.machine), pid: count(doc.pid), since: text(doc.since), command, dir: text(doc.dir), stoppable: true }
+    }
+    if (doc.stoppable !== false || doc.dir !== null) return fail('a run that is neither stoppable nor another\'s')
+    return { work, machine: orNull(doc.machine, text), pid: orNull(doc.pid, count), since: orNull(doc.since, text), command, dir: null, stoppable: false }
+  }
+  let value: unknown
+  try {
+    value = JSON.parse(line)
+  } catch {
+    return fail('not JSON')
+  }
+  const state = (value as Fields | null)?.state
+  if (state === 'unreachable') return { host: text(fields(value, ['host', 'state']).host), state }
+  if (state === 'unexpected') {
+    const doc = fields(value, ['host', 'state', 'answer'])
+    return { host: text(doc.host), state, answer: text(doc.answer) }
+  }
+  if (state !== 'ok') return fail('unknown state')
+  const doc = fields(value, ['host', 'state', 'load', 'cores', 'runs'])
+  if (typeof doc.load !== 'number' || !(doc.load >= 0)) return fail('a load that is not a number')
+  if (!Array.isArray(doc.runs)) return fail('runs that are not a list')
+  return { host: text(doc.host), state, load: doc.load, cores: count(doc.cores), runs: doc.runs.map(run) }
+}
+
+// A folder under the home folder as ~/..., a Claude Code worktree's .claude/worktrees/<name> as "⎇ <name>".
+export function folderLabel(dir: string, home: string): string {
+  const under = home !== '' && (dir === home || dir.startsWith(`${home}/`)) ? `~${dir.slice(home.length)}` : dir
+  const worktree = /^(.*)\/\.claude\/worktrees\/([^/]+)$/.exec(under)
+  return worktree === null ? under : `${worktree[1]} ⎇ ${worktree[2]}`
+}
+
+// Where the pane's rows put a run: this session's first, then this laptop's others, then the rest.
+function runRank(run: HostRun, sessionDir: string): number {
+  if (!run.stoppable) return 2
+  return belongsTo(run.dir, sessionDir) ? 0 : 1
+}
+
+function hostHeader(host: HostView): string {
+  if (host.state === 'unreachable') return `${host.host} · unreachable`
+  if (host.state === 'unexpected') return `${host.host} · unexpected answer: ${host.answer}`
+  const runs = host.runs.length === 0 ? 'idle' : host.runs.length === 1 ? '1 run' : `${host.runs.length} runs`
+  return `${host.host} · load ${host.load.toFixed(2)} of ${host.cores} · ${runs}`
+}
+
+function runRow(run: HostRun, home: string, sessionDir: string): string {
+  const since = run.since === null ? '' : ` · since ${run.since.slice(11, 16)}`
+  const command = runCommand(run) || 'no owner recorded'
+  if (run.stoppable) {
+    const mine = belongsTo(run.dir, sessionDir) ? ' · this session' : ''
+    return `${folderLabel(run.dir, home)}${mine}${since} · ${command}`
+  }
+  return run.machine === null ? `${run.work} · ${command}` : `from ${run.machine}${since} · ${command}`
+}
+
+// The pane's first line: how old the report is, or why the last refresh failed.
+function reportAge(view: HostsView, nowMs: number): string {
+  const age = view.checkedAt === null ? null : duration((nowMs - view.checkedAt) / 1000)
+  if (view.error !== null) return age === null ? view.error : `${view.error} · hosts as of ${age} ago`
+  return age === null ? 'checking…' : `checked ${age} ago`
+}
+
+// The pane's refreshes: the one running, if any, and when the last one started, so the timer leaves a
+// minute between them. One wh hosts --json at a time: a refresh asked for while one runs waits for that one.
+type Refresh = { inFlight: Promise<void> | undefined; startedMs: number }
+
+function refreshHosts($: EngineInterface, refresh: Refresh): Promise<void> {
+  refresh.inFlight ??= askHosts($, refresh).finally(() => {
+    refresh.inFlight = undefined
+  })
+  return refresh.inFlight
+}
+
+// Runs wh hosts --json and stores its report; a refresh that fails keeps the hosts already shown and says why.
+async function askHosts($: EngineInterface, refresh: Refresh): Promise<void> {
+  refresh.startedMs = await $.clock.now()
+  let hosts: HostView[] | undefined
+  let error: string | null = null
+  try {
+    const ran = await $.process.run([`${$.plugin.root}/bin/wh`, 'hosts', '--json'], { timeoutMs: HOSTS_TIMEOUT_MS })
+    if (ran.exitCode !== 0) {
+      error = `wh hosts exited ${ran.exitCode}: ${ran.stderr.trim().split('\n')[0] || 'it said nothing'}`
+    } else {
+      hosts = ran.stdout.split('\n').filter(line => line.trim() !== '').map(parseHostLine)
+    }
+  } catch (failed) {
+    error = (failed as Error).message
+  }
+  const nowMs = await $.clock.now()
+  await update($, hostsView, (view: HostsView): HostsView => (hosts === undefined ? { ...view, error } : { checkedAt: nowMs, hosts, error: null }))
+}
+
 export const register: Register = on => {
+  // The session's folder and home, which the pane's rows are measured against; session.start sets them.
+  let paneSessionDir = ''
+  let paneHome = ''
+
+  const refresh: Refresh = { inFlight: undefined, startedMs: 0 }
+
+  on('command.run', { command: 'workhorses' }, async $ => {
+    let text: string
+    try {
+      const opened = await $.ui.open({ id: PANE_ID, title: 'workhorses' })
+      text = opened.isPlaced ? 'workhorses pane opened.' : `workhorses pane: ${opened.reason}`
+    } catch (error) {
+      return { text: `workhorses pane: ${(error as Error).message}` }
+    }
+    await refreshHosts($, refresh)
+    return { text }
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e) => {
+    const view = await read($, hostsView)
+    const nowMs = await $.clock.now()
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const stop = async (pid: number) => {
+      const said = await $.process.run([`${$.plugin.root}/bin/wh`, 'stop', String(pid)])
+      if (said.exitCode !== 0) $.ui.toast(said.stderr.trim() || `wh stop ${pid} failed with exit ${said.exitCode}`, { timeoutMs: 8000 })
+      await refreshHosts($, refresh)
+    }
+    // Busy hosts first, then the rest in the hosts file's order: an inline pane is only so tall.
+    const hosts = [...view.hosts].sort((a, b) => Number(a.state !== 'ok' || a.runs.length === 0) - Number(b.state !== 'ok' || b.runs.length === 0))
+    // Each row is one Text cut at its end: Texts side by side would wrap into narrow columns. A run's Stop
+    // button has no hotkey, as a digit typed into the composer could press it.
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="row" gap={1}>
+          <Box flexShrink={1}>
+            <Text wrap="truncate-end" color={view.error === null ? undefined : 'error'} dimColor={view.error === null}>
+              {reportAge(view, nowMs)}
+            </Text>
+          </Box>
+          <Box flexShrink={0}>
+            <Button key="refresh" label="Refresh" onPress={() => refreshHosts($, refresh)} />
+          </Box>
+        </Box>
+        {hosts.map(host => (
+          <Box flexDirection="column" marginTop={1}>
+            <Text wrap="truncate-end" weight="bold">
+              {hostHeader(host)}
+            </Text>
+            {(host.state === 'ok' ? [...host.runs].sort((a, b) => runRank(a, paneSessionDir) - runRank(b, paneSessionDir)) : []).map(run => (
+              <Box flexDirection="row" gap={1} paddingLeft={2}>
+                <Box flexShrink={1}>
+                  <Text wrap="truncate-end" dimColor={!run.stoppable}>
+                    {runRow(run, paneHome, paneSessionDir)}
+                  </Text>
+                </Box>
+                {run.stoppable ? (
+                  <Box flexShrink={0}>
+                    <Button key={`stop:${run.pid}`} label="Stop" onPress={() => stop(run.pid)} />
+                  </Box>
+                ) : null}
+              </Box>
+            ))}
+          </Box>
+        ))}
+      </Box>
+    )
+  })
+
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const modes = await next(e)
     const text = await read($, badge)
@@ -321,6 +522,24 @@ export const register: Register = on => {
 
     await poll()
     $.clock.every(POLL_MS, poll)
+
+    paneSessionDir = sessionDir
+    paneHome = (await $.env.get('HOME')) ?? ''
+    // Without /workhorses nothing opens the pane, so the timer starts only once the command is registered.
+    try {
+      await $.command.register({ name: 'workhorses', description: 'Open the workhorses pane: each workhorse, its load and the wh runs going on it' })
+      $.clock.every(PANE_TICK_MS, async () => {
+        try {
+          if (!(await $.ui.panes()).some(pane => pane.id === PANE_ID && pane.isPlaced)) return
+          if ((await $.clock.now()) - refresh.startedMs >= HOSTS_REFRESH_MS) await refreshHosts($, refresh)
+          else $.ui.invalidate('ui.render')
+        } catch (error) {
+          $.ui.log(`workhorses pane: ${(error as Error).message}`)
+        }
+      })
+    } catch (error) {
+      $.ui.log(`workhorses: /workhorses is not available: ${(error as Error).message}`)
+    }
     return next(e)
   })
 }

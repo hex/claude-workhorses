@@ -1,5 +1,5 @@
-// ABOUTME: The workhorse-runs mod's session state: the wh badge's text and the band's run lines while runs from this session's folder go.
-// ABOUTME: The footer badge and the band above the prompt read it; the run-log poll writes it.
+// ABOUTME: The workhorse-runs mod's session state: the wh badge's text and the band's run lines while runs from this session's folder go,
+// ABOUTME: and the /workhorses pane's report of each workhorse; the footer badge, the band and the pane read it.
 // "wh ⇄ gamma 0:42" while the repository is still copying to the workhorse (⇄ and ⇆ in turn), a spinner
 // frame in the arrows' place once the job runs; null with no run.
 export type Badge = string | null
@@ -15,8 +15,25 @@ export type RunLines = readonly {
   command: string
 }[]
 
+// One run going on a workhorse, as wh hosts --json reports it: its lock's name in ~/work and its
+// command. A run this laptop started and its run log lists carries the folder it started from and the
+// pid wh stop takes. Any other run carries the machine, pid and start time its lock's owner line names,
+// each null when the owner line is not one wh wrote.
+export type HostRun =
+  | { work: string; machine: string; pid: number; since: string; command: string; dir: string; stoppable: true }
+  | { work: string; machine: string | null; pid: number | null; since: string | null; command: string; dir: null; stoppable: false }
+// One workhorse in the hosts file's order: its 1-minute load and physical cores with the runs going
+// there, unreachable, or the answer it gave that is not a probe's, as plain text.
+export type HostView =
+  | { host: string; state: 'ok'; load: number; cores: number; runs: readonly HostRun[] }
+  | { host: string; state: 'unreachable' }
+  | { host: string; state: 'unexpected'; answer: string }
+// The pane's report: when wh hosts last answered (ms; null before its first answer), the hosts it
+// reported, and why the last refresh failed (null when it did not), the hosts kept from the one before.
+export type HostsView = { checkedAt: number | null; hosts: readonly HostView[]; error: string | null }
+
 declare module 'claude-code' {
   interface PluginState {
-    'workhorses': { badge: Badge; runLines: Shaped<RunLines> }
+    'workhorses': { badge: Badge; runLines: Shaped<RunLines>; hostsView: Shaped<HostsView> }
   }
 }
