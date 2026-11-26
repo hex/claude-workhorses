@@ -321,16 +321,12 @@ export const register: Register = on => {
   const refresh: Refresh = { inFlight: undefined, startedMs: 0 }
 
   on('command.run', { command: 'workhorses' }, async $ => {
-    let text: string
-    try {
-      const opened = await $.ui.open({ id: PANE_ID, title: 'workhorses' })
-      text = opened.isPlaced ? 'workhorses pane opened.' : `workhorses pane: ${opened.reason}`
-    } catch (error) {
-      return { text: `workhorses pane: ${(error as Error).message}` }
-    }
+    const opened = await $.ui.open({ id: PANE_ID, title: 'workhorses' }).catch((error: unknown) => ({ isPlaced: false as const, reason: (error as Error).message }))
+    // A pane nobody can see asks no host.
+    if (!opened.isPlaced) return { text: `workhorses pane: ${opened.reason}` }
     // The pane is open and shows "checking…" while this runs; $ is not usable once the hook has answered.
     await refreshHosts($, refresh)
-    return { text }
+    return { text: 'workhorses pane opened.' }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e) => {

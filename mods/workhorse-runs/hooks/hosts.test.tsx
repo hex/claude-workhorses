@@ -150,13 +150,14 @@ test('/workhorses opens the pane and draws each host with its runs, busy hosts a
   })
 })
 
-test('/workhorses says why when the surface does not place the pane', async ($, on) => {
+test('/workhorses says why when the surface does not place the pane, and asks no host', async ($, on) => {
   mock.clock(on, { now: NOW })
   const state = world(on)
   await start($)
-  state.placed = { isPlaced: false, reason: 'the terminal is 60 columns wide' }
+  state.placed = { isPlaced: false, reason: 'no-surface' }
 
-  expect(await $.command.run(TYPED)).toEqual({ text: 'workhorses pane: the terminal is 60 columns wide' })
+  expect(await $.command.run(TYPED)).toEqual({ text: 'workhorses pane: no-surface' })
+  expect(state.whCalls).toEqual([])
 })
 
 test('the timer runs wh hosts only while the pane is on screen, once a minute', async ($, on) => {
