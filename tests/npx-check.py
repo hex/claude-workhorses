@@ -106,7 +106,8 @@ def check(target, scratch, home):
     root_var = {"vscode": "PLUGIN_ROOT", "github-copilot": "COPILOT_PLUGIN_ROOT"}.get(
         target, "CLAUDE_PLUGIN_ROOT")
     env[root_var] = str(plugin)
-    expected = run(["bash", str(plugin / "scripts/policy.sh")], env).rstrip("\n")
+    plain = run(["bash", str(plugin / "scripts/policy.sh")], env)
+    expected = plain.removesuffix("\n")
     require("| zeta | me@zeta.example.test | arm64 | 8 | 16 GB |" in expected,
             "policy did not read the test host")
     if target in ("github-copilot", "vscode"):
@@ -121,7 +122,8 @@ def check(target, scratch, home):
     command = hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"]
     output = run(["bash", "-eu", "-c", command], env)
     if target == "codex":
-        actual = output.rstrip("\n")
+        require(output == plain, "Codex hook output differs from installed policy")
+        return
     else:
         response = json.loads(output)["hookSpecificOutput"]
         require(response["hookEventName"] == "SessionStart", "wrong hook event")
