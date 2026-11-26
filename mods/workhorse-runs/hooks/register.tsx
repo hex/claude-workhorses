@@ -179,7 +179,7 @@ type Fields = Record<string, unknown>
 
 // Reads one line of wh hosts --json, strictly: an unknown state, a missing or extra field, or a field of the
 // wrong type fails, naming the line. Every string comes out as plain text.
-export function parseHostLine(line: string): HostView {
+function parseHostLine(line: string): HostView {
   const fail = (why: string): never => {
     throw new Error(`wh hosts --json: ${why} in line ${line.replace(CONTROL, '')}`)
   }
@@ -223,7 +223,7 @@ export function parseHostLine(line: string): HostView {
 }
 
 // A folder under the home folder as ~/..., a Claude Code worktree's .claude/worktrees/<name> as "⎇ <name>".
-export function folderLabel(dir: string, home: string): string {
+function folderLabel(dir: string, home: string): string {
   const under = home !== '' && (dir === home || dir.startsWith(`${home}/`)) ? `~${dir.slice(home.length)}` : dir
   const worktree = /^(.*)\/\.claude\/worktrees\/([^/]+)$/.exec(under)
   return worktree === null ? under : `${worktree[1]} ⎇ ${worktree[2]}`
