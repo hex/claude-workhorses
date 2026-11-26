@@ -4,7 +4,7 @@
     "sessionStart": [
       {
         "type": "command",
-        "bash": "bash \"$COPILOT_PLUGIN_ROOT/scripts/policy-copilot.sh\"",
+        "bash": "if [ -n \"${COPILOT_PLUGIN_ROOT:-}\" ]; then bash \"$COPILOT_PLUGIN_ROOT/scripts/policy-copilot.sh\"; fi",
         "timeoutSec": 10
       }
     ]
