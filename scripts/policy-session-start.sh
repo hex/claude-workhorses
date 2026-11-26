@@ -5,4 +5,9 @@ set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd -P)
 printf -v command 'bash %q --full' "$here/policy.sh"
-bash "$here/policy.sh" --sections | jq -sc --arg command "$command" -f "$here/lib/session-start.jq"
+if ! sections=$(bash "$here/policy.sh" --sections 2>&1); then
+  printf '%s' "workhorses: $here/policy.sh failed, so the workhorse policy is missing: $sections" |
+    jq -Rsc '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: .}}'
+  exit 0
+fi
+printf '%s\n' "$sections" | jq -sc --arg command "$command" -f "$here/lib/session-start.jq"

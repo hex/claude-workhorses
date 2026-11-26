@@ -287,4 +287,16 @@ context=$("$BASH" "$config/incomplete/scripts/policy-copilot.sh" | jq -er .addit
   fail "Copilot's additionalContext lost the policy failure: '$context'"
 echo "ok   Copilot's sessionStart hook reports a policy failure in additionalContext"
 
+dir=$(cd "$config/incomplete/scripts" && pwd -P)
+mkdir "$dir/lib"
+cp "$root/scripts/policy-session-start.sh" "$dir/"
+cp "$root/scripts/lib/session-start.jq" "$dir/lib/"
+if error=$("$BASH" "$dir/policy.sh" --sections 2>&1); then fail "incomplete renderer succeeded"; fi
+"$BASH" "$dir/policy-session-start.sh" >"$config/failed.json" 2>"$config/failed.err" ||
+  fail "SessionStart returned nonzero for a policy failure"
+context=$(jq -er 'select(.hookSpecificOutput.hookEventName == "SessionStart") | .hookSpecificOutput.additionalContext' "$config/failed.json")
+[ "$context" = "workhorses: $dir/policy.sh failed, so the workhorse policy is missing: $error" ] ||
+  fail "SessionStart lost the renderer diagnostic"
+echo "ok   SessionStart reports the renderer failure in additionalContext and exits zero"
+
 echo "all policy checks passed"
