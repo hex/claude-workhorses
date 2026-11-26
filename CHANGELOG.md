@@ -4,7 +4,7 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
-## Unreleased
+## 2026.11.11
 
 ### Changed
 - The plugin is now `workhorses`, and its repository `hex/workhorses`: `claude-` names are Anthropic's, and the plugin serves five agents. Every name moved, with no fallback to the old ones:
