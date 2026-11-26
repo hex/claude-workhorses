@@ -180,4 +180,17 @@ step=$("$BASH" "$root/scripts/policy-agy.sh" | jq -r '.injectSteps[0].systemMess
 [ "$step" = "$plain" ] || fail "Antigravity's hook does not carry the policy as its JSON step: got '${step:0:200}'"
 echo "ok   Antigravity's hook carries the whole policy in the JSON step agy reads"
 
+context=$("$BASH" "$root/scripts/policy-copilot.sh" | jq -er .additionalContext)
+[ "$context" = "$plain" ] || fail "Copilot's additionalContext differs from the plain policy"
+echo "ok   Copilot's sessionStart hook carries the whole policy in additionalContext"
+
+mkdir -p "$config/incomplete/scripts"
+cp "$root/scripts/"{policy,policy-copilot}.sh "$config/incomplete/scripts/"
+script="$config/incomplete/scripts/policy.sh"
+if error=$("$BASH" "$script" 2>&1); then fail "policy.sh succeeded without its libraries"; fi
+context=$("$BASH" "$config/incomplete/scripts/policy-copilot.sh" | jq -er .additionalContext)
+[ "$context" = "workhorses: $script failed, so the workhorse policy is missing: $error" ] ||
+  fail "Copilot's additionalContext lost the policy failure: '$context'"
+echo "ok   Copilot's sessionStart hook reports a policy failure in additionalContext"
+
 echo "all policy checks passed"

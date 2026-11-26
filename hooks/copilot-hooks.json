@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "bash \"$COPILOT_PLUGIN_ROOT/scripts/policy-copilot.sh\"",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}

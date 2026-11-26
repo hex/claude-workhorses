@@ -1,11 +1,11 @@
 #!/bin/bash
-# ABOUTME: Checks that the manifests for Claude Code, Codex, Antigravity and npm (pi, OpenCode) name the same version, which
+# ABOUTME: Checks that the manifests for Claude Code, Codex, GitHub Copilot CLI, Antigravity and npm (pi, OpenCode) name the same version, which
 # ABOUTME: release.sh bumps. Usage: tests/manifests-check.sh; exits 1 when one differs.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 want=$(jq -r .version "$root/.claude-plugin/plugin.json")
-for manifest in .codex-plugin/plugin.json .antigravity-plugin/plugin.json package.json; do
+for manifest in .plugin/plugin.json .codex-plugin/plugin.json .antigravity-plugin/plugin.json package.json; do
   got=$(jq -r .version "$root/$manifest")
   if [ "$got" != "$want" ]; then
     echo "FAIL .claude-plugin/plugin.json is at $want, $manifest at $got" >&2
@@ -13,3 +13,7 @@ for manifest in .codex-plugin/plugin.json .antigravity-plugin/plugin.json packag
   fi
 done
 echo "ok   every manifest is at $want"
+
+hooks=$(jq -er .hooks "$root/.plugin/plugin.json")
+jq -e '.version == 1 and any(.hooks.sessionStart[]; .type == "command" and (.bash | type == "string" and length > 0))' "$root/$hooks" >/dev/null
+echo "ok   the Copilot manifest points to a version 1 sessionStart command hook"
