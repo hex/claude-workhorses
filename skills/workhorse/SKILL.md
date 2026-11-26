@@ -5,9 +5,12 @@ description: Run a job on one of the user's workhorses, the spare Macs and Linux
 
 # Workhorse
 
+If the session has no workhorse policy in context, first run `bash "<plugin root>/scripts/policy.sh"`.
+The plugin root is two folders above this skill’s folder. Use the `wh` path, hosts and rules it prints.
+
 `wh` runs a command on a workhorse in a private copy of the current git repo, after bringing the copy
 level with this machine, `.git` included. This machine stays free. A workhorse can be slower per core,
-so offload to free this machine, never to go faster. The policy printed at session start lists each
+so offload to free this machine, never to go faster. The policy lists each
 host with its architecture, cores and RAM, and the tools each host had at its last sync.
 If the policy exceeds its startup budget, run the command in the notice before choosing a host.
 From the plugin root, `bash scripts/policy.sh --full` shows all validated tool versions and the
@@ -65,9 +68,8 @@ Use it when any of these holds:
 
 Run it locally instead when the job needs more RAM than the hosts have, a GPU, code signing, API
 keys or other environment variables set only on this machine (`wh` passes none), or anything the
-user's notes at the end of the session-start policy rule out. For arm64 output, name an arm64 host.
-Any git repo works; for a folder that is not a git repo, follow the workhorse policy printed at
-session start.
+user's notes in the policy rule out. For arm64 output, name an arm64 host.
+Any git repo works; for a folder that is not a git repo, follow the non-git instructions in the policy.
 
 ## When a host lacks a tool
 
