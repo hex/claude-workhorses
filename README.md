@@ -33,6 +33,8 @@ npx plugins add hex/workhorses
 
 For a new install, npx offers the agents it detects. If you already installed workhorses from a
 marketplace, keep that install. Running npx for the same agent can leave you with two copies.
+Cursor reads Claude Code's plugins, so the `cursor` target also adds a copy to Claude Code. If
+Claude Code already has workhorses, leave Cursor out of the npx run.
 To pick just one target, add its ID, for example `npx plugins add hex/workhorses --target github-copilot`.
 
 Use the native installer for pi, OpenCode and Antigravity.

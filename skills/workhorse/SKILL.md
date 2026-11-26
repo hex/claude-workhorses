@@ -145,7 +145,7 @@ tell the user.
 ## First run in a repo
 
 The copy keeps installed dependencies between runs, but `wh` never carries `node_modules/`,
-`target/`, `.venv/`, `venv/`, `Library/`, `.build/`, `.gradle/`, `DerivedData/` `__pycache__/`, `.DS_Store` or `.cs/`.
+`target/`, `.venv/`, `venv/`, `Library/`, `.build/`, `.gradle/`, `DerivedData/`, `__pycache__/`, `.DS_Store` or `.cs/`.
 With no host named, a run can land on a host that has no copy yet, whenever the hosts that hold one
 are half busy or more; `wh` then says `first copy there`. Put the install in the same run as the
 job, where it costs little once the dependencies are there:
