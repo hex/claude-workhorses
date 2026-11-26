@@ -155,8 +155,10 @@ locks it, copies `.git`, patches the working tree, then runs the command:
 - Git in the copy has your commits, branch and index. A linked worktree's copy is an ordinary
   repository holding the worktree's branch and index.
 - `wh` refuses a first copy of over 1 GB that would cross Tailscale, counting `.git` and every file it
-  sends but nothing under the names above. Make it from a network that reaches the host directly, or
-  set `WORKHORSES_TAILSCALE_FIRST_COPY_MB` to another limit in MB, a whole number from 1 to
+  sends but nothing under the names above. The limit also applies when the Mac reaches the host's
+  LAN address through a Tailscale subnet router. In that case the message names the interface.
+  Make the copy from a network that reaches the host directly, or set
+  `WORKHORSES_TAILSCALE_FIRST_COPY_MB` to another limit in MB, a whole number from 1 to
   9999999.
 
 ### The badge and band

@@ -214,7 +214,7 @@ git_expect "$gitroot/repo" "$(git -C "$gitroot/repo" rev-parse HEAD)" "the repos
 
 # wh refuses a first copy larger than WORKHORSES_TAILSCALE_FIRST_COPY_MB when the ssh connection
 # reaches the host on its Tailscale address, counting .git and every file it would send but none under
-# a name it leaves out; over another address the same copy runs. The host is reached through its real
+# a name it leaves out; over a route outside Tailscale the same copy runs. The host is reached through its real
 # Tailscale address, from a hosts file of this check's own, with a limit of 2 MB and 3 MB of files.
 # shellcheck source=../scripts/lib/hosts.sh
 . "$here/../scripts/lib/hosts.sh"
@@ -234,12 +234,8 @@ guard_cleanup() {
 }
 trap 'rm -rf "$probe" "$gitroot"; guard_cleanup' EXIT
 
-# Whether address $1 is in Tailscale's range: a first number of 100 and a second from 64 to 127.
-in_tailscale_range() {
-  local first second rest
-  IFS=. read -r first second rest <<<"$1"
-  [ "$first" = 100 ] && [[ $second =~ ^[0-9]+$ ]] && [ "$second" -ge 64 ] && [ "$second" -le 127 ]
-}
+# Use the guard's route lookup to decide which paths can be exercised from this Mac.
+eval "$(sed -n '/^in_tailscale_range() {$/,/^}$/p; /^tailscale_route() {$/,/^}$/p' "$here/../scripts/mirror.sh")"
 
 # The server address of an ssh connection to target $1, as the host sees it.
 server_address() {
@@ -307,7 +303,7 @@ else
 fi
 
 lan=$(server_address "$configured" 2>/dev/null)
-if in_tailscale_range "$lan"; then
+if tailscale_route "$lan" >/dev/null; then
   echo "skip: the first copy without Tailscale: $configured reaches $host through Tailscale from here"
 else
   repo=$(bulk_repo lan bulk)

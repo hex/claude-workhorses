@@ -31,11 +31,32 @@ ignores=(node_modules/ target/ .venv/ venv/ Library/ .build/ .gradle/ DerivedDat
 tailscale_first_copy_mb=${WORKHORSES_TAILSCALE_FIRST_COPY_MB:-1024}
 
 # Whether address $1 is in Tailscale's range, 100.64.0.0/10.
-is_tailscale() {
+in_tailscale_range() {
   case "$1" in
     100.6[4-9].* | 100.[7-9][0-9].* | 100.1[01][0-9].* | 100.12[0-7].*) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# Print the route for the first-copy warning. Several VPNs use utun interfaces, so check
+# the interface's own IPv4 addresses before counting a route to a host's LAN address.
+tailscale_route() {
+  local server=$1 interface addresses address
+  if in_tailscale_range "$server"; then
+    echo "$server"
+    return 0
+  fi
+  [ "$(uname -s)" = Darwin ] && [[ $server =~ ^[0-9a-fA-F:.]+$ ]] || return 1
+  interface=$(route -n get "$server" 2>/dev/null | awk '$1 == "interface:" {print $2}') || return 1
+  [ -n "$interface" ] || return 1
+  addresses=$(ifconfig "$interface" 2>/dev/null | awk '$1 == "inet" {print $2}') || return 1
+  while read -r address; do
+    if in_tailscale_range "$address"; then
+      echo "$server via $interface"
+      return 0
+    fi
+  done <<<"$addresses"
+  return 1
 }
 
 # The copy of the repository at $1 on a workhorse, a path under ~: its folder name and a hash of its laptop path.
@@ -524,14 +545,14 @@ run() {
   [ -z "$tracked" ] || blocked "git tracks files under names wh leaves out; they would be missing on $host:
 $tracked"
 
-  local prepared state server has_git first_copy_kb empty tree_bytes stored_clock copy_changes
+  local prepared state server route_description has_git first_copy_kb empty tree_bytes stored_clock copy_changes
   phase=prepare
   prepared=$(remote "$target" /bin/bash -c "$prepare_work_copy" _ "$work" \
     "$run_owner: $*" "$seed" "$(printf '%s\n' "${names[@]}")" "${rsync_excludes[@]}") ||
     blocked "could not lock and refresh $host:~/$work"
   phase=copy
   read -r state server has_git <<<"$(sed -n 1p <<<"$prepared")"
-  if [ "$has_git" = nogit ] && is_tailscale "$server"; then
+  if [ "$has_git" = nogit ] && route_description=$(tailscale_route "$server"); then
     # The first copy sends .git and every file the full walk below sends, measured with the same exclusions.
     first_copy_kb=$(du -sk "$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)" | cut -f1)
     empty=$(mktemp -d)
@@ -542,7 +563,7 @@ $tracked"
     [ -n "$tree_bytes" ] || blocked "could not measure the files in $dir: rsync --stats printed no total file size"
     first_copy_kb=$((first_copy_kb + tree_bytes / 1024))
     [ "$first_copy_kb" -le $((tailscale_first_copy_mb * 1024)) ] ||
-      blocked "the first copy of $dir on $host would send $((first_copy_kb / 1024)) MB through Tailscale ($server), over the $tailscale_first_copy_mb MB limit; run it from a network that reaches $host without Tailscale, name a host on this network, or raise WORKHORSES_TAILSCALE_FIRST_COPY_MB"
+      blocked "the first copy of $dir on $host would send $((first_copy_kb / 1024)) MB through Tailscale ($route_description), over the $tailscale_first_copy_mb MB limit; run it from a network that reaches $host without Tailscale, name a host on this network, or raise WORKHORSES_TAILSCALE_FIRST_COPY_MB"
   fi
   sync_git "$dir" "$target" "$work" || blocked "could not copy $dir's .git to $host:~/$work"
   stored_clock=$(sed -n 2p <<<"$prepared")
