@@ -28,6 +28,28 @@ fail() { echo "FAIL $*" >&2; exit 1; }
   echo "ok   SessionStart includes the unknown OS warning alongside the policy"
 )
 
+# The host table alone can exceed the wire budget even with no tools or notes.
+(
+  export WORKHORSES_CONFIG_DIR="$config/fleet" WORKHORSES_STATE_DIR="$config/fleet/state"
+  mkdir -p "$WORKHORSES_CONFIG_DIR"
+  awk 'BEGIN { for (i=1; i<=300; i++) print "host"i, "me@host"i".example.test", "arm64 8 16" }' >"$WORKHORSES_CONFIG_DIR/hosts"
+  "$BASH" "$root/scripts/policy.sh" >"$config/fleet-policy"
+  table_bytes=$(awk '/^\|/ { bytes += length($0)+1 } END { print bytes }' "$config/fleet-policy")
+  [ "$table_bytes" -gt 8500 ] || fail "fixture host table fits the startup budget"
+  json="$config/fleet.json"
+  "$BASH" "$root/scripts/policy-session-start.sh" >"$json"
+  [ "$(wc -c <"$json")" -le 8500 ] || fail "partial host table exceeds the startup budget"
+  jq -e --arg wh "$root/bin/wh" --arg cmd "$(printf 'bash %q --full' "$root/scripts/policy.sh")" '
+    .hookSpecificOutput.additionalContext as $text |
+    ($text | split("\n") | map(select(startswith("| host"))) | length) as $rows |
+    $rows > 0 and $rows < 300 and
+    ($text | contains("| Host |") and contains($wh) and contains("unattended job takes over 5 minutes") and
+      contains("sudo or installing outside the remote directory")) and
+    ($text | split("\n") | any(.[]; contains("host rows") and contains("omitted") and contains($cmd)))
+  ' "$json" >/dev/null || fail "partial table lost host rows, rules or the recovery notice"
+  echo "ok   an oversize host table keeps fitting rows and offload rules and names the omission"
+)
+
 # Four records share some tools but have different package builds and host-only tools.
 (
   export WORKHORSES_CONFIG_DIR="$config/budget" WORKHORSES_STATE_DIR="$config/budget/state"
