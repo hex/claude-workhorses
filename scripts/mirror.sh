@@ -45,9 +45,12 @@ work_name() { echo "work/$(printf '%s' "${1##*/}" | tr -c 'A-Za-z0-9._-' '_')-$(
 # reads ~/.zshenv for PATH; bash on Linux, which reads the top of ~/.bashrc when sshd starts it), so
 # paths and commands cross SSH as data, never as shell text.
 remote() {
-  local target=$1
+  local target=$1 command
   shift
-  ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" "$(printf '%q ' "$@")"
+  # printf -v, not a command substitution: after a write to a closed stderr, bash 3.2 would put the
+  # failed text in front of the command.
+  printf -v command '%q ' "$@"
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" "$command"
 }
 
 blocked() {
@@ -62,7 +65,8 @@ blocked() {
 # line (SIGKILL, power loss) can be told apart from one still going.
 run_log=$HOME/.local/state/workhorse/runs.jsonl
 run_id="" run_ended=0 end_reason=""
-# What a signal or the way out acts on: the phase (copy while the copy is made, then job), the host, the
+# What a signal or the way out acts on: the phase (prepare while the host takes the lock, copy while the
+# copy is made, then job), the host, the
 # copy and this run's line in its lock's owner file, and the ssh that runs the job.
 phase="" run_host="" run_target="" run_work="" run_owner="" job_ssh=""
 
@@ -224,8 +228,9 @@ if ! mkdir "$lock" 2>/dev/null; then
   echo "$work is in use: $(cat "$lock/owner" 2>/dev/null || echo "lock without owner") (remove $lock if that run is gone)" >&2
   exit 1
 fi
-trap 'rm -rf "$lock"' EXIT
 echo "$owner" >"$lock/owner"
+# A run stopped from the laptop frees this lock itself and may already have a successor's in its place.
+trap 'case "$(cat "$lock/owner" 2>/dev/null)" in "$owner") rm -rf "$lock" ;; esac' EXIT
 if [ ! -d "$work" ]; then
   rm -f "$work.times" "$work.listing" "$work.clock"
   mkdir "$work"
@@ -520,10 +525,11 @@ run() {
 $tracked"
 
   local prepared state server has_git first_copy_kb empty tree_bytes stored_clock copy_changes
-  phase=copy
+  phase=prepare
   prepared=$(remote "$target" /bin/bash -c "$prepare_work_copy" _ "$work" \
     "$run_owner: $*" "$seed" "$(printf '%s\n' "${names[@]}")" "${rsync_excludes[@]}") ||
     blocked "could not lock and refresh $host:~/$work"
+  phase=copy
   read -r state server has_git <<<"$(sed -n 1p <<<"$prepared")"
   if [ "$has_git" = nogit ] && is_tailscale "$server"; then
     # The first copy sends .git and every file the full walk below sends, measured with the same exclusions.
@@ -597,19 +603,25 @@ $tracked"
   return "$status"
 }
 
+# Writes a line to stderr from a way out, where stderr can be a closed pipe (wh ... | tee after Ctrl-C).
+# An external printf then fails alone; bash 3.2's own echo would keep the line buffered and write it
+# into the next command substitution, the end line's time among them.
+say() { /usr/bin/printf '%s\n' "$*" >&2 2>/dev/null || true; }
+
 # Frees the lock this run took on the host, and only that one: another run's lock, or none, stays.
 free_lock() {
   remote "$run_target" /bin/sh -c 'case "$(cat "$1/owner" 2>/dev/null)" in "$2:"*) rm -rf "$1" ;; esac' _ "$run_work.lock" "$run_owner"
 }
 
 # The way out of a run, however it ends: while the copy is made, the lock this run took goes (once the
-# job runs, the host frees it), then the end line. Signals are ignored from here, by this shell and the
-# ssh it starts, so a second Ctrl-C or wh stop cannot cut the cleanup short.
+# job runs, the host frees it), then the end line. A prepare that failed took no lock, or freed its own;
+# one a signal cut short may have taken it. Signals are ignored from here, by this shell and the ssh it
+# starts, so a second Ctrl-C or wh stop cannot cut the cleanup short, nor a closed pipe end it.
 finish() {
   local status=$1
-  trap '' TERM INT HUP
-  if [ "$phase" = copy ] && ! free_lock; then
-    echo "mirror.sh run: could not free $run_host:~/$run_work.lock; remove it if no run holds it" >&2 || true
+  trap '' TERM INT HUP PIPE
+  if { [ "$phase" = copy ] || { [ "$phase" = prepare ] && [ "$end_reason" = stopped ]; }; } && ! free_lock; then
+    say "mirror.sh run: could not free $run_host:~/$run_work.lock; remove it if no run holds it"
   fi
   log_end "$status"
 }
@@ -617,12 +629,12 @@ finish() {
 # A signal stops the run and exits $1: wh stop sends SIGTERM, Ctrl-C SIGINT and a closed terminal
 # SIGHUP. Once the job runs, stop_job ends it on the host; before, the way out frees the lock.
 on_signal() {
-  trap '' TERM INT HUP
+  trap '' TERM INT HUP PIPE
   end_reason=stopped
   if [ "$phase" = job ]; then
     stop_job
   else
-    echo "mirror.sh run: stopped before the job started" >&2 || true
+    say "mirror.sh run: stopped before the job started"
   fi
   exit "$1"
 }
@@ -643,21 +655,31 @@ done
 [ "$4" = free ] && rm -rf "$1"'
 
 # Ends this run's job on the host. Without this the job would run on, as nothing reaches a host's
-# process once its laptop side is gone. When no job shell has written its pid after 10 seconds, the
-# ssh that starts the job never reached the host: once that ssh is ended no job can start, so the
-# lock goes too.
+# process once its laptop side is gone. The job's ssh then gets 10 seconds to end, as a child the job
+# left holding its output, or a dead connection, can keep it open. When no job shell has written its
+# pid after 10 seconds, the ssh that starts the job never reached the host: once that ssh is ended no
+# job can start, so the lock goes too.
 stop_job() {
+  local waited=0
   if remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 10 wait; then
-    [ -z "$job_ssh" ] || wait "$job_ssh" 2>/dev/null || true
-    echo "mirror.sh run: stopped the job on $run_host" >&2 || true
+    while [ -n "$job_ssh" ] && kill -0 "$job_ssh" 2>/dev/null; do
+      if [ $waited -ge 100 ]; then
+        # shellcheck disable=SC2046 # one pid a word
+        kill -s TERM $(descendants $$) 2>/dev/null || true
+        break
+      fi
+      sleep 0.1
+      waited=$((waited + 1))
+    done
+    say "mirror.sh run: stopped the job on $run_host"
     return
   fi
   # shellcheck disable=SC2046 # one pid a word
   kill -s TERM $(descendants $$) 2>/dev/null || true
   if remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 1 free; then
-    echo "mirror.sh run: the job never started on $run_host; its lock is freed" >&2 || true
+    say "mirror.sh run: the job never started on $run_host; its lock is freed"
   else
-    echo "mirror.sh run: could not reach $run_host to stop the job; it may still be running in ~/$run_work" >&2 || true
+    say "mirror.sh run: could not reach $run_host to stop the job; it may still be running in ~/$run_work"
   fi
 }
 
