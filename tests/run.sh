@@ -4,7 +4,7 @@
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd -P)
-for check in pick-check route-check limits-check hosts-check tools-check apply-check apt-check recipes-check policy-check manifests-check; do
+for check in pick-check report-check route-check limits-check hosts-check tools-check apply-check apt-check recipes-check policy-check manifests-check; do
   echo "=== $check"
   "$BASH" "$here/$check.sh"
 done

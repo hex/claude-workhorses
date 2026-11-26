@@ -164,8 +164,10 @@ choose_host() {
 
 # The probe's count of runs going on a host, run by the host's login shell: the locks in ~/work whose
 # pid file names a live process, and those without one, a run still copying, under an hour old. A lock
-# left by a run that died without its cleanup does not count.
-count_runs='n=0; for l in $(find ~/work -maxdepth 1 -name "*.lock" -type d 2>/dev/null); do if [ -f "$l/pid" ]; then kill -0 "$(cat "$l/pid")" 2>/dev/null && n=$((n + 1)); elif [ -n "$(find "$l" -maxdepth 0 -mmin -60)" ]; then n=$((n + 1)); fi; done; echo $n'
+# left by a run that died without its cleanup does not count. With list=1 set before it, it first
+# prints each counted lock as a line of three tab-separated fields: "lock", the lock's name without
+# .lock, and its owner file with newlines and tabs made spaces (empty without an owner file).
+count_runs='n=0; for l in $(find ~/work -maxdepth 1 -name "*.lock" -type d 2>/dev/null); do if [ -f "$l/pid" ]; then kill -0 "$(cat "$l/pid")" 2>/dev/null || continue; elif [ -z "$(find "$l" -maxdepth 0 -mmin -60)" ]; then continue; fi; n=$((n + 1)); if [ "${list:-}" = 1 ]; then w=${l##*/}; printf "lock\t%s\t%s\n" "${w%.lock}" "$(if [ -f "$l/owner" ]; then tr "\n\t" "  " <"$l/owner"; fi)"; fi; done; echo $n'
 
 # Asks every workhorse at once for its load, its physical core count, its runs going and whether it holds the copy $1
 # (a path under ~), lets choose_host pick, and names the choice on stderr. A host that has not answered
