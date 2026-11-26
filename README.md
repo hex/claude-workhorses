@@ -20,8 +20,8 @@ front of you.
 | Claude Code on your Mac | `wh` on the path of every command Claude runs, the offload policy and your host table at the start of every session, the `workhorse` skill, and the badge and band. |
 | Codex, pi, OpenCode or Antigravity on your Mac | The offload policy and your host table in every session, which give `wh`'s full path, and the `workhorse` skill. No badge, band or `/workhorses:setup`: those are Claude Code's. |
 | GitHub Copilot CLI on your Mac | The offload policy and your host table at the start of an interactive session, and the `workhorse` skill. |
-| Cursor or VS Code on your Mac | The workhorse skill and the startup policy when you enable plugin hooks. Cursor also needs third-party imports. |
-| Grok Build or Kimi Code on your Mac | The workhorse skill. Kimi also loads the skill text at startup. Neither agent adds the current host table to model context from the startup hook. |
+| Cursor or VS Code on your Mac | Verified npx installs include the skill and startup hook. Enable plugin hooks and, in Cursor, third-party imports. Live startup remains unverified in both. |
+| Grok Build or Kimi Code on your Mac | Grok listed the workhorse skill in a live session. Kimi’s verified npx install includes the startup skill file. Its live startup remains unverified. |
 | Your own terminal | `wh` by its full path, or linked into a folder on your `PATH`. Its runs show in the badge and band of a Claude Code session whose folder holds the repository or sits inside it. |
 | The workhorses | Spare Macs, Intel or Apple silicon, with Remote Login on, or Linux machines with sshd. `wh` reaches them over ssh and needs nothing installed on a Mac; see [Linux and WSL hosts](#linux-and-wsl-hosts) for Linux. `sync.sh` gives each one the tools you list. |
 

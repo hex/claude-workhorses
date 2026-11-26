@@ -45,6 +45,11 @@ the native component inventory. For Kimi it checks the startup skill. The check 
 temporary homes and npm cache on exit. It runs separately from `tests/run.sh` and does not open
 an agent session.
 
+Separate live checks covered Claude Code and interactive Copilot CLI. Grok Build listed the
+workhorse skill in a live session. The Codex files match version 2026.11.13, which was tested
+live. Only the installs were verified for Cursor, VS Code and Kimi. Cursor hit a usage limit,
+VS Code required an editor window, and the Kimi account was suspended.
+
 ## The policy in each agent
 
 ```bash
