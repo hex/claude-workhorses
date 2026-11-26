@@ -47,8 +47,12 @@ expect_load "a name with capitals or other characters is refused" \
 "Gamma g x86_64 6 16"
 
 expect_load "a name wh takes as a command is refused" \
-"workhorses: $config/hosts line 1: host name \"stop\" is a wh command (wh ps, wh stop); give the host another name" \
+"workhorses: $config/hosts line 1: host name \"stop\" is a wh command (wh ps, wh stop, wh hosts); give the host another name" \
 "stop g x86_64 6 16"
+
+expect_load "the name of wh hosts is refused too" \
+"workhorses: $config/hosts line 1: host name \"hosts\" is a wh command (wh ps, wh stop, wh hosts); give the host another name" \
+"hosts g x86_64 6 16"
 
 expect_load "a name used twice is refused" \
 "workhorses: $config/hosts line 2: host name \"gamma\" is already on line 1" \

@@ -80,7 +80,7 @@ load_hosts() {
       return 1
     fi
     case "$name" in
-      ps | stop) echo "$where host name \"$name\" is a wh command (wh ps, wh stop); give the host another name" >&2; return 1 ;;
+      ps | stop | hosts) echo "$where host name \"$name\" is a wh command (wh ps, wh stop, wh hosts); give the host another name" >&2; return 1 ;;
     esac
     for i in "${!host_names[@]}"; do
       if [ "${host_names[$i]}" = "$name" ]; then

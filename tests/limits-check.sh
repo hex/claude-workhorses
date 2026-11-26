@@ -143,7 +143,8 @@ expect_wh() {
 
 usage="usage: wh [host] [--timeout <limit>] -- <command...>  (no host: a free workhorse, by load; limit: 90s, 30m, 2h)
        wh ps          (the wh runs going from this machine)
-       wh stop <run>  (ends a run, its job on the host included; <run> is the number wh ps shows)"
+       wh stop <run>  (ends a run, its job on the host included; <run> is the number wh ps shows)
+       wh hosts       (each workhorse's load and the runs going on it; --json for one JSON object a host)"
 expect_wh "a limit that is not a whole number with s, m or h is refused" \
 "wh: --timeout takes a whole number of seconds, minutes or hours (90s, 30m, 2h), not \"5x\"" 2 --timeout 5x -- true
 expect_wh "a limit of zero is refused" \
@@ -156,6 +157,8 @@ expect_wh "a limit of a week gets as far as the hosts file" \
 "workhorses: no hosts file at $scratch/no-config/hosts; the README's First run section shows one" 2 --timeout 168h -- true
 expect_wh "--timeout with no value is a usage error" "$usage" 2 --timeout
 expect_wh "two hosts are a usage error" "$usage" 2 alpha beta -- true
+expect_wh "wh hosts gets as far as the hosts file" \
+"workhorses: no hosts file at $scratch/no-config/hosts; the README's First run section shows one" 2 hosts
 expect_wh "a good limit, before or after the host, gets as far as the hosts file" \
 "workhorses: no hosts file at $scratch/no-config/hosts; the README's First run section shows one" 2 alpha --timeout 30m -- true
 WORKHORSES_TAILSCALE_FIRST_COPY_MB=2.5 expect_wh "a Tailscale first-copy limit that is not a whole number is refused" \

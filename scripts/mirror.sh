@@ -164,10 +164,10 @@ choose_host() {
 
 # The probe's count of runs going on a host, run by the host's login shell: the locks in ~/work whose
 # pid file names a live process, and those without one, a run still copying, under an hour old. A lock
-# left by a run that died without its cleanup does not count. With list=1 set before it, it first
+# left by a run that died without its cleanup does not count. With wh_list=1 set before it, it first
 # prints each counted lock as a line of three tab-separated fields: "lock", the lock's name without
 # .lock, and its owner file with newlines and tabs made spaces (empty without an owner file).
-count_runs='n=0; for l in $(find ~/work -maxdepth 1 -name "*.lock" -type d 2>/dev/null); do if [ -f "$l/pid" ]; then kill -0 "$(cat "$l/pid")" 2>/dev/null || continue; elif [ -z "$(find "$l" -maxdepth 0 -mmin -60)" ]; then continue; fi; n=$((n + 1)); if [ "${list:-}" = 1 ]; then w=${l##*/}; printf "lock\t%s\t%s\n" "${w%.lock}" "$(if [ -f "$l/owner" ]; then tr "\n\t" "  " <"$l/owner"; fi)"; fi; done; echo $n'
+count_runs='n=0; for l in $(find ~/work -maxdepth 1 -name "*.lock" -type d 2>/dev/null); do if [ -f "$l/pid" ]; then kill -0 "$(cat "$l/pid")" 2>/dev/null || continue; elif [ -z "$(find "$l" -maxdepth 0 -mmin -60)" ]; then continue; fi; n=$((n + 1)); if [ "${wh_list:-}" = 1 ]; then w=${l##*/}; printf "lock\t%s\t%s\n" "${w%.lock}" "$(if [ -f "$l/owner" ]; then tr "\n\t" "  " <"$l/owner"; fi)"; fi; done; echo $n'
 
 # A host's load line, then its physical core count, run by the host's login shell. Linux counts
 # physical cores as the distinct core and socket pairs lscpu lists, since nproc counts each core's
@@ -746,6 +746,81 @@ list_runs() {
     "\(.pid)\t\(.host)\t\(age)\t\(.dir | split("/") | last)\(if .sub == "" then "" else "/" + .sub end)\t\(.command)"' <<<"$runs"
 }
 
+# Prints one JSON object for host $1 from its answer in folder $2 (as probe_hosts left it) to
+# load_and_cores followed by count_runs with wh_list=1: {host, state: "ok", load, cores, runs},
+# {host, state: "unreachable"}, or {host, state: "unexpected", answer} with the answer made plain text
+# and cut at 200 characters. A run's owner line, as run writes it ("<machine> pid <n> since
+# <date> <time>: <command>"), gives its machine, pid, start and command; any other owner text is the
+# command, and the rest is null. A run of this machine ($3) that the run log's live runs ($4, a JSON
+# array of start lines) list for this host has the folder it started from and can be stopped with wh
+# stop. What a host sends is data: control characters never reach the report.
+host_report() {
+  local host=$1 answers=$2 me=$3 mine=$4 state load cores
+  read -r _ state load cores _ <<<"$(probe_answer "$host" "$(cat "$answers/$host.status")" \
+    "$(sed -n '1,2p' "$answers/$host" | tr '\n' ' ')0 none ")"
+  jq -nc --arg host "$host" --arg state "$state" --arg load "$load" --arg cores "$cores" \
+    --rawfile answer "$answers/$host" --arg me "$me" --argjson mine "$mine" '
+    def plain: gsub("[\\t\\n\\r]"; " ") | gsub("[\\x{0}-\\x{1f}\\x{7f}-\\x{9f}]"; "") | sub("^ +"; "") | sub(" +$"; "");
+    def owned: "^(?<machine>[A-Za-z0-9._-]+) pid (?<pid>[0-9]{1,10}) since (?<since>[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}): (?<command>.*)$";
+    def run: (.owner | capture(owned)? // null) as $owner
+      | if $owner == null then {work, machine: null, pid: null, since: null, command: .owner, dir: null, stoppable: false}
+        else ($owner.pid | tonumber) as $pid
+          | (if $owner.machine == $me then first($mine[] | select(.pid == $pid and .host == $host)) // null else null end) as $start
+          | {work, machine: $owner.machine, pid: $pid, since: $owner.since, command: $owner.command,
+             dir: ($start.dir // null), stoppable: ($start != null)}
+        end;
+    def unexpected: {host: $host, state: "unexpected", answer: ($answer | plain | .[:200])};
+    ($answer | split("\n")[2:] | map(select(. != ""))) as $rest
+    | ($rest[:-1]) as $locks
+    | if $state == "unreachable" then {host: $host, state: "unreachable"}
+      elif $state != "ok" or (($rest[-1] // "") | test("^[0-9]+$") | not)
+        or ($rest[-1] | tonumber) != ($locks | length)
+        or any($locks[]; test("^lock\t[A-Za-z0-9._-]+\t[^\t]*$") | not) then unexpected
+      else {host: $host, state: "ok", load: ($load | tonumber), cores: ($cores | tonumber),
+        runs: ([$locks[] | split("\t") | {work: .[1], owner: (.[2] | plain)} | run] | sort_by(.work))}
+      end'
+}
+
+# Prints the human form of host_report's lines on stdin: a line per host, then a line per run going
+# there, indented. A run of this machine leads with the number wh stop takes and its folder under ~.
+render_hosts() {
+  jq -rs --arg home "$HOME" '
+    (map(.host | length) | max + 2) as $width
+    | def pad: . + (" " * ($width - length));
+    def two: tostring | if test("[.]") then (. + "00" | capture("^(?<n>[0-9]+[.][0-9]{2})").n) else . + ".00" end;
+    def tilde: if startswith($home + "/") then "~" + .[($home | length):] else . end;
+    def line: if .stoppable then "\(.pid)  \(.dir | tilde)  since \(.since[11:16])  \(.command)"
+      elif .machine != null then "from \(.machine) pid \(.pid) since \(.since): \(.command)"
+      elif .command == "" then "\(.work): no owner recorded"
+      else "\(.work): \(.command)" end;
+    .[] | (.host | pad) + if .state == "unreachable" then "unreachable"
+      elif .state == "unexpected" then "unexpected answer: \(.answer)"
+      else "load \(.load | two) of \(.cores) cores, "
+        + (.runs | length | if . == 0 then "idle" elif . == 1 then "1 run" else "\(.) runs" end)
+        + ([.runs[] | "\n" + (" " * $width) + line] | join(""))
+      end'
+}
+
+# Asks every workhorse at once, for at most 5 seconds (eris is reached over Tailscale away from home),
+# for its load and the runs going on it, and prints a report: a line per host and its runs, or with
+# --json one host_report object a line, in the hosts file's order. A host that cannot be reached is
+# part of the report, not a failure.
+list_hosts() {
+  if [ $# -gt 1 ] || { [ $# = 1 ] && [ "$1" != --json ]; }; then
+    echo "usage: wh hosts [--json]" >&2
+    exit 2
+  fi
+  local answers host mine reports
+  load_hosts || exit 2
+  all_hosts=("${host_names[@]}")
+  mine=$(live_runs | jq -sc .)
+  answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-hosts.XXXX")
+  probe_hosts 5 "$load_and_cores; wh_list=1; $count_runs" "$answers"
+  reports=$(for host in "${all_hosts[@]}"; do host_report "$host" "$answers" "$(hostname -s)" "$mine" || exit 1; done)
+  rm -rf "$answers"
+  if [ $# = 1 ]; then printf '%s\n' "$reports"; else render_hosts <<<"$reports"; fi
+}
+
 # The pids of every process under process $1, children first.
 descendants() {
   local child
@@ -782,5 +857,6 @@ case "${1:-}" in
   run) shift; run "$@" ;;
   ps) [ $# = 1 ] || { echo "usage: wh ps" >&2; exit 2; }; list_runs ;;
   stop) shift; stop_run "$@" ;;
+  hosts) shift; list_hosts "$@" ;;
   *) echo "usage: $0 run [--timeout <seconds>] <host|auto> <dir> <command...>" >&2; exit 2 ;;
 esac
