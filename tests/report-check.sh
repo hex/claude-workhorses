@@ -54,8 +54,12 @@ echo "ok   a start line names the session from CLAUDE_CODE_SESSION_ID only when 
 # mangled answer something that is not a probe's answer, and linuxy gives a Linux host's answer. The laptop's home is a scratch one too, its
 # run log naming three runs going, each one's mirror.sh a sleeping stand-in: two from the same folder
 # started by different Claude Code sessions (on xur and ikora, since a folder has one lock a host), and
-# one whose start line names no session.
+# one whose start line names no session. A run's lock on a host is named as run names it: the folder's
+# name and the first 8 hex digits of the SHA-1 of its path. On xur a decoy lock's owner names the xur
+# run's pid; twice lists one run's lock twice, and the run log has a start there with that same pid, as
+# when a pid is used again.
 me=$(hostname -s)
+work_of() { printf '%s-%s' "${1##*/}" "$(printf '%s' "$1" | shasum | cut -c1-8)"; }
 cores=$(/usr/sbin/sysctl -n hw.physicalcpu)
 laptop=$scratch/laptop
 config=$scratch/config
@@ -69,6 +73,7 @@ eris eris@192.168.1.98 arm64 10 16
 slow slow@slow.local x86_64 6 16
 odd odd@odd.local x86_64 6 16
 mangled mangled@mangled.local x86_64 6 16
+twice twice@twice.local x86_64 6 16
 linuxy linuxy@linuxy.local x86_64 6 16
 HOSTS
 cat >"$scratch/bin/ssh" <<'SSH'
@@ -82,6 +87,7 @@ case "$5" in
   slow@slow.local) exec sleep 30 ;;
   odd@odd.local) printf 'Last login: Thu Nov 26 \033[1mon ttys000\n%s\n' "$(printf 'x%.0s' $(seq 250))" ;;
   mangled@mangled.local) printf '{ 1.00 1.00 1.00 }\n6\nlock\tok-1\towner\nnot a lock line\n1\n' ;;
+  twice@twice.local) printf '0.50 0.40 0.30 1/215 1245\n6\n%s\n%s\n2\n' "$TWICE_LOCK" "$TWICE_LOCK" ;;
   linuxy@linuxy.local) printf '0.50 0.40 0.30 1/215 1245\n6\nlock\tlx-1\tother-mac pid 7 since 2026-11-26 08:00:00: cargo test\n1\n' ;;
   *) echo "fake ssh: unexpected arguments: $*" >&2; exit 99 ;;
 esac
@@ -104,21 +110,28 @@ batch=$laptop/proj/.claude/worktrees/ai-batch
     '{event: "start", id: "r2", at: 2, host: "ikora", dir: $dir, sub: "", command: "make lint", pid: $pid, session: "sess-B2"}'
   jq -nc --argjson pid "$stand_in_c" --arg dir "$laptop/proj" \
     '{event: "start", id: "r3", at: 3, host: "ikora", dir: $dir, sub: "", command: "make docs", pid: $pid}'
+  jq -nc --argjson pid "$stand_in" --arg dir "$batch" \
+    '{event: "start", id: "r4", at: 4, host: "twice", dir: $dir, sub: "", command: "make twice", pid: $pid, session: "sess-D4"}'
 } >"$laptop/.local/state/workhorse/runs.jsonl"
+batch_work=$(work_of "$batch")
+proj_work=$(work_of "$laptop/proj")
 locks=$scratch/hosts/ikora/work
-mkdir "$locks/ai-batch-7f7532ed.lock" "$locks/proj-5e5e5e5e.lock"
-for lock in ai-batch-7f7532ed proj-5e5e5e5e; do echo $$ >"$locks/$lock.lock/pid"; done
-echo "$me pid $stand_in_b since 2026-11-26 15:54:00: make lint" >"$locks/ai-batch-7f7532ed.lock/owner"
-echo "$me pid $stand_in_c since 2026-11-26 15:55:00: make docs" >"$locks/proj-5e5e5e5e.lock/owner"
+mkdir "$locks/$batch_work.lock" "$locks/$proj_work.lock"
+for lock in "$batch_work" "$proj_work"; do echo $$ >"$locks/$lock.lock/pid"; done
+echo "$me pid $stand_in_b since 2026-11-26 15:54:00: make lint" >"$locks/$batch_work.lock/owner"
+echo "$me pid $stand_in_c since 2026-11-26 15:55:00: make docs" >"$locks/$proj_work.lock/owner"
 locks=$scratch/hosts/xur/work
-mkdir "$locks/ai-batch-7f7532ed.lock" "$locks/other-1234abcd.lock" "$locks/bare-00000000.lock" "$locks/esc-11111111.lock"
-for lock in ai-batch-7f7532ed other-1234abcd esc-11111111; do echo $$ >"$locks/$lock.lock/pid"; done
-echo "$me pid $stand_in since 2026-11-26 15:53:42: gtimeout 45m make test" >"$locks/ai-batch-7f7532ed.lock/owner"
+mkdir "$locks/$batch_work.lock" "$locks/other-1234abcd.lock" "$locks/bare-00000000.lock" "$locks/esc-11111111.lock" "$locks/decoy-22222222.lock"
+for lock in "$batch_work" other-1234abcd esc-11111111 decoy-22222222; do echo $$ >"$locks/$lock.lock/pid"; done
+echo "$me pid $stand_in since 2026-11-26 15:53:42: gtimeout 45m make test" >"$locks/$batch_work.lock/owner"
+echo "$me pid $stand_in since 2026-11-26 15:53:42: harmless looking" >"$locks/decoy-22222222.lock/owner"
 printf 'other-mac pid 412 since 2026-11-26 09:05:01: make\ttest\n' >"$locks/other-1234abcd.lock/owner"
 printf '%s pid 999 since 2026-11-26 10:00:00: printf \033[31mred\033[0m \302\233done\r\n' "$me" >"$locks/esc-11111111.lock/owner"
 
+twice_lock=$(printf 'lock\t%s\t%s pid %s since 2026-11-26 16:00:00: make twice' "$batch_work" "$me" "$stand_in")
+
 wh() {
-  HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts PATH=$scratch/bin:$PATH \
+  HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts TWICE_LOCK=$twice_lock PATH=$scratch/bin:$PATH \
     "$BASH" "$here/../bin/wh" "$@"
 }
 
@@ -133,32 +146,38 @@ loads=$(jq -r 'select(.state == "ok") | .load | type' "$scratch/out" | sort -u)
 got=$(jq -c 'if .host == "cayde" or .host == "xur" or .host == "ikora" then .load = "L" else . end' "$scratch/out")
 want="{\"host\":\"cayde\",\"state\":\"ok\",\"load\":\"L\",\"cores\":$cores,\"runs\":[]}
 {\"host\":\"xur\",\"state\":\"ok\",\"load\":\"L\",\"cores\":$cores,\"runs\":[\
-{\"work\":\"ai-batch-7f7532ed\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 15:53:42\",\"command\":\"gtimeout 45m make test\",\"dir\":\"$batch\",\"session\":\"sess-A1\",\"stoppable\":true},\
+{\"work\":\"$batch_work\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 15:53:42\",\"command\":\"gtimeout 45m make test\",\"dir\":\"$batch\",\"session\":\"sess-A1\",\"stoppable\":true},\
 {\"work\":\"bare-00000000\",\"machine\":null,\"pid\":null,\"since\":null,\"command\":\"\",\"dir\":null,\"session\":null,\"stoppable\":false},\
+{\"work\":\"decoy-22222222\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 15:53:42\",\"command\":\"harmless looking\",\"dir\":null,\"session\":null,\"stoppable\":false},\
 {\"work\":\"esc-11111111\",\"machine\":\"$me\",\"pid\":999,\"since\":\"2026-11-26 10:00:00\",\"command\":\"printf [31mred[0m done\",\"dir\":null,\"session\":null,\"stoppable\":false},\
 {\"work\":\"other-1234abcd\",\"machine\":\"other-mac\",\"pid\":412,\"since\":\"2026-11-26 09:05:01\",\"command\":\"make test\",\"dir\":null,\"session\":null,\"stoppable\":false}]}
 {\"host\":\"ikora\",\"state\":\"ok\",\"load\":\"L\",\"cores\":$cores,\"runs\":[\
-{\"work\":\"ai-batch-7f7532ed\",\"machine\":\"$me\",\"pid\":$stand_in_b,\"since\":\"2026-11-26 15:54:00\",\"command\":\"make lint\",\"dir\":\"$batch\",\"session\":\"sess-B2\",\"stoppable\":true},\
-{\"work\":\"proj-5e5e5e5e\",\"machine\":\"$me\",\"pid\":$stand_in_c,\"since\":\"2026-11-26 15:55:00\",\"command\":\"make docs\",\"dir\":\"$laptop/proj\",\"session\":null,\"stoppable\":true}]}
+{\"work\":\"$batch_work\",\"machine\":\"$me\",\"pid\":$stand_in_b,\"since\":\"2026-11-26 15:54:00\",\"command\":\"make lint\",\"dir\":\"$batch\",\"session\":\"sess-B2\",\"stoppable\":true},\
+{\"work\":\"$proj_work\",\"machine\":\"$me\",\"pid\":$stand_in_c,\"since\":\"2026-11-26 15:55:00\",\"command\":\"make docs\",\"dir\":\"$laptop/proj\",\"session\":null,\"stoppable\":true}]}
 {\"host\":\"eris\",\"state\":\"unreachable\"}
 {\"host\":\"slow\",\"state\":\"unreachable\"}
 {\"host\":\"odd\",\"state\":\"unexpected\",\"answer\":\"Last login: Thu Nov 26 [1mon ttys000 $(printf 'x%.0s' $(seq 163))\"}
 {\"host\":\"mangled\",\"state\":\"unexpected\",\"answer\":\"{ 1.00 1.00 1.00 } 6 lock ok-1 owner not a lock line 1\"}
+{\"host\":\"twice\",\"state\":\"ok\",\"load\":0.50,\"cores\":6,\"runs\":[\
+{\"work\":\"$batch_work\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 16:00:00\",\"command\":\"make twice\",\"dir\":\"$batch\",\"session\":\"sess-D4\",\"stoppable\":true},\
+{\"work\":\"$batch_work\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 16:00:00\",\"command\":\"make twice\",\"dir\":null,\"session\":null,\"stoppable\":false}]}
 {\"host\":\"linuxy\",\"state\":\"ok\",\"load\":0.50,\"cores\":6,\"runs\":[{\"work\":\"lx-1\",\"machine\":\"other-mac\",\"pid\":7,\"since\":\"2026-11-26 08:00:00\",\"command\":\"cargo test\",\"dir\":null,\"session\":null,\"stoppable\":false}]}"
 [ "$got" = "$want" ] || fail "wh hosts --json: wanted
 $want
 got
 $got"
 echo "ok   wh hosts --json reports each host in file order: its load and runs, unreachable, or its answer made plain text"
+echo "ok   only the lock named for a run's folder gets its folder, session and Stop, once a pid"
 
 code=0
 wh hosts >"$scratch/out" 2>"$scratch/err" || code=$?
 [ "$code" = 0 ] || fail "wh hosts exited $code: $(cat "$scratch/err")"
 got=$(sed -E '/^(cayde|xur|ikora) /s/load [0-9]+[.][0-9]{2} of/load L of/' "$scratch/out")
 want="cayde    load L of $cores cores, idle
-xur      load L of $cores cores, 4 runs
+xur      load L of $cores cores, 5 runs
          $stand_in  ~/proj/.claude/worktrees/ai-batch  since 15:53  gtimeout 45m make test
          bare-00000000: no owner recorded
+         from $me pid $stand_in since 2026-11-26 15:53:42: harmless looking
          from $me pid 999 since 2026-11-26 10:00:00: printf [31mred[0m done
          from other-mac pid 412 since 2026-11-26 09:05:01: make test
 ikora    load L of $cores cores, 2 runs
@@ -168,6 +187,9 @@ eris     unreachable
 slow     unreachable
 odd      unexpected answer: Last login: Thu Nov 26 [1mon ttys000 $(printf 'x%.0s' $(seq 163))
 mangled  unexpected answer: { 1.00 1.00 1.00 } 6 lock ok-1 owner not a lock line 1
+twice    load 0.50 of 6 cores, 2 runs
+         $stand_in  ~/proj/.claude/worktrees/ai-batch  since 16:00  make twice
+         from $me pid $stand_in since 2026-11-26 16:00:00: make twice
 linuxy   load 0.50 of 6 cores, 1 run
          from other-mac pid 7 since 2026-11-26 08:00:00: cargo test"
 [ "$got" = "$want" ] || fail "wh hosts: wanted

@@ -756,8 +756,10 @@ list_runs() {
 # and cut at 200 characters. A run's owner line, as run writes it ("<machine> pid <n> since
 # <date> <time>: <command>"), gives its machine, pid, start and command; any other owner text is the
 # command, and the rest is null. A run of this machine ($3) that the run log's live runs ($4, a JSON
-# array of start lines) list for this host has the folder it started from, the Claude Code session
-# that started it (null when its start line names none) and can be stopped with wh stop. What a host sends is data: control characters never reach the report.
+# array of start lines, each with the name of its folder's work copy added as work) list for this host
+# under this lock's name has the folder it started from, the Claude Code session that started it (null
+# when its start line names none) and can be stopped with wh stop; only the first such run of a pid
+# does, so a host that lists a lock twice gets one Stop. What a host sends is data: control characters never reach the report.
 host_report() {
   local host=$1 answers=$2 me=$3 mine=$4 state load cores
   read -r _ state load cores _ <<<"$(probe_answer "$host" "$(cat "$answers/$host.status")" \
@@ -769,7 +771,8 @@ host_report() {
     def run: (.owner | capture(owned)? // null) as $owner
       | if $owner == null then {work, machine: null, pid: null, since: null, command: .owner, dir: null, session: null, stoppable: false}
         else ($owner.pid | tonumber) as $pid
-          | (if $owner.machine == $me then first($mine[] | select(.pid == $pid and .host == $host)) // null else null end) as $start
+          | .work as $work
+          | (if $owner.machine == $me then first($mine[] | select(.pid == $pid and .host == $host and .work == $work)) // null else null end) as $start
           | {work, machine: $owner.machine, pid: $pid, since: $owner.since, command: $owner.command,
              dir: ($start.dir // null),
              session: ($start.session | if type == "string" and test("^[A-Za-z0-9-]{1,64}$") then . else null end),
@@ -783,7 +786,9 @@ host_report() {
         or ($rest[-1] | tonumber) != ($locks | length)
         or any($locks[]; test("^lock\t[A-Za-z0-9._-]+\t[^\t]*$") | not) then unexpected
       else {host: $host, state: "ok", load: ($load | tonumber), cores: ($cores | tonumber),
-        runs: ([$locks[] | split("\t") | {work: .[1], owner: (.[2] | plain)} | run] | sort_by(.work))}
+        runs: ([$locks[] | split("\t") | {work: .[1], owner: (.[2] | plain)} | run] | sort_by(.work)
+          | reduce .[] as $run ([]; . + [if $run.stoppable and any(.[]; .stoppable and .pid == $run.pid)
+              then $run + {dir: null, session: null, stoppable: false} else $run end]))}
       end'
 }
 
@@ -819,7 +824,9 @@ list_hosts() {
   local answers host mine reports
   load_hosts || exit 2
   all_hosts=("${host_names[@]}")
-  mine=$(live_runs | jq -sc .)
+  mine=$(live_runs | while IFS= read -r start; do
+    jq -c --arg work "$(work_name "$(jq -r .dir <<<"$start")")" '.work = ($work | ltrimstr("work/"))' <<<"$start"
+  done | jq -sc .)
   answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-hosts.XXXX")
   probe_hosts 5 "$load_and_cores; wh_list=1; $count_runs" "$answers"
   reports=$(for host in "${all_hosts[@]}"; do host_report "$host" "$answers" "$(hostname -s)" "$mine" || exit 1; done)
