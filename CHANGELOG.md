@@ -4,7 +4,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
-## Unreleased
+## 2026.11.10
 
 ### Added
 - `wh ps` lists the runs going from this machine and `wh stop <run>` ends one: its job and everything the job started stop on the host, the copy's lock goes, the run's `wh` exits 143 and the run log records the end as stopped.
