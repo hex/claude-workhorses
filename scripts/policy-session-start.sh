@@ -3,5 +3,5 @@
 # ABOUTME: The context is the same policy that the plain-text hook prints.
 set -euo pipefail
 
-policy=$(bash "$(dirname "$0")/policy.sh")
-jq -n --arg text "$policy" '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $text}}'
+here=$(dirname "$0")
+bash "$here/policy.sh" | jq -Rsc -L "$here/lib" 'include "session-start"; rtrimstr("\n") | session_start'

@@ -9,6 +9,10 @@ description: Run a job on one of the user's workhorses, the spare Macs and Linux
 level with this machine, `.git` included. This machine stays free. A workhorse can be slower per core,
 so offload to free this machine, never to go faster. The policy printed at session start lists each
 host with its architecture, cores and RAM, and the tools each host had at its last sync.
+If the policy exceeds its startup budget, run the command in the notice before choosing a host.
+From the plugin root, `bash scripts/policy.sh --full` shows all validated tool versions and the
+user's full notes. The startup view drops apt, brew and port build strings. The local record for
+each host is in the manifests directory named in the policy.
 
 Each run adds a few seconds before the command starts: about 1.5 s on a small repo and 4 s on one of
 70,000 files (5 to 6 s with every laptop core busy).
@@ -42,7 +46,7 @@ wh alpha --timeout 20m -- cargo test   # a named host
   `mise` recipe runs as `wh --timeout 30m -- mise exec node@26 -- npm test`. On a Linux host, the
   first version of each tool on its `mise` line is on the `PATH` directly: `node`, `go`, `ruby`. The
   policy counts `apt` packages named `lib*` without naming them, so for a job that needs a particular
-  library, check on the host first, `wh alpha --timeout 90s -- dpkg-query -W libssl-dev`, or ask the
+  library, check the full policy or query the host, `wh alpha --timeout 90s -- dpkg-query -W libssl-dev`, or ask the
   user to add it.
 - Run it from a background shell (`run_in_background: true` in Claude Code) when it takes minutes, and wait for the
   exit notification instead of polling.
@@ -141,7 +145,7 @@ tell the user.
 ## First run in a repo
 
 The copy keeps installed dependencies between runs, but `wh` never carries `node_modules/`,
-`target/`, `.venv/`, `venv/`, `Library/`, `.build/`, `.gradle/`, `DerivedData/` or `__pycache__/`.
+`target/`, `.venv/`, `venv/`, `Library/`, `.build/`, `.gradle/`, `DerivedData/` `__pycache__/`, `.DS_Store` or `.cs/`.
 With no host named, a run can land on a host that has no copy yet, whenever the hosts that hold one
 are half busy or more; `wh` then says `first copy there`. Put the install in the same run as the
 job, where it costs little once the dependencies are there:

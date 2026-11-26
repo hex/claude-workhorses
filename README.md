@@ -210,8 +210,8 @@ how to make them again.
 At the start of every session, a hook gives Claude the offload policy: when to offload, when to stay
 local, a table of your hosts with their ssh target, architecture, cores and RAM, and the tools each
 host had at its last sync. It lists the tools every host has once, then what each host has on its own,
-with its macOS or Linux release and sync date. Each recipe gets one line, its tools and versions after
-it: `- mise: node 24.22.3 26.13.1, go 1.27.4`. It counts the apt packages whose name starts with
+with its macOS or Linux release and sync date. Each recipe gets one line. For apt, brew and port,
+the startup view lists package names and marks missing packages. Other recipes keep their versions: `- mise: node 24.22.3 26.13.1, go 1.27.4`. It counts the apt packages whose name starts with
 `lib` as libraries and names only the missing ones. The hook reads only files on your machine; it never
 contacts a host. With no hosts file, or one it cannot use, it says so in one line instead.
 
@@ -222,7 +222,11 @@ version under a recipe shaped as a recipe name, presents them as data, and count
 recipe's line stops at 2000 characters and a host's list at 6000, each saying how much it cut.
 `sync.sh status` marks the end of a run's log as the host's text, and `sync.sh diff` shows a host's
 lines in the same shape. For what no record shows (no code signing, a tool that needs a license),
-write `~/.config/workhorses/notes`. The hook appends it as written. The `workhorse` skill
+write `~/.config/workhorses/notes`. The hook includes the notes in full when the session-start
+JSON fits in 8,500 bytes. Otherwise it returns a short notice with the absolute command to read
+the full policy. From the plugin directory, run `bash scripts/policy.sh --full` for all validated
+tool versions and the complete notes. The last sync records also remain in the manifests directory
+named in the policy. The `workhorse` skill
 covers how to run `wh` well: exit codes, first runs, git in the copy, and the steps for adding a tool.
 
 ### Provisioning

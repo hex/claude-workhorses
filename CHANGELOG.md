@@ -11,6 +11,9 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   VS Code, Grok Build and Kimi Code. Cursor and VS Code can read the startup policy. Kimi loads
   the workhorse skill at session start.
 
+### Fixed
+- The startup policy fits four package inventories and 1.65 KB of notes within 8,500 JSON bytes. Larger policies give the command to read the full text.
+
 ## 2026.11.13
 
 ### Added

@@ -4,7 +4,9 @@
 set -euo pipefail
 
 script="$(dirname "$0")/policy.sh"
-if ! policy=$(bash "$script" 2>&1); then
+if ! policy=$(bash "$script" 2>&1 && printf .); then
   policy="workhorses: $script failed, so the workhorse policy is missing: $policy"
+else
+  policy=${policy%$'\n.'}
 fi
 jq -n --arg text "$policy" '{additionalContext: $text}'

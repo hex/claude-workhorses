@@ -4,7 +4,9 @@
 set -uo pipefail
 
 # A failing policy script must not leave the session without a word, so its error becomes the step, as in pi and OpenCode.
-if ! policy=$(bash "$(dirname "$0")/policy.sh" 2>&1); then
+if ! policy=$(bash "$(dirname "$0")/policy.sh" 2>&1 && printf .); then
   policy="workhorses: $(dirname "$0")/policy.sh failed, so the workhorse policy is missing: $policy"
+else
+  policy=${policy%$'\n.'}
 fi
 jq -n --arg text "$policy" '{injectSteps: [{systemMessage: {systemMessage: $text}}]}'
