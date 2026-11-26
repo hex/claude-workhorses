@@ -100,7 +100,7 @@ load_tools() {
     words=()
     read -r -a words <<<"$line" || true
     [ ${#words[@]} -gt 0 ] || continue
-    where="claude-workhorses: $file line $number:"
+    where="workhorses: $file line $number:"
     recipe=${words[0]}
     if ! [[ $recipe =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
       echo "$where recipe \"$recipe\" is not lower-case letters, digits and dashes" >&2
@@ -158,7 +158,7 @@ tool_targets() {
   [ -z "${tool_arch[i]}" ] || [ "${tool_arch[i]}" = "${host_arch[index]}" ] || return 1
   if [ -n "${tool_os[i]}" ]; then
     if [ -z "${host_os[index]:-}" ]; then
-      echo "claude-workhorses: the OS $host runs is not known, so the @os=${tool_os[i]} filter of ${tool_recipe[i]} cannot be checked" >&2
+      echo "workhorses: the OS $host runs is not known, so the @os=${tool_os[i]} filter of ${tool_recipe[i]} cannot be checked" >&2
       return 1
     fi
     [ "${tool_os[i]}" = "${host_os[index]}" ] || return 1

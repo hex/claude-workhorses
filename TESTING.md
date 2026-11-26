@@ -67,7 +67,7 @@ hosts file of the check's own, `wh` blocks the first and runs the second, whose 
 address, or one ssh cannot reach on it, prints a `skip:` line for the first two, and a hosts file
 target that already goes through Tailscale one for the third. The check removes every copy it made
 under `~/work`. It works in throwaway folders and exits 1 on the first mismatch. Point it at a test
-hosts file with `CLAUDE_WORKHORSES_CONFIG_DIR` to keep your own untouched.
+hosts file with `WORKHORSES_CONFIG_DIR` to keep your own untouched.
 
 ## Upgrading a provisioned workhorse
 
@@ -75,7 +75,7 @@ For a host the scripts before recipes provisioned (`setup.sh`, `tools.sh`, `unit
 check compares the host before and after the new `sync.sh`, read both times by the same old
 `manifest.sh`. Run it on one host first. `alpha` and `alpha-mini` stand for its name and ssh target.
 
-1. Snapshot the host with the old scripts, right after an old sync, so the installers' own updates
+1. Snapshot the host with the old scripts, which read `CLAUDE_WORKHORSES_CONFIG_DIR`, right after an old sync, so the installers' own updates
    move as little as possible between the two snapshots:
 
    ```bash
@@ -92,8 +92,8 @@ check compares the host before and after the new `sync.sh`, read both times by t
    old `setup.sh`, `tools.sh` and `unity.sh`:
 
    ```bash
-   CLAUDE_WORKHORSES_CONFIG_DIR=<new folder> bash provision/sync.sh alpha
-   CLAUDE_WORKHORSES_CONFIG_DIR=<new folder> bash provision/sync.sh status alpha   # until exit=0
+   WORKHORSES_CONFIG_DIR=<new folder> bash provision/sync.sh alpha
+   WORKHORSES_CONFIG_DIR=<new folder> bash provision/sync.sh status alpha   # until exit=0
    ```
 
 3. Compare, with the same old `manifest.sh`:

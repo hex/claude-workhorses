@@ -1,4 +1,4 @@
-# The claude-workhorses hosts file: copy it to ~/.config/claude-workhorses/hosts and edit it.
+# The workhorses hosts file: copy it to ~/.config/workhorses/hosts and edit it.
 # One host per line: name, ssh target, arch, cores, RAM in GB, then any host options.
 # - name: lower-case letters, digits and dashes, and not ps or stop; wh and sync.sh take it as the host's name.
 # - ssh target: an alias from ~/.ssh/config or user@host. ~/.ssh/config decides the route.

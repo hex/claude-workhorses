@@ -55,7 +55,7 @@ echo "ok   the macOS-only recipes refuse a Linux host, naming the filter, before
 
 # On a Mac, mise comes from MacPorts and a line only installs its versions: PATH and defaults stay as they are.
 expect_install "mise on a Mac" "" 0 "mise install node@26" mise Darwin node@26
-[ ! -e "$HOME/.local/share/claude-workhorses/env.d/mise.sh" ] || fail "mise on a Mac wrote an env snippet: $(cat "$HOME/.local/share/claude-workhorses/env.d/mise.sh")"
+[ ! -e "$HOME/.local/share/workhorses/env.d/mise.sh" ] || fail "mise on a Mac wrote an env snippet: $(cat "$HOME/.local/share/workhorses/env.d/mise.sh")"
 rm "$bin/mise"
 expect_install "mise on a Mac without mise" "mise needs mise: list a recipe that installs it (port mise, say) before it" 1 "" mise Darwin node@26
 echo "ok   on a Mac, mise only installs the versions, and a missing mise names the line that brings it"
@@ -79,7 +79,7 @@ cp "$here"/../provision/host/* "$HOME/workhorse/"
 : >"$HOME/workhorse/options"
 (cd "$HOME/workhorse" && RECIPES_CHECK_OS=Linux SHELL=/bin/bash PATH=$path /bin/bash ./apply.sh run >run.log 2>&1 3</dev/null) || true
 [ "$(cat "$HOME/workhorse/run.status")" = 0 ] || fail "apply.sh with no lines ended '$(cat "$HOME/workhorse/run.status")': $(cat "$HOME/workhorse/run.log")"
-shims=$(env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/sh -c '. "$1"; printf "%s\n" "$PATH"' _ "$HOME/.local/share/claude-workhorses/env.sh")
+shims=$(env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/sh -c '. "$1"; printf "%s\n" "$PATH"' _ "$HOME/.local/share/workhorses/env.sh")
 [ "$shims" = "$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.local/share/mise/shims:$HOME/.bun/bin:/usr/bin:/bin" ] ||
   fail "with env.sh as apply.sh builds it, PATH is '$shims'"
 echo "ok   mise's shims come ahead of the system's folders, behind ~/.local/bin and the folders of snippets that sort after mise's"

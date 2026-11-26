@@ -13,9 +13,9 @@ const policyScript = join(root, "scripts", "policy.sh");
 function readSkill() {
   const text = readFileSync(skillPath, "utf8");
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
-  if (!match) throw new Error(`claude-workhorses: no frontmatter in ${skillPath}`);
+  if (!match) throw new Error(`workhorses: no frontmatter in ${skillPath}`);
   const field = (name) => match[1].match(new RegExp(`^${name}: (.*?)\r?$`, "m"))?.[1];
-  return { id: "claude-workhorses-workhorse", name: field("name"), description: field("description"), path: skillPath, content: text.slice(match[0].length) };
+  return { id: "workhorses-workhorse", name: field("name"), description: field("description"), path: skillPath, content: text.slice(match[0].length) };
 }
 
 // A failing script must not stop the session, so its error becomes the text, where the model can report it.
@@ -23,12 +23,12 @@ async function readPolicy() {
   try {
     return (await promisify(execFile)("bash", [policyScript], { timeout: 10_000 })).stdout;
   } catch (error) {
-    return `claude-workhorses: ${policyScript} failed, so the workhorse policy is missing: ${error.message}`;
+    return `workhorses: ${policyScript} failed, so the workhorse policy is missing: ${error.message}`;
   }
 }
 
 export default {
-  id: "claude-workhorses",
+  id: "workhorses",
   async setup(ctx) {
     const skill = readSkill();
     await ctx.skill.transform((editor) => {

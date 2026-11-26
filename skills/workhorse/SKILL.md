@@ -1,6 +1,6 @@
 ---
 name: workhorse
-description: Run a job on one of the user's workhorses, the spare Macs and Linux machines in the claude-workhorses hosts file, against a verified copy of the current git repo, with the `wh` command. Use it when the user names a workhorse or one of its hosts, or asks to offload, and on your own when you are about to run a full test suite, a full build or another job that takes minutes in a git repo, or when this machine is already busy. For git repos, use this instead of claude-tmux:remote-tests. Not for a single test file or a job that finishes in under 2 minutes.
+description: Run a job on one of the user's workhorses, the spare Macs and Linux machines in the workhorses hosts file, against a verified copy of the current git repo, with the `wh` command. Use it when the user names a workhorse or one of its hosts, or asks to offload, and on your own when you are about to run a full test suite, a full build or another job that takes minutes in a git repo, or when this machine is already busy. For git repos, use this instead of claude-tmux:remote-tests. Not for a single test file or a job that finishes in under 2 minutes.
 ---
 
 # Workhorse
@@ -69,7 +69,7 @@ session start.
 
 When the job needs a tool the hosts lack or have in too old a version (a runtime, a browser, a
 command-line tool), do not run it locally. Each host gets what the user's tools file lists,
-`~/.config/claude-workhorses/tools` (or `$CLAUDE_WORKHORSES_CONFIG_DIR/tools`): one recipe and its
+`~/.config/workhorses/tools` (or `$WORKHORSES_CONFIG_DIR/tools`): one recipe and its
 arguments per line, then optional filters, `@arch=x86_64` or `arm64`, `@os=macos` or `linux`, and
 `@hosts=alpha,beta`. Give a recipe that exists for one system the matching `@os=`.
 
@@ -79,7 +79,7 @@ arguments per line, then optional filters, `@arch=x86_64` or `arm64`, `@os=macos
 2. Ask the user with your tool for asking the user (`AskUserQuestion` in Claude Code), never in
    prose, before sync.sh runs. The question shows the exact line, and the recommended option appends
    it and syncs the hosts it targets. When no built-in recipe fits, write a user recipe instead: an
-   executable in `~/.config/claude-workhorses/recipes/<name>`, owned by the user, writable only by
+   executable in `~/.config/workhorses/recipes/<name>`, owned by the user, writable only by
    them, that answers `install [args]` and `probe [args]` (probe prints `<name> <version>` lines and
    exits 0). Show its full text in the question. A recipe that runs `sudo -A` must carry the
    line `# needs: sudo`, and the question must say it runs as root on every host it targets.

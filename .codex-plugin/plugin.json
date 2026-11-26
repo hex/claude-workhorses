@@ -1,13 +1,13 @@
 {
-  "name": "claude-workhorses",
+  "name": "workhorses",
   "version": "2026.11.10",
   "description": "Runs long jobs on your spare Macs. wh copies the current git repository to a workhorse, .git included, and runs the command there. The agent reads an offload policy, a table of your hosts and each host's tools at session start, and sync.sh installs the tools you list on each workhorse.",
   "author": {
     "name": "hex",
     "url": "https://github.com/hex"
   },
-  "homepage": "https://github.com/hex/claude-workhorses",
-  "repository": "https://github.com/hex/claude-workhorses",
+  "homepage": "https://github.com/hex/workhorses",
+  "repository": "https://github.com/hex/workhorses",
   "license": "MIT",
   "skills": "./skills/",
   "hooks": "./hooks/codex-hooks.json",

@@ -18,4 +18,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PRIVATE_SYNC_TOKEN }}
           TAG: ${{ github.event.release.tag_name }}
-        run: gh api -X POST repos/hex/claude-marketplace-private/actions/workflows/sync.yml/dispatches -f ref=main -f "inputs[release]=claude-workhorses@${TAG}"
+        run: gh api -X POST repos/hex/claude-marketplace-private/actions/workflows/sync.yml/dispatches -f ref=main -f "inputs[release]=workhorses@${TAG}"

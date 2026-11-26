@@ -4,6 +4,18 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Changed
+- The plugin is now `workhorses`, and its repository `hex/workhorses`: `claude-` names are Anthropic's, and the plugin serves five agents. Every name moved, with no fallback to the old ones:
+  - the config folder `~/.config/claude-workhorses` is now `~/.config/workhorses`;
+  - `CLAUDE_WORKHORSES_CONFIG_DIR`, `CLAUDE_WORKHORSES_STATE_DIR` and `CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB` are now `WORKHORSES_CONFIG_DIR`, `WORKHORSES_STATE_DIR` and `WORKHORSES_TAILSCALE_FIRST_COPY_MB`;
+  - the stored host records move from `~/.local/state/claude-workhorses` to `~/.local/state/workhorses`;
+  - on each workhorse, `~/.local/share/claude-workhorses` is now `~/.local/share/workhorses`, loaded by a line marked `# workhorses`;
+  - the setup command is `/workhorses:setup`.
+
+  To move: uninstall `claude-workhorses` and install `workhorses` in each agent, as Install shows; rename the config folder and the state folder; rename the variables you set. On each workhorse, delete `~/.local/share/claude-workhorses` and the line marked `# claude-workhorses` in `~/.zshenv` (macOS) or `~/.bashrc` (Linux), then run `provision/sync.sh` for it.
+
 ## 2026.11.10
 
 ### Added

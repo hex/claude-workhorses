@@ -7,20 +7,20 @@ here=$(cd "$(dirname "$0")" && pwd -P)
 root=$(cd "$here/.." && pwd -P)
 config=$(mktemp -d "${TMPDIR:-/tmp}/policy-check.XXXX")
 trap 'rm -rf "$config"' EXIT
-export CLAUDE_WORKHORSES_CONFIG_DIR=$config
+export WORKHORSES_CONFIG_DIR=$config
 state=$config/state
-export CLAUDE_WORKHORSES_STATE_DIR=$state
+export WORKHORSES_STATE_DIR=$state
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 
 out=$("$BASH" "$root/scripts/policy.sh")
-[ "$out" = "claude-workhorses: no workhorses are configured (no hosts file at $config/hosts), so wh cannot run; the plugin's README shows how to add one." ] ||
+[ "$out" = "workhorses: no workhorses are configured (no hosts file at $config/hosts), so wh cannot run; the plugin's README shows how to add one." ] ||
   fail "a missing hosts file: got '$out'"
 echo "ok   with no hosts file, one line says so"
 
 printf '%s\n' "gamma g x86_64 6 16 dock dock" >"$config/hosts"
 out=$("$BASH" "$root/scripts/policy.sh")
-[ "$out" = "claude-workhorses: the hosts file is not usable, so wh cannot run: claude-workhorses: $config/hosts line 1: option \"dock\" for gamma is given twice" ] ||
+[ "$out" = "workhorses: the hosts file is not usable, so wh cannot run: workhorses: $config/hosts line 1: option \"dock\" for gamma is given twice" ] ||
   fail "a bad hosts file: got '$out'"
 echo "ok   with a bad hosts file, one line names the problem"
 
@@ -171,7 +171,7 @@ rm "$state/manifests/delta"
 
 printf 'port -rf\n' >"$config/tools"
 out=$("$BASH" "$root/scripts/policy.sh")
-grep -qxF "The tools file is not usable, so the tools section is left out: claude-workhorses: $config/tools line 1: argument \"-rf\" for port is not letters, digits and @._/+- (and does not start with -)" <<<"$out" ||
+grep -qxF "The tools file is not usable, so the tools section is left out: workhorses: $config/tools line 1: argument \"-rf\" for port is not letters, digits and @._/+- (and does not start with -)" <<<"$out" ||
   fail "a bad tools file: got '$out'"
 echo "ok   a bad tools file is named in one line"
 

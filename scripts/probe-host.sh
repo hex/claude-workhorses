@@ -11,12 +11,12 @@ lib=$(cd "$(dirname "$0")/lib" && pwd -P)
 
 target=${1:?usage: probe-host.sh <ssh target> [name]}
 if ! valid_ssh_target "$target"; then
-  echo "claude-workhorses: ssh target \"$target\" is not an ssh alias or user@host" >&2
+  echo "workhorses: ssh target \"$target\" is not an ssh alias or user@host" >&2
   exit 1
 fi
 name=${2:-$(printf '%s' "${target#*@}" | cut -d. -f1 | tr 'A-Z_' 'a-z-')}
 if ! valid_host_name "$name"; then
-  echo "claude-workhorses: host name \"$name\" is not lower-case letters, digits and dashes" >&2
+  echo "workhorses: host name \"$name\" is not lower-case letters, digits and dashes" >&2
   exit 1
 fi
 
@@ -24,12 +24,12 @@ fi
 # hyperthreads too), and memory as MemTotal, which /proc/meminfo gives in kB.
 answer=$(run_bounded 20 ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" \
   'uname -m; if [ "$(uname -s)" = Darwin ]; then /usr/sbin/sysctl -n hw.physicalcpu hw.memsize; else lscpu -p=core,socket | grep -v "^#" | sort -u | wc -l; echo $(($(sed -n "s/^MemTotal: *\([0-9]*\) kB$/\1/p" /proc/meminfo) * 1024)); fi') ||
-  { echo "claude-workhorses: $target did not answer over ssh (BatchMode, so it needs your key)" >&2; exit 1; }
+  { echo "workhorses: $target did not answer over ssh (BatchMode, so it needs your key)" >&2; exit 1; }
 read -r arch cores memory <<<"$(tr '\n' ' ' <<<"$answer")" || true
 # Linux names 64-bit ARM aarch64; the hosts file, like macOS, says arm64.
 [ "$arch" != aarch64 ] || arch=arm64
 if ! [[ $arch =~ ^(x86_64|arm64)$ && $cores =~ ^[1-9][0-9]*$ && $memory =~ ^[1-9][0-9]*$ ]]; then
-  echo "claude-workhorses: $target answered \"$(tr '\n' ' ' <<<"$answer" | sed 's/ $//')\", not an architecture (x86_64 or arm64), a core count and a memory size" >&2
+  echo "workhorses: $target answered \"$(tr '\n' ' ' <<<"$answer" | sed 's/ $//')\", not an architecture (x86_64 or arm64), a core count and a memory size" >&2
   exit 1
 fi
 gigabyte=$((1024 * 1024 * 1024))

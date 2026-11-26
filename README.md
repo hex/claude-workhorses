@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="The claude-workhorses horse in front of a terminal where wh picks the workhorse alpha, copies a small Go module to it and runs its tests, then after a one-line edit sends only the edited file and runs them again">
+  <img src="assets/banner.svg" alt="The workhorses horse in front of a terminal where wh picks the workhorse alpha, copies a small Go module to it and runs its tests, then after a one-line edit sends only the edited file and runs them again">
 </p>
 
-<h1 align="center">claude-workhorses</h1>
+<h1 align="center">workhorses</h1>
 
 <p align="center">Long jobs run on your spare Macs while this one stays free.</p>
 
@@ -11,14 +11,14 @@ Windows Subsystem for Linux (WSL2) included. `wh` copies the git repository you 
 there. The test suite or the build runs on the workhorse, and your laptop stays free for the work in
 front of you.
 
-[![Tests](https://github.com/hex/claude-workhorses/actions/workflows/tests.yml/badge.svg)](https://github.com/hex/claude-workhorses/actions/workflows/tests.yml)
+[![Tests](https://github.com/hex/workhorses/actions/workflows/tests.yml/badge.svg)](https://github.com/hex/workhorses/actions/workflows/tests.yml)
 
 ## Where it runs
 
 | Where | What you get |
 | --- | --- |
 | Claude Code on your Mac | `wh` on the path of every command Claude runs, the offload policy and your host table at the start of every session, the `workhorse` skill, and the badge and band. |
-| Codex, pi, OpenCode or Antigravity on your Mac | The offload policy and your host table in every session, which give `wh`'s full path, and the `workhorse` skill. No badge, band or `/claude-workhorses:setup`: those are Claude Code's. |
+| Codex, pi, OpenCode or Antigravity on your Mac | The offload policy and your host table in every session, which give `wh`'s full path, and the `workhorse` skill. No badge, band or `/workhorses:setup`: those are Claude Code's. |
 | Your own terminal | `wh` by its full path, or linked into a folder on your `PATH`. Its runs show in the badge and band of a Claude Code session whose folder holds the repository or sits inside it. |
 | The workhorses | Spare Macs, Intel or Apple silicon, with Remote Login on, or Linux machines with sshd. `wh` reaches them over ssh and needs nothing installed on a Mac; see [Linux and WSL hosts](#linux-and-wsl-hosts) for Linux. `sync.sh` gives each one the tools you list. |
 
@@ -35,31 +35,31 @@ You need:
 
 ```text
 /plugin marketplace add hex/claude-marketplace
-/plugin install claude-workhorses
+/plugin install workhorses
 ```
 
 In another agent:
 
 | Agent | Install |
 | --- | --- |
-| Codex | `codex plugin marketplace add hex/claude-marketplace`, then `codex plugin add claude-workhorses@hex-plugins`. Codex runs the plugin's session-start hook only once you trust it in `/hooks`. |
-| pi | `pi install git:github.com/hex/claude-workhorses` |
-| OpenCode | `opencode plugin add github:hex/claude-workhorses`, or the path of a clone under `plugins` in `opencode.json` |
+| Codex | `codex plugin marketplace add hex/claude-marketplace`, then `codex plugin add workhorses@hex-plugins`. Codex runs the plugin's session-start hook only once you trust it in `/hooks`. |
+| pi | `pi install git:github.com/hex/workhorses` |
+| OpenCode | `opencode plugin add github:hex/workhorses`, or the path of a clone under `plugins` in `opencode.json` |
 | Antigravity | `agy plugin install <folder>` on a clone of this repository |
 
 Each one reads the same hosts file and tools records as Claude Code, so set up the workhorses once.
 
 ## First run
 
-1. In Claude Code, from a git repository, run `/claude-workhorses:setup` with your hosts' ssh
+1. In Claude Code, from a git repository, run `/workhorses:setup` with your hosts' ssh
    targets:
 
    ```text
-   /claude-workhorses:setup alpha-mini me@gamma.example.test
+   /workhorses:setup alpha-mini me@gamma.example.test
    ```
 
    It asks each host for its architecture, cores and RAM, shows you the lines it would add to
-   `~/.config/claude-workhorses/hosts`, and on your yes adds them and runs a first job on each host.
+   `~/.config/workhorses/hosts`, and on your yes adds them and runs a first job on each host.
    It installs nothing.
 2. Or write the hosts file yourself. One host per line: name, ssh target, arch, cores, RAM in GB,
    then any [host options](#host-options).
@@ -156,7 +156,7 @@ locks it, copies `.git`, patches the working tree, then runs the command:
   repository holding the worktree's branch and index.
 - `wh` refuses a first copy of over 1 GB that would cross Tailscale, counting `.git` and every file it
   sends but nothing under the names above. Make it from a network that reaches the host directly, or
-  set `CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB` to another limit in MB, a whole number from 1 to
+  set `WORKHORSES_TAILSCALE_FIRST_COPY_MB` to another limit in MB, a whole number from 1 to
   9999999.
 
 ### The badge and band
@@ -200,7 +200,7 @@ version under a recipe shaped as a recipe name, presents them as data, and count
 recipe's line stops at 2000 characters and a host's list at 6000, each saying how much it cut.
 `sync.sh status` marks the end of a run's log as the host's text, and `sync.sh diff` shows a host's
 lines in the same shape. For what no record shows (no code signing, a tool that needs a license),
-write `~/.config/claude-workhorses/notes`. The hook appends it as written. The `workhorse` skill
+write `~/.config/workhorses/notes`. The hook appends it as written. The `workhorse` skill
 covers how to run `wh` well: exit codes, first runs, git in the copy, and the steps for adding a tool.
 
 ### Provisioning
@@ -218,14 +218,14 @@ bash provision/sync.sh diff        # compare the hosts, tools line by tools line
 Before it contacts any host, `sync.sh` checks the hosts file, the tools file and every recipe it
 names. A run stops at the first step that fails, and `status` names that step and its exit code.
 `status` reports every host and exits non-zero when one does not answer or its last run failed.
-On the host, the run adds one line, marked `# claude-workhorses`, which loads the `PATH` the recipes
+On the host, the run adds one line, marked `# workhorses`, which loads the `PATH` the recipes
 set, to the file the login shell reads for an ssh command: the end of `~/.zshenv` on a Mac or for
 zsh on Linux, and the top of `~/.bashrc` for bash on Linux. The rest of that file stays untouched.
 Removing a line from the tools file, or an option from a host, undoes nothing on the host.
 
 #### The tools file
 
-`~/.config/claude-workhorses/tools` has one recipe per line, then its arguments, then any filters.
+`~/.config/workhorses/tools` has one recipe per line, then its arguments, then any filters.
 Lines run in file order, so a line goes after the one it needs. It starts empty;
 [examples/tools](examples/tools) shows the shape.
 
@@ -281,7 +281,7 @@ before it asks for the sudo password or takes the host's lock, with a message th
 A recipe is an executable that answers `install [args]` and `probe [args]`. `probe` prints one
 `<name> <version>` line per tool and exits 0; the policy's tool list shows those lines on the
 recipe's line, each without the recipe's name and the space or dash after it. Put yours in
-`~/.config/claude-workhorses/recipes/<name>`. The name is lower-case letters, digits and
+`~/.config/workhorses/recipes/<name>`. The name is lower-case letters, digits and
 dashes, and may not be a built-in recipe's name. `sync.sh` refuses a recipe unless you own it, its
 folder and the config folder, and nobody else can write any of them, because it runs on every host
 its line targets. A recipe that runs `sudo -A` says so with the line `# needs: sudo` near its top;
@@ -319,7 +319,7 @@ settings: `sync.sh` refuses a Linux host whose line has any, naming them, before
 
 `sync.sh` asks for a host's sudo password only when one of its options, or a recipe on one of its
 lines, needs it. A host with neither syncs without one. It runs your helper,
-`~/.config/claude-workhorses/sudo-password`, with the host name as its one argument and reads the
+`~/.config/workhorses/sudo-password`, with the host name as its one argument and reads the
 password from its output. The helper must be a file you own that only you can write; the plugin
 never runs its output as shell text. [examples/sudo-password](examples/sudo-password) reads it from
 the login keychain. The password reaches the host on the ssh session's stdin, never in an
@@ -334,7 +334,7 @@ that account.
 
 A Linux host needs sshd, your ssh key, `rsync`, `git` for git commands, and bash or zsh as the
 workhorse user's login shell. `wh` uses the system's `find`, `awk`, `sort` and `lscpu`, which
-Debian and Ubuntu ship. `/claude-workhorses:setup` probes it like a Mac: `uname -m` for the
+Debian and Ubuntu ship. `/workhorses:setup` probes it like a Mac: `uname -m` for the
 architecture (`aarch64` becomes `arm64`), physical cores from `lscpu`, and RAM from `MemTotal`,
 rounded to the nearest GB. Host options are Mac settings and do not apply. The `apt` recipe
 installs packages with `sudo`, so a host without sudo takes only lines that need none.
@@ -373,20 +373,20 @@ A Windows PC serves through WSL2, with Ubuntu say:
 
 | Setting | Where |
 | --- | --- |
-| Hosts and host options | `~/.config/claude-workhorses/hosts` |
-| What each host gets | `~/.config/claude-workhorses/tools` |
-| Your own recipes | `~/.config/claude-workhorses/recipes/` |
-| Facts for Claude that no record shows | `~/.config/claude-workhorses/notes` |
-| Sudo passwords, for `sync.sh` | `~/.config/claude-workhorses/sudo-password`, an executable |
-| Another config folder | `CLAUDE_WORKHORSES_CONFIG_DIR`, read by `wh`, `sync.sh` and the policy |
-| The largest first copy `wh` sends through Tailscale | `CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB`, in MB, 1024 by default |
-| Each host's last record | `~/.local/state/claude-workhorses/manifests/<host>`, or `CLAUDE_WORKHORSES_STATE_DIR` |
+| Hosts and host options | `~/.config/workhorses/hosts` |
+| What each host gets | `~/.config/workhorses/tools` |
+| Your own recipes | `~/.config/workhorses/recipes/` |
+| Facts for Claude that no record shows | `~/.config/workhorses/notes` |
+| Sudo passwords, for `sync.sh` | `~/.config/workhorses/sudo-password`, an executable |
+| Another config folder | `WORKHORSES_CONFIG_DIR`, read by `wh`, `sync.sh` and the policy |
+| The largest first copy `wh` sends through Tailscale | `WORKHORSES_TAILSCALE_FIRST_COPY_MB`, in MB, 1024 by default |
+| Each host's last record | `~/.local/state/workhorses/manifests/<host>`, or `WORKHORSES_STATE_DIR` |
 
 ## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
-| `wh` exits 2 with "no hosts file" | Run `/claude-workhorses:setup` or write `~/.config/claude-workhorses/hosts`, as in [First run](#first-run). For a bad line, the error names the file and the line number. |
+| `wh` exits 2 with "no hosts file" | Run `/workhorses:setup` or write `~/.config/workhorses/hosts`, as in [First run](#first-run). For a bad line, the error names the file and the line number. |
 | `wh: command not found` in your own terminal | Claude Code puts the plugin's `bin/` on the path of the commands Claude runs, not on your shell's. Call `bin/wh` in the installed plugin by its full path, or link it into a folder on your `PATH`. |
 | `wh` exits 124 | The job ran past `--timeout`. Give it a longer limit, or split it. |
 | `BLOCKED: no workhorse is free` | The message lists each host's reason. Every host is at its core count or unreachable; run the job locally. |

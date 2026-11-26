@@ -10,7 +10,7 @@ root=$(cd "$here/.." && pwd -P)
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/apply-check.XXXX")
 trap 'rm -rf "$scratch"' EXIT
 config=$scratch/config
-export CLAUDE_WORKHORSES_CONFIG_DIR=$config CLAUDE_WORKHORSES_STATE_DIR=$scratch/state
+export WORKHORSES_CONFIG_DIR=$config WORKHORSES_STATE_DIR=$scratch/state
 mkdir -p "$config/recipes" "$scratch/home" "$scratch/bin"
 chmod 700 "$config" "$config/recipes"
 
@@ -140,8 +140,8 @@ apply() {
 printf 'export FOO=1' >"$scratch/home/.zshenv"
 # Any process on a host can write an env snippet; this one records every variable and every open
 # descriptor above stderr that it can see while env.sh loads it.
-mkdir -p "$scratch/home/.local/share/claude-workhorses/env.d"
-cat >"$scratch/home/.local/share/claude-workhorses/env.d/zz-planted.sh" <<'SH'
+mkdir -p "$scratch/home/.local/share/workhorses/env.d"
+cat >"$scratch/home/.local/share/workhorses/env.d/zz-planted.sh" <<'SH'
 { set; env; } >>"$HOME/leak" 2>/dev/null
 for fd in 3 4 5 6 7 8 9; do { true <&"$fd"; } 2>/dev/null && echo "descriptor $fd is open" >>"$HOME/leak"; done
 SH
@@ -170,7 +170,7 @@ grep -q '^#synced [0-9-]* [0-9:]* UTC$' "$manifest" || fail "the manifest has no
   fail "the manifest's plain block: $(cat "$manifest")"
 echo "ok   the manifest records the result and each line's probe"
 
-line='. "$HOME/.local/share/claude-workhorses/env.sh" # claude-workhorses'
+line='. "$HOME/.local/share/workhorses/env.sh" # workhorses'
 [ "$(cat "$scratch/home/.zshenv")" = "export FOO=1
 $line" ] || fail ".zshenv after one run: '$(cat "$scratch/home/.zshenv")'"
 printf '%s\n' "plain @scope/pkg a.b+c" >"$stage/tools"
@@ -199,11 +199,11 @@ apply ""
 [ "$(cat "$scratch/home/.zshenv")" = "$line" ] || fail ".zshenv from nothing: '$(cat "$scratch/home/.zshenv")'"
 echo "ok   a missing ~/.zshenv is created with the one line"
 
-printf 'exit 3\n' >"$scratch/home/.local/share/claude-workhorses/env.d/zz-exit.sh"
+printf 'exit 3\n' >"$scratch/home/.local/share/workhorses/env.d/zz-exit.sh"
 apply ""
-rm "$scratch/home/.local/share/claude-workhorses/env.d/zz-exit.sh"
+rm "$scratch/home/.local/share/workhorses/env.d/zz-exit.sh"
 [ "$(cat "$scratch/home/workhorse/run.status")" = "1 env" ] || fail "a snippet that exits gave run.status '$(cat "$scratch/home/workhorse/run.status")'"
-grep -qxF "env.sh stopped before its end: a snippet in $scratch/home/.local/share/claude-workhorses/env.d exits or fails, and the steps would miss what it sets" "$scratch/apply.log" ||
+grep -qxF "env.sh stopped before its end: a snippet in $scratch/home/.local/share/workhorses/env.d exits or fails, and the steps would miss what it sets" "$scratch/apply.log" ||
   fail "a snippet that exits is not named: $(cat "$scratch/apply.log")"
 echo "ok   a snippet that ends env.sh early stops the run at the env step"
 
@@ -276,7 +276,7 @@ expect_sync() {
 }
 
 printf '%s\n' "plain ok" "port -rf" >"$config/tools"
-expect_sync "a bad tools line" "claude-workhorses: $config/tools line 2: argument \"-rf\" for port is not letters, digits and @._/+- (and does not start with -)" 1 alpha
+expect_sync "a bad tools line" "workhorses: $config/tools line 2: argument \"-rf\" for port is not letters, digits and @._/+- (and does not start with -)" 1 alpha
 [ ! -s "$scratch/calls" ] || fail "sync.sh contacted a host before refusing a bad tools file: $(cat "$scratch/calls")"
 printf '%s\n' "plain ok" >"$config/tools"
 expect_sync "an unknown host" "unknown workhorse \"delta\"; known: alpha beta gamma" 1 alpha delta
@@ -285,7 +285,7 @@ echo "ok   a bad tools line or host name stops sync.sh before it contacts any ho
 
 printf '%s\n' "plain ok" >"$config/tools"
 rm "$config/sudo-password"
-expect_sync "a host that needs sudo without a helper" "claude-workhorses: no executable sudo-password helper at $config/sudo-password
+expect_sync "a host that needs sudo without a helper" "workhorses: no executable sudo-password helper at $config/sudo-password
 beta: no sudo password; nothing was run" 1 beta
 [ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 b uname -s" ] ||
   fail "sync.sh did more than ask beta's OS before it found no password: $(cat "$scratch/calls")"

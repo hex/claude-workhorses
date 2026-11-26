@@ -1,10 +1,10 @@
 # ABOUTME: Reads the workhorse hosts file and calls the user's sudo-password helper, for mirror.sh, sync.sh and the session-start policy.
-# ABOUTME: Both live in $CLAUDE_WORKHORSES_CONFIG_DIR, by default ~/.config/claude-workhorses; values are checked here and never evaluated.
+# ABOUTME: Both live in $WORKHORSES_CONFIG_DIR, by default ~/.config/workhorses; values are checked here and never evaluated.
 # shellcheck shell=bash
 
 # The folder that holds the hosts file and the sudo-password helper.
 workhorses_config_dir() {
-  printf '%s\n' "${CLAUDE_WORKHORSES_CONFIG_DIR:-$HOME/.config/claude-workhorses}"
+  printf '%s\n' "${WORKHORSES_CONFIG_DIR:-$HOME/.config/workhorses}"
 }
 
 # The host options a hosts line may end with, each at most once; provision/host/options.sh applies
@@ -42,7 +42,7 @@ check_host_option() {
 
 # The folder where sync.sh status stores each host's last manifest, which the session-start policy reads.
 workhorses_state_dir() {
-  printf '%s\n' "${CLAUDE_WORKHORSES_STATE_DIR:-$HOME/.local/state/claude-workhorses}"
+  printf '%s\n' "${WORKHORSES_STATE_DIR:-$HOME/.local/state/workhorses}"
 }
 
 # A host name: lower-case letters, digits and dashes.
@@ -65,7 +65,7 @@ load_hosts() {
   # shellcheck disable=SC2034 # host_os is read by tools.sh and filled by its callers
   host_lines=() host_os=()
   if [ ! -f "$file" ]; then
-    echo "claude-workhorses: no hosts file at $file; the README's First run section shows one" >&2
+    echo "workhorses: no hosts file at $file; the README's First run section shows one" >&2
     return 1
   fi
   while IFS= read -r line || [ -n "$line" ]; do
@@ -74,7 +74,7 @@ load_hosts() {
     read -r name ssh arch cores ram rest <<<"$line" || true
     read -r -a options <<<"$rest" || true
     [ -n "$name" ] || continue
-    local where="claude-workhorses: $file line $number:"
+    local where="workhorses: $file line $number:"
     if ! valid_host_name "$name"; then
       echo "$where host name \"$name\" is not lower-case letters, digits and dashes" >&2
       return 1
@@ -123,7 +123,7 @@ load_hosts() {
     host_ram+=("$ram") host_options+=("${options[*]+${options[*]}}") host_lines+=("$number")
   done <"$file"
   if [ ${#host_names[@]} -eq 0 ]; then
-    echo "claude-workhorses: $file lists no hosts" >&2
+    echo "workhorses: $file lists no hosts" >&2
     return 1
   fi
 }
@@ -148,24 +148,24 @@ sudo_password() {
   local helper password status=0
   helper="$(workhorses_config_dir)/sudo-password"
   if [ ! -f "$helper" ] || [ ! -x "$helper" ]; then
-    echo "claude-workhorses: no executable sudo-password helper at $helper" >&2
+    echo "workhorses: no executable sudo-password helper at $helper" >&2
     return 1
   fi
   if [ ! -O "$helper" ]; then
-    echo "claude-workhorses: $helper is not owned by you" >&2
+    echo "workhorses: $helper is not owned by you" >&2
     return 1
   fi
   if [ -n "$(find -L "$helper" \( -perm -020 -o -perm -002 \) -print)" ]; then
-    echo "claude-workhorses: $helper is writable by others than you; chmod go-w it" >&2
+    echo "workhorses: $helper is writable by others than you; chmod go-w it" >&2
     return 1
   fi
   password=$("$helper" "$1") || status=$?
   if [ $status -ne 0 ]; then
-    echo "claude-workhorses: the sudo-password helper failed for $1 (exit $status)" >&2
+    echo "workhorses: the sudo-password helper failed for $1 (exit $status)" >&2
     return 1
   fi
   if [ -z "$password" ]; then
-    echo "claude-workhorses: the sudo-password helper printed nothing for $1" >&2
+    echo "workhorses: the sudo-password helper printed nothing for $1" >&2
     return 1
   fi
   printf '%s\n' "$password"

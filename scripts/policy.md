@@ -1,7 +1,7 @@
 # Workhorses
 
 This machine drives agents. Long jobs nobody is waiting on, and jobs that would crowd this machine,
-run on a workhorse instead. These are the workhorses, from the claude-workhorses hosts file:
+run on a workhorse instead. These are the workhorses, from the workhorses hosts file:
 
 @HOSTS@
 

@@ -6,7 +6,7 @@ cd "$HOME/workhorse" || exit 1
 # Snippets come from installers that were not written for set -u, so env.sh loads without it.
 set +u
 # shellcheck source=/dev/null
-[ ! -f "$HOME/.local/share/claude-workhorses/env.sh" ] || . "$HOME/.local/share/claude-workhorses/env.sh"
+[ ! -f "$HOME/.local/share/workhorses/env.sh" ] || . "$HOME/.local/share/workhorses/env.sh"
 set -u
 
 echo "#base"

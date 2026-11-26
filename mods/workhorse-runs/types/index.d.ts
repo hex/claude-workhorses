@@ -17,6 +17,6 @@ export type RunLines = readonly {
 
 declare module 'claude-code' {
   interface PluginState {
-    'claude-workhorses': { badge: Badge; runLines: Shaped<RunLines> }
+    'workhorses': { badge: Badge; runLines: Shaped<RunLines> }
   }
 }

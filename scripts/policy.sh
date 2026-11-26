@@ -12,11 +12,11 @@ sync="$root/provision/sync.sh"
 
 hosts_file="$(workhorses_config_dir)/hosts"
 if [ ! -f "$hosts_file" ]; then
-  echo "claude-workhorses: no workhorses are configured (no hosts file at $hosts_file), so wh cannot run; the plugin's README shows how to add one."
+  echo "workhorses: no workhorses are configured (no hosts file at $hosts_file), so wh cannot run; the plugin's README shows how to add one."
   exit 0
 fi
 if ! load_hosts 2>/dev/null; then
-  echo "claude-workhorses: the hosts file is not usable, so wh cannot run: $(load_hosts 2>&1 || true)"
+  echo "workhorses: the hosts file is not usable, so wh cannot run: $(load_hosts 2>&1 || true)"
   exit 0
 fi
 

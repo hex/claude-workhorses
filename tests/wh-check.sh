@@ -212,7 +212,7 @@ git_expect "$gitroot/wt" "$(git -C "$gitroot/wt" rev-parse HEAD)" "git in a work
 git_expect "$gitroot/wt" "A  g" "the worktree's staged file comes staged" 'git status --porcelain'
 git_expect "$gitroot/repo" "$(git -C "$gitroot/repo" rev-parse HEAD)" "the repository's copy keeps its own HEAD after the worktree's run" 'git rev-parse HEAD'
 
-# wh refuses a first copy larger than CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB when the ssh connection
+# wh refuses a first copy larger than WORKHORSES_TAILSCALE_FIRST_COPY_MB when the ssh connection
 # reaches the host on its Tailscale address, counting .git and every file it would send but none under
 # a name it leaves out; over another address the same copy runs. The host is reached through its real
 # Tailscale address, from a hosts file of this check's own, with a limit of 2 MB and 3 MB of files.
@@ -283,7 +283,7 @@ else
 
   repo=$(bulk_repo tailscale bulk)
   code=0
-  (cd "$repo" && CLAUDE_WORKHORSES_CONFIG_DIR=$guard/config CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=2 \
+  (cd "$repo" && WORKHORSES_CONFIG_DIR=$guard/config WORKHORSES_TAILSCALE_FIRST_COPY_MB=2 \
     "$wh" "$host" -- true) >/dev/null 2>"$guard/err" || code=$?
   blocked="mirror.sh run: BLOCKED: the first copy of $repo on $host would send 3 MB through Tailscale ($tailscale), over the 2 MB limit;"
   if [ "$code" != 3 ] || ! grep -qF "$blocked" "$guard/err"; then
@@ -298,7 +298,7 @@ else
   echo "ok   a first copy whose files and .git pass the limit is blocked through Tailscale, and sends nothing"
 
   repo=$(bulk_repo skipped node_modules/bulk)
-  out=$(cd "$repo" && CLAUDE_WORKHORSES_CONFIG_DIR=$guard/config CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=2 \
+  out=$(cd "$repo" && WORKHORSES_CONFIG_DIR=$guard/config WORKHORSES_TAILSCALE_FIRST_COPY_MB=2 \
     "$wh" "$host" -- sh -c 'cat f; test -e node_modules && echo present || echo absent' 2>"$guard/err") ||
     { echo "FAIL a first copy whose bulk is under node_modules/ failed through Tailscale:" >&2; cat "$guard/err" >&2; exit 1; }
   [ "$out" = "small"$'\n'"absent" ] ||
@@ -311,7 +311,7 @@ if in_tailscale_range "$lan"; then
   echo "skip: the first copy without Tailscale: $configured reaches $host through Tailscale from here"
 else
   repo=$(bulk_repo lan bulk)
-  out=$(cd "$repo" && CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB=2 "$wh" "$host" -- sh -c 'wc -c <bulk | tr -d " "' 2>"$guard/err") ||
+  out=$(cd "$repo" && WORKHORSES_TAILSCALE_FIRST_COPY_MB=2 "$wh" "$host" -- sh -c 'wc -c <bulk | tr -d " "' 2>"$guard/err") ||
     { echo "FAIL a 3 MB first copy outside Tailscale failed:" >&2; cat "$guard/err" >&2; exit 1; }
   [ "$out" = $((3 * 1024 * 1024)) ] ||
     { echo "FAIL a 3 MB first copy outside Tailscale: wanted $((3 * 1024 * 1024)) bytes in the copy, got '$out'" >&2; exit 1; }

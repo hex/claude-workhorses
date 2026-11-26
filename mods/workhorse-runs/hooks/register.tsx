@@ -30,8 +30,8 @@ const BAND_MAX_RUNS = 3
 const ROUND_LEFT = '\ue0b6'
 const ROUND_RIGHT = '\ue0b4'
 
-const badge = atom({ plugin: 'claude-workhorses', key: 'badge' } as const, null as Badge)
-const runLines = atom({ plugin: 'claude-workhorses', key: 'runLines' } as const, [] as RunLines, { shape: 'run-lines-2' })
+const badge = atom({ plugin: 'workhorses', key: 'badge' } as const, null as Badge)
+const runLines = atom({ plugin: 'workhorses', key: 'runLines' } as const, [] as RunLines, { shape: 'run-lines-2' })
 // The band's label, as the claude-bloodhounds band opens its row; later rows keep its width blank.
 const BAND_LABEL = '↗ workhorses'
 // The grey of the rule between the label and the runs.

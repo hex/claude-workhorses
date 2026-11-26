@@ -74,7 +74,7 @@ ANIMATION = (
         for i, (x, y) in enumerate(EYES)
     )
 )
-TITLE = "claude-workhorses: wh runs a repository's tests on a workhorse, under the plugin's horse"
+TITLE = "workhorses: wh runs a repository's tests on a workhorse, under the plugin's horse"
 
 
 def build(terminal):

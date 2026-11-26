@@ -1,5 +1,5 @@
 {
-  "claude-workhorses": {
+  "workhorses": {
     "SessionStart": [
       {
         "type": "command",

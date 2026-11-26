@@ -6,7 +6,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd -P)
 config=$(mktemp -d "${TMPDIR:-/tmp}/tools-check.XXXX")
 trap 'rm -rf "$config"' EXIT
-export CLAUDE_WORKHORSES_CONFIG_DIR=$config
+export WORKHORSES_CONFIG_DIR=$config
 chmod 700 "$config"
 builtin=$(cd "$here/../provision/recipes" && pwd -P)
 # shellcheck source=../scripts/lib/hosts.sh
@@ -72,14 +72,14 @@ uv @os=macos @hosts=gamma
 bun"
 
 expect_tools "@os given twice is refused" \
-"claude-workhorses: $config/tools line 1: filter @os for apt is given twice" \
+"workhorses: $config/tools line 1: filter @os for apt is given twice" \
 "apt git @os=linux @os=macos"
 
 host_os=(macos "" linux)
 printf '%s\n' "apt git @os=linux" "bun" >"$config/tools"
 load_tools
 out=$(host_tool_lines beta 2>&1)
-[ "$out" = "claude-workhorses: the OS beta runs is not known, so the @os=linux filter of apt cannot be checked
+[ "$out" = "workhorses: the OS beta runs is not known, so the @os=linux filter of apt cannot be checked
 bun" ] || fail "a host whose OS is not known: got '$out'"
 echo "ok   a line filtered by @os names a host whose OS is not known and leaves the line out"
 host_os=(macos macos macos)
@@ -87,48 +87,48 @@ host_os=(macos macos macos)
 file=$config/tools
 for bad in Port ../port -x port.sh; do
   expect_tools "recipe name \"$bad\" is refused" \
-  "claude-workhorses: $file line 1: recipe \"$bad\" is not lower-case letters, digits and dashes" \
+  "workhorses: $file line 1: recipe \"$bad\" is not lower-case letters, digits and dashes" \
   "$bad cmake"
 done
 
 expect_tools "a recipe neither built in nor in the user folder is refused" \
-"claude-workhorses: $file line 2: no recipe \"nosuch\" in $builtin or $config/recipes" \
+"workhorses: $file line 2: no recipe \"nosuch\" in $builtin or $config/recipes" \
 "port cmake
 nosuch"
 
 # shellcheck disable=SC2088 # a literal ~ is one of the words checked
 for bad in -g 'a;b' '$(id)' 'x=y' "it's" '~/x' 'a*'; do
   expect_tools "argument \"$bad\" is refused" \
-  "claude-workhorses: $file line 1: argument \"$bad\" for port is not letters, digits and @._/+- (and does not start with -)" \
+  "workhorses: $file line 1: argument \"$bad\" for port is not letters, digits and @._/+- (and does not start with -)" \
   "port cmake $bad"
 done
 
 expect_tools "a word that starts with @ but is no scoped package or filter is refused" \
-"claude-workhorses: $file line 1: argument \"@arch\" for npm starts with @ but is not a scoped package (@scope/name); a host filter is @arch=<arch>, @os=<os> or @hosts=<names>" \
+"workhorses: $file line 1: argument \"@arch\" for npm starts with @ but is not a scoped package (@scope/name); a host filter is @arch=<arch>, @os=<os> or @hosts=<names>" \
 "npm @arch"
 
 expect_tools "an unknown filter is refused" \
-"claude-workhorses: $file line 1: filter \"@cpu=6\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
+"workhorses: $file line 1: filter \"@cpu=6\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
 "bun @cpu=6"
 
 expect_tools "an unknown OS is refused" \
-"claude-workhorses: $file line 1: filter \"@os=windows\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
+"workhorses: $file line 1: filter \"@os=windows\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
 "bun @os=windows"
 
 expect_tools "an unknown architecture is refused" \
-"claude-workhorses: $file line 1: filter \"@arch=amd64\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
+"workhorses: $file line 1: filter \"@arch=amd64\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
 "bun @arch=amd64"
 
 expect_tools "a host the hosts file does not list is refused" \
-"claude-workhorses: $file line 1: filter @hosts names \"delta\", which is not in the hosts file" \
+"workhorses: $file line 1: filter @hosts names \"delta\", which is not in the hosts file" \
 "bun @hosts=alpha,delta"
 
 expect_tools "an empty host list is refused" \
-"claude-workhorses: $file line 1: filter \"@hosts=\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
+"workhorses: $file line 1: filter \"@hosts=\" for bun is not @arch=x86_64|arm64, @os=macos|linux or @hosts=<name>,..." \
 "bun @hosts="
 
 expect_tools "a filter given twice is refused" \
-"claude-workhorses: $file line 1: filter @arch for bun is given twice" \
+"workhorses: $file line 1: filter @arch for bun is given twice" \
 "bun @arch=x86_64 @arch=arm64"
 
 mkdir "$config/recipes"
@@ -143,22 +143,22 @@ gamma: my-tool 1.2" \
 
 chmod 720 "$config/recipes/my-tool"
 expect_tools "a user recipe others can write is refused" \
-"claude-workhorses: $file line 1: $config/recipes/my-tool is writable by others than you; chmod go-w it"
+"workhorses: $file line 1: $config/recipes/my-tool is writable by others than you; chmod go-w it"
 chmod 700 "$config/recipes/my-tool"
 
 chmod 600 "$config/recipes/my-tool"
 expect_tools "a user recipe that is not executable is refused" \
-"claude-workhorses: $file line 1: recipe $config/recipes/my-tool is not an executable file"
+"workhorses: $file line 1: recipe $config/recipes/my-tool is not an executable file"
 chmod 700 "$config/recipes/my-tool"
 
 chmod 770 "$config/recipes"
 expect_tools "a user recipe folder others can write is refused" \
-"claude-workhorses: $file line 1: $config/recipes is writable by others than you; chmod go-w it"
+"workhorses: $file line 1: $config/recipes is writable by others than you; chmod go-w it"
 chmod 700 "$config/recipes"
 
 chmod 770 "$config"
 expect_tools "a config folder others can write is refused, so nobody can swap the recipe folder" \
-"claude-workhorses: $file line 1: $config is writable by others than you; chmod go-w it"
+"workhorses: $file line 1: $config is writable by others than you; chmod go-w it"
 chmod 700 "$config"
 
 # A symlink would send whatever it points at, the sudo-password helper say, to every host.
@@ -166,18 +166,18 @@ printf '#!/bin/sh\necho pw\n' >"$config/sudo-password"
 chmod 700 "$config/sudo-password"
 ln -s ../sudo-password "$config/recipes/leak"
 expect_tools "a user recipe that is a symlink is refused" \
-"claude-workhorses: $file line 1: recipe $config/recipes/leak is a symlink; put the file itself there" \
+"workhorses: $file line 1: recipe $config/recipes/leak is a symlink; put the file itself there" \
 "leak"
 rm "$config/recipes/leak"
 mkdir "$config/recipes/folder"
 expect_tools "a user recipe that is a folder is refused" \
-"claude-workhorses: $file line 1: recipe $config/recipes/folder is not an executable file" \
+"workhorses: $file line 1: recipe $config/recipes/folder is not an executable file" \
 "folder"
 rmdir "$config/recipes/folder"
 
 cp "$config/recipes/my-tool" "$config/recipes/port"
 expect_tools "a user recipe may not take a built-in recipe's name" \
-"claude-workhorses: $file line 1: user recipe $config/recipes/port has the name of a built-in recipe; rename it" \
+"workhorses: $file line 1: user recipe $config/recipes/port has the name of a built-in recipe; rename it" \
 "port cmake"
 rm "$config/recipes/port"
 

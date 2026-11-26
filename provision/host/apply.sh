@@ -4,7 +4,7 @@
 set -euo pipefail
 
 here=$HOME/workhorse
-state=$HOME/.local/share/claude-workhorses
+state=$HOME/.local/share/workhorses
 cd "$here"
 
 # sync.sh's ssh runs "apply.sh start" with the password on stdin, so no variable carries it through
@@ -105,7 +105,7 @@ build_env() {
 # one line that sources env.sh, added once; the rest of the file stays the user's. On a Mac that is
 # ~/.zshenv. On Linux, zsh reads ~/.zshenv too, and bash started by sshd reads ~/.bashrc, whose stock
 # first lines return from a shell that is not interactive: the line goes above them.
-source_line='. "$HOME/.local/share/claude-workhorses/env.sh" # claude-workhorses'
+source_line='. "$HOME/.local/share/workhorses/env.sh" # workhorses'
 step="env"
 mkdir -p "$state/env.d" "$HOME/.local/bin"
 install -m 700 ./askpass-env "$HOME/.local/bin/askpass-env"

@@ -14,7 +14,7 @@ const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '
 // The spinner frame between wh and the hosts, with the space after it.
 const SPINNING_MARK = /(?<=^wh )[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /
 const SPINNING = /^wh [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] gamma \d+:\d\d$/
-const FOOTER = { plugin: 'claude-workhorses', surface: 'terminal', component: 'SessionMode', props: { modes: ['focus'] } } as const
+const FOOTER = { plugin: 'workhorses', surface: 'terminal', component: 'SessionMode', props: { modes: ['focus'] } } as const
 
 const BAND_PROPS = {
   hasSurvey: false,
@@ -31,7 +31,7 @@ const BAND_PROPS = {
 // has a Stop button with no hotkey: a digit typed into an empty composer must never stop a run.
 async function bandNow($: Parameters<TestBody>[0], props: Partial<typeof BAND_PROPS> = {}): Promise<string[]> {
   const ui = await $.ui.mount({
-    plugin: 'claude-workhorses',
+    plugin: 'workhorses',
     surface: 'terminal',
     component: 'AbovePrompt',
     props: { ...BAND_PROPS, ...props },
@@ -372,7 +372,7 @@ test('the band row stays three runs tall, so the rows of other mods keep their r
     'gamma · copying 0:09 · demo · sleep 300',
     'gamma · copying 0:08 · demo · sleep 300',
   ])
-  const ui = await $.ui.mount({ plugin: 'claude-workhorses', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS })
+  const ui = await $.ui.mount({ plugin: 'workhorses', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS })
   expect((await ui.find({ type: 'Text', text: /more/ }))?.text).toBe('and 2 more runs; wh ps lists them')
   await ui.unmount()
 })
@@ -386,7 +386,7 @@ test("a run's Stop button runs wh stop for that run, and a stop that fails says 
   for (const pid of [4261, 4262]) state.live.add(pid)
   await clock.advance(1_000)
 
-  const band = await $.ui.mount({ plugin: 'claude-workhorses', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS })
+  const band = await $.ui.mount({ plugin: 'workhorses', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS })
   await band.press({ key: 'stop:b' })
   expect(state.whCalls).toEqual([['stop', '4262']])
   expect(state.toasts).toEqual([])

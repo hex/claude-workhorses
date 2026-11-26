@@ -64,5 +64,5 @@ echo "  - the Claude Code, Codex, Antigravity and npm manifests updated"
 echo "  - Committed and tagged v${NEW_VERSION}"
 echo ""
 echo "Refreshing plugin cache..."
-claude plugin update claude-workhorses@hex-plugins-dev
+claude plugin update workhorses@hex-plugins
 echo "Done. Plugin cache is now at v${NEW_VERSION}."

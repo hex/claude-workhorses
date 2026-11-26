@@ -10,10 +10,10 @@ trap '[ -z "$server" ] || { kill "$server"; wait "$server"; } 2>/dev/null; rm -r
 
 # A scratch config whose notes end in a token unique to this run, so only the policy can carry it into a request.
 token=wh-check-$RANDOM$RANDOM
-export CLAUDE_WORKHORSES_CONFIG_DIR=$work/config
-mkdir -p "$CLAUDE_WORKHORSES_CONFIG_DIR" "$work/requests"
-cp "$root/examples/hosts" "$CLAUDE_WORKHORSES_CONFIG_DIR/hosts"
-printf -- '- The check token is %s.\n' "$token" >"$CLAUDE_WORKHORSES_CONFIG_DIR/notes"
+export WORKHORSES_CONFIG_DIR=$work/config
+mkdir -p "$WORKHORSES_CONFIG_DIR" "$work/requests"
+cp "$root/examples/hosts" "$WORKHORSES_CONFIG_DIR/hosts"
+printf -- '- The check token is %s.\n' "$token" >"$WORKHORSES_CONFIG_DIR/notes"
 
 # Records every request body and answers 400, so each agent stops after its first request and no model is called.
 python3 -I -c '
@@ -39,7 +39,7 @@ for _ in $(seq 50); do [ -s "$work/port" ] && break; sleep 0.1; done
 url=http://127.0.0.1:$(cat "$work/port")
 
 # The start of the skill's description, which each agent lists among its skills.
-skill="spare Macs and Linux machines in the claude-workhorses hosts file"
+skill="spare Macs and Linux machines in the workhorses hosts file"
 ran=0
 
 # Runs one agent until a request it sent holds the token, or it exits, or 3 minutes pass; passes on the token.
@@ -79,12 +79,12 @@ expect_policy claude env CLAUDE_CONFIG_DIR="$work/claude" ANTHROPIC_BASE_URL="$u
 # Codex installs the plugin from a marketplace, here one in the scratch folder. Its hook runs only once trusted,
 # which this throwaway CODEX_HOME grants for the one run.
 mkdir -p "$work/market/.claude-plugin" "$work/market/plugins" "$work/codex"
-ln -s "$root" "$work/market/plugins/claude-workhorses"
-printf '%s\n' '{"name": "wh-check", "owner": {"name": "wh-check"}, "plugins": [{"name": "claude-workhorses", "source": "./plugins/claude-workhorses"}]}' \
+ln -s "$root" "$work/market/plugins/workhorses"
+printf '%s\n' '{"name": "wh-check", "owner": {"name": "wh-check"}, "plugins": [{"name": "workhorses", "source": "./plugins/workhorses"}]}' \
   >"$work/market/.claude-plugin/marketplace.json"
 if command -v codex >/dev/null; then
   CODEX_HOME=$work/codex codex plugin marketplace add "$work/market" >/dev/null
-  CODEX_HOME=$work/codex codex plugin add claude-workhorses@wh-check >/dev/null
+  CODEX_HOME=$work/codex codex plugin add workhorses@wh-check >/dev/null
 fi
 expect_policy codex env CODEX_HOME="$work/codex" RECORDED_KEY=recorded codex exec --skip-git-repo-check \
   --dangerously-bypass-hook-trust -c model_provider=recorder -c 'model_providers.recorder.name="recorder"' \

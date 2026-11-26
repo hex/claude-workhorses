@@ -7,11 +7,11 @@ allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/probe-host.sh:*), Bash(mk
 ## Context
 
 - Arguments: $ARGUMENTS
-- Config folder: `${CLAUDE_WORKHORSES_CONFIG_DIR:-~/.config/claude-workhorses}`
+- Config folder: `${WORKHORSES_CONFIG_DIR:-~/.config/workhorses}`
 
 ## Your task
 
-Add each ssh target in the arguments to the claude-workhorses hosts file, then prove `wh` reaches it.
+Add each ssh target in the arguments to the workhorses hosts file, then prove `wh` reaches it.
 This installs nothing on the hosts. With no arguments, ask the user for the ssh targets with
 **AskUserQuestion** and stop until they answer.
 

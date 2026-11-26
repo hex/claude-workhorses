@@ -93,7 +93,7 @@ class Capture:
             "TMPDIR": str(self.work / "tmp"), "TERM": "xterm-256color", "COLORTERM": "truecolor",
             "LANG": "en_US.UTF-8", "SHELL": "/bin/bash", "BASH_ENV": "/dev/null", "ENV": "/dev/null",
             "BASH_SILENCE_DEPRECATION_WARNING": "1", "PS1": "$ ",
-            "CLAUDE_WORKHORSES_CONFIG_DIR": str(self.config), "WH_CAPTURE_SSH_TARGET": self.target,
+            "WORKHORSES_CONFIG_DIR": str(self.config), "WH_CAPTURE_SSH_TARGET": self.target,
             "CLAUDE_CODE_SHELL": str(self.bin / "bash"),
             "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",

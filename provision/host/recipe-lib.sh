@@ -3,7 +3,7 @@
 # shellcheck shell=bash
 
 # The folder that holds env.sh, which ~/.zshenv or ~/.bashrc sources, and the snippets apply.sh builds it from.
-workhorse_state=$HOME/.local/share/claude-workhorses
+workhorse_state=$HOME/.local/share/workhorses
 
 # Saves stdin as recipe $1's environment snippet, sh syntax; apply.sh folds every snippet into env.sh.
 # Add a folder to PATH with workhorse_path_add <folder>, which env.sh defines.

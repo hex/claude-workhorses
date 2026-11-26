@@ -1,4 +1,4 @@
-# The claude-workhorses tools file: copy it to ~/.config/claude-workhorses/tools and keep the lines
+# The workhorses tools file: copy it to ~/.config/workhorses/tools and keep the lines
 # you want. Each line is a recipe, its arguments, then any filters; lines run in this order, so a
 # line goes after the one it needs. The README's Provisioning section lists the built-in recipes.
 #   @arch=x86_64 or @arch=arm64   only hosts of that architecture

@@ -16,7 +16,7 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on("before_agent_start", (event) => {
     policy ??= readPolicy();
-    event.systemPromptOptions.sections["claude-workhorses"] = policy;
+    event.systemPromptOptions.sections["workhorses"] = policy;
   });
 }
 
@@ -25,6 +25,6 @@ function readPolicy(): string {
   try {
     return execFileSync("bash", [policyScript], { encoding: "utf8", timeout: 10_000 });
   } catch (error) {
-    return `claude-workhorses: ${policyScript} failed, so the workhorse policy is missing: ${(error as Error).message}`;
+    return `workhorses: ${policyScript} failed, so the workhorse policy is missing: ${(error as Error).message}`;
   }
 }

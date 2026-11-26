@@ -28,7 +28,7 @@ ignores=(node_modules/ target/ .venv/ venv/ Library/ .build/ .gradle/ DerivedDat
 # A first copy sends the whole repository. Through Tailscale that keeps laptop cores busy (WireGuard
 # runs in userspace), so a copy with no .git yet whose first copy, .git and files together, is larger
 # than this many MB waits for a network that reaches the host without Tailscale. run checks the value.
-tailscale_first_copy_mb=${CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB:-1024}
+tailscale_first_copy_mb=${WORKHORSES_TAILSCALE_FIRST_COPY_MB:-1024}
 
 # Whether address $1 is in Tailscale's range, 100.64.0.0/10.
 is_tailscale() {
@@ -486,7 +486,7 @@ run() {
     { echo "usage: $0 run [--timeout <seconds>] <host|auto> <dir> <command...>" >&2; exit 2; }
   # Seven digits at most, so the size in KB stays far inside shell arithmetic.
   [[ $tailscale_first_copy_mb =~ ^[1-9][0-9]{0,6}$ ]] ||
-    { echo "mirror.sh run: CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB takes a whole number of MB from 1 to 9999999, not \"$tailscale_first_copy_mb\"" >&2; exit 2; }
+    { echo "mirror.sh run: WORKHORSES_TAILSCALE_FIRST_COPY_MB takes a whole number of MB from 1 to 9999999, not \"$tailscale_first_copy_mb\"" >&2; exit 2; }
   local host=$1 dir sub main seed="" target work ignore rsync_excludes=() names=() pattern tracked
   dir=$(cd "$2" && pwd -P)
   shift 2
@@ -542,7 +542,7 @@ $tracked"
     [ -n "$tree_bytes" ] || blocked "could not measure the files in $dir: rsync --stats printed no total file size"
     first_copy_kb=$((first_copy_kb + tree_bytes / 1024))
     [ "$first_copy_kb" -le $((tailscale_first_copy_mb * 1024)) ] ||
-      blocked "the first copy of $dir on $host would send $((first_copy_kb / 1024)) MB through Tailscale ($server), over the $tailscale_first_copy_mb MB limit; run it from a network that reaches $host without Tailscale, name a host on this network, or raise CLAUDE_WORKHORSES_TAILSCALE_FIRST_COPY_MB"
+      blocked "the first copy of $dir on $host would send $((first_copy_kb / 1024)) MB through Tailscale ($server), over the $tailscale_first_copy_mb MB limit; run it from a network that reaches $host without Tailscale, name a host on this network, or raise WORKHORSES_TAILSCALE_FIRST_COPY_MB"
   fi
   sync_git "$dir" "$target" "$work" || blocked "could not copy $dir's .git to $host:~/$work"
   stored_clock=$(sed -n 2p <<<"$prepared")
