@@ -140,9 +140,9 @@ test('/workhorses opens the pane and draws each host with its runs, busy hosts a
     rows: [
       'checked 0s ago',
       'xur · load 2.58 of 6 · 3 runs',
-      '~/proj ⎇ ai-batch · this session · since 15:53 · mise exec node@26 -- npm test',
-      '~/house · since 15:10 · make lint',
-      'from other-mac · since 09:05 · make test',
+      'mise exec node@26 -- npm test · this session · since 15:53 · ~/proj ⎇ ai-batch',
+      'make lint · since 15:10 · ~/house',
+      'make test · since 09:05 · from other-mac',
       'cayde · load 0.10 of 6 · idle',
       'eris · unreachable',
     ],
@@ -240,7 +240,7 @@ test('what a host sent reaches the pane as plain text', async ($, on) => {
   expect((await paneNow($)).rows).toEqual([
     'checked 0s ago',
     'xur · load 1.00 of 6 · 1 run',
-    'from other]0;x · since 15:00 · make [31mred',
+    'make [31mred · since 15:00 · from other]0;x',
     'odd · unexpected answer: Last login [1mtoday2J',
   ])
 
@@ -285,8 +285,8 @@ test('only a run this Claude Code session started is marked, not another run fro
   expect((await paneNow($)).rows).toEqual([
     'checked 0s ago',
     'xur · load 1.00 of 6 · 3 runs',
-    '~/proj · this session · since 10:00 · make 1',
-    '~/proj · since 10:00 · make 3',
-    '~/proj · since 10:00 · make 2',
+    'make 1 · this session · since 10:00 · ~/proj',
+    'make 3 · since 10:00 · ~/proj',
+    'make 2 · since 10:00 · ~/proj',
   ])
 })

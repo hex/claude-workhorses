@@ -268,14 +268,16 @@ function hostHeader(host: HostView): string {
   return `${host.host} · load ${host.load.toFixed(2)} of ${host.cores} · ${runs}`
 }
 
+// The command leads and the folder or machine comes last, so a row cut at an 80-column pane's edge loses
+// where it came from before what it runs.
 function runRow(run: HostRun, home: string, sessionId: string | null): string {
   const since = run.since === null ? '' : ` · since ${run.since.slice(11, 16)}`
   const command = runCommand(run) || 'no owner recorded'
   if (run.stoppable) {
     const mine = isThisSession(run, sessionId) ? ' · this session' : ''
-    return `${folderLabel(run.dir, home)}${mine}${since} · ${command}`
+    return `${command}${mine}${since} · ${folderLabel(run.dir, home)}`
   }
-  return run.machine === null ? `${run.work} · ${command}` : `from ${run.machine}${since} · ${command}`
+  return run.machine === null ? `${run.work} · ${command}` : `${command}${since} · from ${run.machine}`
 }
 
 // The pane's first line: how old the report is, or why the last refresh failed.
@@ -363,27 +365,30 @@ export const register: Register = on => {
             <Button key="refresh" label="Refresh" onPress={() => refreshHosts($, refresh)} />
           </Box>
         </Box>
-        {hosts.map(host => (
-          <Box flexDirection="column" marginTop={1}>
-            <Text wrap="truncate-end" weight="bold">
-              {hostHeader(host)}
-            </Text>
-            {(host.state === 'ok' ? [...host.runs].sort((a, b) => runRank(a, sessionId) - runRank(b, sessionId)) : []).map(run => (
-              <Box flexDirection="row" gap={1} paddingLeft={2}>
-                <Box flexShrink={1}>
-                  <Text wrap="truncate-end" dimColor={!run.stoppable}>
-                    {runRow(run, paneHome, sessionId)}
-                  </Text>
-                </Box>
-                {run.stoppable ? (
-                  <Box flexShrink={0}>
-                    <Button key={`stop:${run.pid}`} label="Stop" onPress={() => stop(run.pid)} />
+        {/* No blank row between hosts: an inline pane is only so tall. */}
+        <Box flexDirection="column" marginTop={1}>
+          {hosts.map(host => (
+            <Box flexDirection="column">
+              <Text wrap="truncate-end" weight="bold">
+                {hostHeader(host)}
+              </Text>
+              {(host.state === 'ok' ? [...host.runs].sort((a, b) => runRank(a, sessionId) - runRank(b, sessionId)) : []).map(run => (
+                <Box flexDirection="row" gap={1} paddingLeft={2}>
+                  <Box flexShrink={1}>
+                    <Text wrap="truncate-end" dimColor={!run.stoppable}>
+                      {runRow(run, paneHome, sessionId)}
+                    </Text>
                   </Box>
-                ) : null}
-              </Box>
-            ))}
-          </Box>
-        ))}
+                  {run.stoppable ? (
+                    <Box flexShrink={0}>
+                      <Button key={`stop:${run.pid}`} label="Stop" onPress={() => stop(run.pid)} />
+                    </Box>
+                  ) : null}
+                </Box>
+              ))}
+            </Box>
+          ))}
+        </Box>
       </Box>
     )
   })
