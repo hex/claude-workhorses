@@ -47,7 +47,7 @@ In another agent:
 | pi | `pi install git:github.com/hex/workhorses` |
 | OpenCode | `opencode plugin add github:hex/workhorses`, or the path of a clone under `plugins` in `opencode.json` |
 | Antigravity | `agy plugin install <folder>` on a clone of this repository |
-| GitHub Copilot CLI | `npx plugins add hex/workhorses --target github-copilot`. Only interactive sessions read the policy. `copilot -p` skips the hook. Rerun the same npx command to update because `copilot plugin update` does not refresh the copy. |
+| GitHub Copilot CLI | `npx plugins add hex/workhorses --target github-copilot`. Only interactive sessions read the policy. `copilot -p` skips the hook. Rerun the same npx command to update because `copilot plugin update` does not refresh the copy. Keep `--target`: without it, npx installs into every agent it finds, beside the installs above. |
 
 Each one reads the same hosts file and tools records as Claude Code, so set up the workhorses once.
 
