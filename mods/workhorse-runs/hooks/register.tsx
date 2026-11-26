@@ -1,6 +1,6 @@
 // ABOUTME: Watches the workhorse run log that mirror.sh writes and shows the wh runs started from this session's folder.
 // ABOUTME: While one runs, a green wh badge sits in the prompt footer, counting the copy to the workhorse, then spinning while the job runs;
-// ABOUTME: the band above the prompt names each run with a Stop button, and a toast marks a long, BLOCKED or stopped end.
+// ABOUTME: the band above the prompt names each run with a Stop button, and a toast marks a long or BLOCKED end.
 import { atom, read, update } from 'claude-code'
 import type { Register, Timer } from 'claude-code'
 

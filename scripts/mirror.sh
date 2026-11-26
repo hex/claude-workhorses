@@ -62,7 +62,9 @@ blocked() {
 # line (SIGKILL, power loss) can be told apart from one still going.
 run_log=$HOME/.local/state/workhorse/runs.jsonl
 run_id="" run_ended=0 end_reason=""
-job_ssh="" job_host="" job_target="" job_work=""
+# What a signal or the way out acts on: the phase (copy while the copy is made, then job), the host, the
+# copy and this run's line in its lock's owner file, and the ssh that runs the job.
+phase="" run_host="" run_target="" run_work="" run_owner="" job_ssh=""
 
 log_start() {
   local host=$1 dir=$2 sub=$3
@@ -497,14 +499,13 @@ run() {
   work=$(work_name "$dir")
   [ "$host" != auto ] || host=$(pick_host "$work")
   target=$(ssh_target "$host")
+  run_host=$host run_target=$target run_work=$work run_owner="$(hostname -s) pid $$ since $(date '+%F %T')"
 
   log_start "$host" "$dir" "${sub%/}" "$@"
-  trap 'log_end $?' EXIT
-  # wh stop sends SIGTERM, and Ctrl-C or a closed terminal the others. While the copy is made, the EXIT
-  # trap then frees the host's lock; once the job runs, stop_job ends it on the host as well.
-  trap 'stop_copy 143' TERM
-  trap 'stop_copy 130' INT
-  trap 'stop_copy 129' HUP
+  trap 'finish $?' EXIT
+  trap 'on_signal 143' TERM
+  trap 'on_signal 130' INT
+  trap 'on_signal 129' HUP
 
   for ignore in "${ignores[@]}"; do
     rsync_excludes+=(--exclude "$ignore")
@@ -519,11 +520,10 @@ run() {
 $tracked"
 
   local prepared state server has_git first_copy_kb empty tree_bytes stored_clock copy_changes
+  phase=copy
   prepared=$(remote "$target" /bin/bash -c "$prepare_work_copy" _ "$work" \
-    "$(hostname -s) pid $$ since $(date '+%F %T'): $*" "$seed" "$(printf '%s\n' "${names[@]}")" "${rsync_excludes[@]}") ||
+    "$run_owner: $*" "$seed" "$(printf '%s\n' "${names[@]}")" "${rsync_excludes[@]}") ||
     blocked "could not lock and refresh $host:~/$work"
-  # shellcheck disable=SC2064,SC2154
-  trap "status=\$?; remote $(printf '%q' "$target") rm -rf $(printf '%q' "$work.lock"); log_end \$status" EXIT
   read -r state server has_git <<<"$(sed -n 1p <<<"$prepared")"
   if [ "$has_git" = nogit ] && is_tailscale "$server"; then
     # The first copy sends .git and every file the full walk below sends, measured with the same exclusions.
@@ -588,41 +588,77 @@ $tracked"
 
   # From here the remote job owns the lock and releases it itself. ssh runs in the background, its
   # stdin kept, so a signal to this shell interrupts the wait at once instead of after the job.
-  trap 'log_end $?' EXIT
   log_synced
+  phase=job
   remote "$target" /bin/bash -c "$run_job" _ "$work" "${sub:-.}" "$clock" "$(printf '%s\n' "${names[@]}")" "$limit" "$@" <&0 &
-  job_ssh=$! job_host=$host job_target=$target job_work=$work
-  trap 'stop_job 143' TERM
-  trap 'stop_job 130' INT
-  trap 'stop_job 129' HUP
+  job_ssh=$!
   local status=0
   wait "$job_ssh" || status=$?
   return "$status"
 }
 
-# Ends a run stopped before its job started, exiting $1 through the EXIT trap, which frees the lock.
-stop_copy() {
+# Frees the lock this run took on the host, and only that one: another run's lock, or none, stays.
+free_lock() {
+  remote "$run_target" /bin/sh -c 'case "$(cat "$1/owner" 2>/dev/null)" in "$2:"*) rm -rf "$1" ;; esac' _ "$run_work.lock" "$run_owner"
+}
+
+# The way out of a run, however it ends: while the copy is made, the lock this run took goes (once the
+# job runs, the host frees it), then the end line. Signals are ignored from here, by this shell and the
+# ssh it starts, so a second Ctrl-C or wh stop cannot cut the cleanup short.
+finish() {
+  local status=$1
+  trap '' TERM INT HUP
+  if [ "$phase" = copy ] && ! free_lock; then
+    echo "mirror.sh run: could not free $run_host:~/$run_work.lock; remove it if no run holds it" >&2 || true
+  fi
+  log_end "$status"
+}
+
+# A signal stops the run and exits $1: wh stop sends SIGTERM, Ctrl-C SIGINT and a closed terminal
+# SIGHUP. Once the job runs, stop_job ends it on the host; before, the way out frees the lock.
+on_signal() {
+  trap '' TERM INT HUP
   end_reason=stopped
-  echo "mirror.sh run: stopped before the job started" >&2
+  if [ "$phase" = job ]; then
+    stop_job
+  else
+    echo "mirror.sh run: stopped before the job started" >&2 || true
+  fi
   exit "$1"
 }
 
-# Ends this run's job on $job_host and exits $1. SIGTERM goes to the shell that runs the job there,
-# whose pid run_job writes into the lock as it starts: that shell stops the job's process group and
-# frees the lock. Without the ssh that started it, the job would run on, as nothing reaches a host's
-# process once its laptop side is gone. A job whose ssh has already ended needs nothing.
+# On a host: ends the job of the run whose lock is $1 and whose owner line starts with $2. SIGTERM goes
+# to the shell that runs the job, whose pid run_job writes into the lock as it starts; that shell stops
+# the job's process group and frees the lock. It waits up to $3 seconds for that pid; with none by then,
+# $4 = free removes the lock, which no job holds, and anything else fails. A lock that is gone, or
+# another run's, means the job has already ended.
+stop_on_host='n=0
+while :; do
+  case "$(cat "$1/owner" 2>/dev/null)" in "$2:"*) ;; *) exit 0 ;; esac
+  [ -s "$1/pid" ] && exec kill -s TERM "$(cat "$1/pid")"
+  n=$((n + 1))
+  [ "$n" -lt "$3" ] || break
+  sleep 1
+done
+[ "$4" = free ] && rm -rf "$1"'
+
+# Ends this run's job on the host. Without this the job would run on, as nothing reaches a host's
+# process once its laptop side is gone. When no job shell has written its pid after 10 seconds, the
+# ssh that starts the job never reached the host: once that ssh is ended no job can start, so the
+# lock goes too.
 stop_job() {
-  trap '' TERM INT HUP
-  end_reason=stopped
-  if kill -0 "$job_ssh" 2>/dev/null; then
-    if remote "$job_target" /bin/sh -c 'for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$1" ] && exec kill -s TERM "$(cat "$1")"; sleep 1; done; exit 1' _ "$job_work.lock/pid"; then
-      wait "$job_ssh" 2>/dev/null || true
-      echo "mirror.sh run: stopped the job on $job_host" >&2
-    else
-      echo "mirror.sh run: could not reach the job on $job_host to stop it; it may still be running in ~/$job_work" >&2
-    fi
+  if remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 10 wait; then
+    [ -z "$job_ssh" ] || wait "$job_ssh" 2>/dev/null || true
+    echo "mirror.sh run: stopped the job on $run_host" >&2 || true
+    return
   fi
-  exit "$1"
+  # shellcheck disable=SC2046 # one pid a word
+  kill -s TERM $(descendants $$) 2>/dev/null || true
+  if remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 1 free; then
+    echo "mirror.sh run: the job never started on $run_host; its lock is freed" >&2 || true
+  else
+    echo "mirror.sh run: could not reach $run_host to stop the job; it may still be running in ~/$run_work" >&2 || true
+  fi
 }
 
 # The run log's runs still going: a start line with no end line whose mirror.sh still lives. Prints one
@@ -654,6 +690,15 @@ list_runs() {
     "\(.pid)\t\(.host)\t\(age)\t\(.dir | split("/") | last)\(if .sub == "" then "" else "/" + .sub end)\t\(.command)"' <<<"$runs"
 }
 
+# The pids of every process under process $1, children first.
+descendants() {
+  local child
+  for child in $(pgrep -P "$1"); do
+    echo "$child"
+    descendants "$child"
+  done
+}
+
 # Stops the run whose pid here is $1, as Ctrl-C in its terminal would: SIGTERM to its mirror.sh, whose
 # traps end the job on the host and free the lock. Waits up to 30 s for the run to end.
 stop_run() {
@@ -661,12 +706,14 @@ stop_run() {
   local pid=$1 start waited=0
   start=$(live_runs | jq -c --argjson pid "$pid" 'select(.pid == $pid)')
   [ -n "$start" ] || { echo "wh stop: no wh run going has the number $pid; wh ps lists the runs going" >&2; exit 1; }
-  # While the copy is made, mirror.sh waits on rsync or ssh in the foreground, which holds its trap
-  # back until they end, so they get SIGTERM too. Once the job runs, its traps act at once.
-  if ! jq -e --arg id "$(jq -r .id <<<"$start")" 'select(.event == "synced" and .id == $id)' "$run_log" >/dev/null; then
-    pkill -TERM -P "$pid" 2>/dev/null || true
-  fi
   kill -s TERM "$pid" 2>/dev/null || true
+  # While the copy is made, mirror.sh waits on rsync or ssh in the foreground, which holds its trap
+  # back until they end, so every process under it gets SIGTERM too: the ssh of a command substitution
+  # sits under a subshell. Once the job runs, its traps act at once.
+  if ! jq -e --arg id "$(jq -r .id <<<"$start")" 'select(.event == "synced" and .id == $id)' "$run_log" >/dev/null; then
+    # shellcheck disable=SC2046 # one pid a word
+    kill -s TERM $(descendants "$pid") 2>/dev/null || true
+  fi
   while kill -0 "$pid" 2>/dev/null; do
     [ $waited -lt 300 ] || { echo "wh stop: run $pid is still going 30 s after SIGTERM" >&2; exit 1; }
     sleep 0.1
