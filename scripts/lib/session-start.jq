@@ -15,6 +15,15 @@ def add_warnings($message):
   else . + [$message]
   end;
 
+# Errors often end with the failing file or operation. Keep that end when clipping.
+def fit_error($prefix):
+  if ($prefix + . | fits) then $prefix + .
+  elif length < 2 then "workhorses: the startup policy could not be rendered."
+  else .[(length / 2 | ceil):] | fit_error($failure + "[earlier output omitted] ")
+  end;
+
+if $failure != "" then ($warnings | rtrimstr("\n") | fit_error($failure))
+else
 add_warnings($warnings) as $all |
 ($all | join("") | rtrimstr("\n")) as $whole |
 if ($whole | fits) then $whole
@@ -32,4 +41,5 @@ else
     if fits then . else notice("Policy including rules") end
   else notice("Policy diagnostic")
   end
+end
 end | session_start

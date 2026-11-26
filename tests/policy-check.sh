@@ -314,4 +314,19 @@ context=$(jq -er 'select(.hookSpecificOutput.hookEventName == "SessionStart") | 
   fail "SessionStart lost the renderer diagnostic"
 echo "ok   SessionStart reports the renderer failure in additionalContext and exits zero"
 
+# A renderer can finish several sections before a later read fails.
+cat >"$dir/policy.sh" <<'RENDERER'
+awk 'BEGIN { printf "\"partial tool inventory "; for (i=0;i<9000;i++) printf "x"; print "\"" }'
+awk 'BEGIN { for (i=0;i<6000;i++) printf "é\""; print " notes read failed" }' >&2
+exit 1
+RENDERER
+"$BASH" "$dir/policy-session-start.sh" >"$config/failed.json" || fail "oversize renderer failure exited nonzero"
+bytes=$(wc -c <"$config/failed.json" | tr -d ' ')
+[ "$bytes" -le 8500 ] || fail "renderer failure returned $bytes bytes (limit 8500)"
+jq -e --arg script "$dir/policy.sh" '.hookSpecificOutput.additionalContext |
+  startswith("workhorses: " + $script + " failed, so the workhorse policy is missing: ") and
+  endswith("notes read failed") and (contains("partial tool inventory") | not)' "$config/failed.json" >/dev/null ||
+  fail "oversize renderer failure lost its diagnostic or included partial sections"
+echo "ok   an oversize renderer failure fits and carries the error without the partial inventory"
+
 echo "all policy checks passed"

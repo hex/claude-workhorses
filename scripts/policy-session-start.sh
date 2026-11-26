@@ -5,12 +5,23 @@ set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd -P)
 printf -v command 'bash %q --full' "$here/policy.sh"
-warnings=$(mktemp)
+missing_context() {
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"workhorses: the startup policy could not be rendered."}}'
+}
+
+warnings=$(mktemp) || { missing_context; exit 0; }
 trap 'rm -f "$warnings"' EXIT
-if ! sections=$(bash "$here/policy.sh" --sections 2>"$warnings"); then
-  sections=${sections}$(cat "$warnings")
-  printf '%s' "workhorses: $here/policy.sh failed, so the workhorse policy is missing: $sections" |
-    jq -Rsc '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: .}}'
+failure=""
+if sections=$(bash "$here/policy.sh" --sections 2>"$warnings"); then
+  :
+else
+  failure="workhorses: $here/policy.sh failed, so the workhorse policy is missing: "
+  [ -s "$warnings" ] || printf 'renderer exited without a diagnostic' >"$warnings"
+  sections=""
+fi
+if ! json=$(printf '%s\n' "$sections" | jq -sc --rawfile warnings "$warnings" \
+    --arg failure "$failure" --arg command "$command" -f "$here/lib/session-start.jq"); then
+  missing_context
   exit 0
 fi
-printf '%s\n' "$sections" | jq -sc --rawfile warnings "$warnings" --arg command "$command" -f "$here/lib/session-start.jq"
+printf '%s\n' "$json"
