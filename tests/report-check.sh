@@ -131,8 +131,9 @@ printf '%s pid 999 since 2026-11-26 10:00:00: printf \033[31mred\033[0m \302\233
 
 twice_lock=$(printf 'lock\t%s\t%s pid %s since 2026-11-26 16:00:00: make twice' "$batch_work" "$me" "$stand_in")
 
+mkdir "$scratch/tmp"
 wh() {
-  HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts TWICE_LOCK=$twice_lock PATH=$scratch/bin:$PATH \
+  HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts TWICE_LOCK=$twice_lock TMPDIR=$scratch/tmp PATH=$scratch/bin:$PATH \
     "$BASH" "$here/../bin/wh" "$@"
 }
 
@@ -207,5 +208,32 @@ for args in "hosts extra" "hosts --json extra" "hosts --jsonx"; do
     fail "wh $args: wanted exit 2 and the usage line, got exit $code: $(cat "$scratch/err")"
 done
 echo "ok   wh hosts with an argument other than --json is a usage error"
+
+# wh hosts leaves no folder of answers behind: not when it reports, not when building a host's report fails
+# (a jq that fails where it reads a host's answer stands in for that), and not when it is stopped mid-probe
+# (the mod stops a wh hosts that runs past its time limit).
+[ -z "$(ls -A "$scratch/tmp")" ] || fail "wh hosts left $(ls -A "$scratch/tmp") in TMPDIR"
+mkdir "$scratch/failing-jq"
+cat >"$scratch/failing-jq/jq" <<JQ
+#!/bin/bash
+for arg; do [ "\$arg" != --rawfile ] || exit 5; done
+exec $(command -v jq) "\$@"
+JQ
+chmod +x "$scratch/failing-jq/jq"
+code=0
+PATH=$scratch/failing-jq:$PATH wh hosts --json >"$scratch/out" 2>"$scratch/err" || code=$?
+[ "$code" = 1 ] || fail "wh hosts with a failing report exited $code, wanted 1: $(cat "$scratch/err")"
+[ -z "$(ls -A "$scratch/tmp")" ] || fail "wh hosts left $(ls -A "$scratch/tmp") in TMPDIR when a host's report failed"
+# Not through the wh function: in the background that is a subshell, and the TERM must reach mirror.sh,
+# which bin/wh execs.
+HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts TWICE_LOCK=$twice_lock TMPDIR=$scratch/tmp PATH=$scratch/bin:$PATH \
+  "$BASH" "$here/../bin/wh" hosts --json >/dev/null 2>&1 &
+stopped=$!
+for _ in $(seq 50); do [ -z "$(ls -A "$scratch/tmp")" ] || break; sleep 0.1; done
+[ -n "$(ls -A "$scratch/tmp")" ] || fail "wh hosts made no folder of answers to stop it in"
+kill -s TERM "$stopped"
+wait "$stopped" 2>/dev/null || true
+[ -z "$(ls -A "$scratch/tmp")" ] || fail "wh hosts left $(ls -A "$scratch/tmp") in TMPDIR when stopped"
+echo "ok   wh hosts removes its folder of answers when it reports, fails or is stopped"
 
 echo "wh hosts reports are right"

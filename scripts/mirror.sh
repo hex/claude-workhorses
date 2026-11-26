@@ -824,16 +824,18 @@ list_hosts() {
     echo "usage: wh hosts [--json]" >&2
     exit 2
   fi
-  local answers host mine reports
+  local host mine reports
   load_hosts || exit 2
   all_hosts=("${host_names[@]}")
   mine=$(live_runs | while IFS= read -r start; do
     jq -c --arg work "$(work_name "$(jq -r .dir <<<"$start")")" '.work = ($work | ltrimstr("work/"))' <<<"$start"
   done | jq -sc .)
-  answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-hosts.XXXX")
-  probe_hosts 5 "$load_and_cores; wh_list=1; $count_runs" "$answers"
-  reports=$(for host in "${all_hosts[@]}"; do host_report "$host" "$answers" "$(hostname -s)" "$mine" || exit 1; done)
-  rm -rf "$answers"
+  # Global, not local: the EXIT trap removes the folder however this script ends, a failed report or a
+  # SIGTERM included, and runs after this function has returned.
+  hosts_answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-hosts.XXXX")
+  trap 'rm -rf "$hosts_answers"' EXIT
+  probe_hosts 5 "$load_and_cores; wh_list=1; $count_runs" "$hosts_answers"
+  reports=$(for host in "${all_hosts[@]}"; do host_report "$host" "$hosts_answers" "$(hostname -s)" "$mine" || exit 1; done)
   if [ $# = 1 ]; then printf '%s\n' "$reports"; else render_hosts <<<"$reports"; fi
 }
 
