@@ -41,7 +41,9 @@ fictional host. To check a single target, pass its ID, for example `python3 test
 It follows each install registration to the skill on disk. For Claude Code it also checks the mod
 entry point. For Claude Code, Codex, Cursor, Copilot CLI and VS Code it runs the installed hook
 command and compares the context field or stdout with the installed policy. For Grok it checks
-the native component inventory. For Kimi it checks the startup skill. The check removes the
+the native component inventory. Grok’s npx install carries `hooks/hooks.json` and runs the same
+8,500-byte SessionStart hook as Claude Code, Cursor and VS Code. Grok leaves its output out of
+model context. For Kimi it checks the startup skill. The check removes the
 temporary homes and npm cache on exit. It runs separately from `tests/run.sh` and does not open
 an agent session.
 
