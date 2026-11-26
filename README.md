@@ -166,8 +166,8 @@ locks it, copies `.git`, patches the working tree, then runs the command:
 Every run writes a start, a synced and an end line to `~/.local/state/workhorse/runs.jsonl`. The
 mod reads that log and shows the runs started from the session's folder:
 
-- The green footer badge names the host and counts the copy (`↗ wh - alpha 0:42`), then spins while the
-  job runs (`⠋ wh - alpha 0:43`).
+- The green footer badge names the host and counts the copy, its arrows swapping while the copy
+  syncs (`wh ⇄ alpha 0:42`), then a spinner takes their place while the job runs (`wh ⠋ alpha 0:43`).
 - The band above the prompt has a row per run (`↗ workhorses │ alpha · 0:43 · demo · pnpm test [ Stop ]`),
   at most three, then a count of the rest. The time reads `copying 0:02` while the copy runs. Stop
   runs `wh stop` for that run; click it, or press ctrl+x tab to reach it and enter to press it. A

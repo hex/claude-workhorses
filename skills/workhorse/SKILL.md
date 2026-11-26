@@ -28,7 +28,7 @@ wh alpha --timeout 20m -- cargo test   # a named host
   clone or worktree works at once.
 - Every run shows up for the user in the sessions whose folder holds the repo, or sits inside it (the
   workhorse-runs mod): a green `wh` badge in the prompt footer, which names the host and counts the copy
-  (`↗ wh - alpha 0:42`), then spins (`⠋ wh - alpha 0:43`) while the job runs, a row per run above the
+  (`wh ⇄ alpha 0:42`, the arrows swapping), then spins (`wh ⠋ alpha 0:43`) while the job runs, a row per run above the
   prompt (`↗ workhorses │ alpha · 0:43 · demo · pnpm test [ Stop ]`), at most three of them and a
   count of the rest, and a toast when one that took over 2 minutes ends or a run ends with `BLOCKED`.
 - With no host, `wh` picks among the hosts whose 1-minute load is below their core count: the least

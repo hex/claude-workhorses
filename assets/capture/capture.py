@@ -270,7 +270,8 @@ class Capture:
             lines = text.splitlines()
             self.expect(sum(line.startswith(f"↗ workhorses │ {HOST} · ") for line in lines) == (1 if running else 0),
                         f"{'one' if running else 'no'} band line")
-            self.expect(text.count(f"wh - {HOST}") == (1 if running else 0), f"{'one' if running else 'no'} badge")
+            self.expect(len(re.findall(f"wh [⇄⇆{SPINNER}] {HOST}", text)) == (1 if running else 0),
+                        f"{'one' if running else 'no'} badge")
         return check
 
     def claude_band(self, theme):
@@ -291,13 +292,13 @@ class Capture:
         self.tmux("send-keys", "-t", "capture:0.0", "-l", "!")
         time.sleep(.5)
         self.type(BENCH)
-        self.wait(f"↗ wh - {HOST}")
+        self.wait(lambda text: re.search(f"wh [⇄⇆] {HOST}", text) is not None)
         self.save("The badge counts the copy to the workhorse", "! wh --", self.band(True))
-        self.wait(lambda text: re.search(f"[{SPINNER}] wh - {HOST}", text) is not None)
+        self.wait(lambda text: re.search(f"wh [{SPINNER}] {HOST}", text) is not None)
         self.save("The badge spins while the job runs", "! wh --", self.band(True))
         self.wait("ns/op")
         self.save("The band counts the run's time", "! wh --", self.band(True))
-        self.wait(lambda text: f"wh - {HOST}" not in text and "ok  " in text)
+        self.wait(lambda text: re.search(f"wh [⇄⇆{SPINNER}] {HOST}", text) is None and "ok  " in text)
         self.save("The run ends, and the band and badge go", "! wh --", self.band(False))
 
     def finish(self):

@@ -13,6 +13,7 @@ This file lists the notable changes to claude-workhorses. The format follows
 ### Changed
 - The band draws a row per run in the style of the claude-bloodhounds band: `↗ workhorses │ alpha · 0:43 · demo · pnpm test [ Stop ]`, the time reading `copying 0:02` while the copy runs.
 - The hosts file refuses a host named `ps` or `stop`, since `wh` takes those as commands.
+- The footer badge puts its mark between `wh` and the host: arrows that swap while the copy syncs (`wh ⇄ alpha 0:42`), then the spinner while the job runs (`wh ⠋ alpha 0:43`).
 
 ### Fixed
 - `Ctrl-C` on a run's `wh`, or a closed terminal, now stops the job on the host. Before, the job ran on and held the copy's lock, and the run log recorded the run as ended with exit 0.

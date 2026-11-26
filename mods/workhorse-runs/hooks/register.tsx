@@ -1,5 +1,5 @@
 // ABOUTME: Watches the workhorse run log that mirror.sh writes and shows the wh runs started from this session's folder.
-// ABOUTME: While one runs, a green wh badge sits in the prompt footer, counting the copy to the workhorse, then spinning while the job runs;
+// ABOUTME: While one runs, a green wh badge sits in the prompt footer, its arrows swapping while the copy syncs, then a spinner while the job runs;
 // ABOUTME: the band above the prompt names each run with a Stop button, and a toast marks a long or BLOCKED end.
 import { atom, read, update } from 'claude-code'
 import type { Register, Timer } from 'claude-code'
@@ -17,9 +17,10 @@ const LONG_RUN_SECONDS = 120
 const LIVENESS_MS = 15000
 // The theme's key for the green of the session-name tag, so the badge follows light and dark themes.
 export const BADGE_GREEN = 'green_FOR_SUBAGENTS_ONLY'
-// The arrow marks work being sent off the laptop, while the copy runs.
-const COPYING_MARK = '↗'
-// A braille spinner turns while the job itself runs on the workhorse.
+// Between wh and the host, two arrows swap while the copy syncs the repository to the workhorse, every
+// SYNC_MS, and a braille spinner turns while the job itself runs there, every SPIN_MS.
+const SYNC_ARROWS = ['⇄', '⇆']
+const SYNC_MS = 500
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const SPIN_MS = 100
 // The band above the prompt is shared with other mods' rows: this mod's row names at most this many
@@ -32,7 +33,7 @@ const ROUND_RIGHT = '\ue0b4'
 const badge = atom({ plugin: 'claude-workhorses', key: 'badge' } as const, null as Badge)
 const runLines = atom({ plugin: 'claude-workhorses', key: 'runLines' } as const, [] as RunLines, { shape: 'run-lines-2' })
 // The band's label, as the claude-bloodhounds band opens its row; later rows keep its width blank.
-const BAND_LABEL = `${COPYING_MARK} workhorses`
+const BAND_LABEL = '↗ workhorses'
 // The grey of the rule between the label and the runs.
 const RULE = 'gray'
 
@@ -126,17 +127,19 @@ function clock(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
 
-// The badge's text: none without a run; else the workhorses the runs went to, each once, with the
-// time the oldest copy has taken while any run is still copying; once every job runs, a spinner frame
-// that steps every SPIN_MS and the time since the oldest run started.
+// The badge's text: none without a run; else wh, the mark of what the runs do now, the workhorses
+// they went to, each once, and a time. While any run still copies, the swapping arrows and the time the
+// oldest copy has taken; once every job runs, a spinner frame and the time since the oldest run started.
 export function badgeText(active: Iterable<Start>, copying: ReadonlySet<string>, nowMs: number): Badge {
   const runs = [...active]
   if (runs.length === 0) return null
   const hosts = [...new Set(runs.map(start => start.host))].sort().join(', ')
   const starts = runs.filter(start => copying.has(start.id)).map(start => start.at)
-  if (starts.length > 0) return `${COPYING_MARK} wh - ${hosts} ${clock(nowMs / 1000 - Math.min(...starts))}`
+  if (starts.length > 0) {
+    return `wh ${SYNC_ARROWS[Math.floor(nowMs / SYNC_MS) % SYNC_ARROWS.length]} ${hosts} ${clock(nowMs / 1000 - Math.min(...starts))}`
+  }
   const oldest = Math.min(...runs.map(start => start.at))
-  return `${SPINNER[Math.floor(nowMs / SPIN_MS) % SPINNER.length]} wh - ${hosts} ${clock(nowMs / 1000 - oldest)}`
+  return `wh ${SPINNER[Math.floor(nowMs / SPIN_MS) % SPINNER.length]} ${hosts} ${clock(nowMs / 1000 - oldest)}`
 }
 
 // The band's lines: each run on its own, in the order the runs started, its time counting the copy
@@ -228,7 +231,8 @@ export const register: Register = on => {
     const copying = new Set<string>()
     let offset: number | undefined
     let checkedAt = 0
-    // Redraws the spinner between polls; runs only while a job runs and no copy is counting.
+    // Redraws the badge's arrows or spinner between polls, while any run goes; a redraw that changes
+    // nothing writes nothing.
     let spin: Timer | undefined
 
     // A run whose mirror.sh is gone will never get its end line: drop it. Only a run this session saw
@@ -277,7 +281,7 @@ export const register: Register = on => {
       const flat = (rows: RunLines) => rows.map(row => `${row.id} ${row.time}`).join('\n')
       if (flat(await read($, runLines)) !== flat(lines)) await update($, runLines, () => lines)
       await drawBadge(nowMs)
-      const spinning = active.size > 0 && copying.size === 0
+      const spinning = active.size > 0
       if (spinning && spin === undefined) spin = $.clock.every(SPIN_MS, async () => drawBadge(await $.clock.now()))
       if (!spinning && spin !== undefined) {
         spin.cancel()
