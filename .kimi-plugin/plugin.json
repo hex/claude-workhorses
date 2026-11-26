@@ -1,0 +1,8 @@
+{
+  "name": "workhorses",
+  "version": "2026.11.13",
+  "description": "Run jobs on the Macs and Linux machines in your workhorses hosts file.",
+  "skills": "./skills",
+  "sessionStart": { "skill": "workhorse" },
+  "hooks": []
+}
