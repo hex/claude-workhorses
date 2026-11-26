@@ -194,6 +194,20 @@ apply ""
 [ "$code" = 0 ] || fail "the run after a loose snippet exited $code: $(tail -3 "$scratch/apply.log")"
 echo "ok   a recipe that reads stdin cannot eat the lines after it, and a snippet written without set -u in mind breaks no run"
 
+# An install can exit 0 and leave its tool unusable: an earlier run cut short left a folder the
+# installer takes for a finished install. The step fails when its probe still reports the tool missing.
+printf '#!/bin/bash\n[ "$1" = install ] || { echo "hollow-tool missing"; echo "hollow-other 1.0"; }\n' >"$stage/recipes/hollow"
+chmod 700 "$stage/recipes/hollow"
+printf '%s\n' "hollow" "after" >"$stage/tools"
+apply ""
+[ "$(cat "$scratch/home/workhorse/run.status")" = "1 hollow" ] || fail "a hollow install gave run.status '$(cat "$scratch/home/workhorse/run.status")'"
+grep -qxF "hollow: the install ended, but its probe reports: hollow-tool missing" "$scratch/apply.log" ||
+  fail "a hollow install is not named: $(tail -3 "$scratch/apply.log")"
+grep -q '^after' "$scratch/home/calls" && fail "the recipe after a hollow install ran"
+grep -qx 'hollow-tool missing' "$scratch/home/workhorse/manifest" || fail "the manifest lacks the hollow probe: $(cat "$scratch/home/workhorse/manifest")"
+printf '%s\n' "slurp" "loose" "after" >"$stage/tools"
+echo "ok   an install that exits 0 while its probe still reports the tool missing fails its step, named, and the steps after it do not run"
+
 rm -f "$scratch/home/.zshenv"
 apply ""
 [ "$(cat "$scratch/home/.zshenv")" = "$line" ] || fail ".zshenv from nothing: '$(cat "$scratch/home/.zshenv")'"

@@ -22,6 +22,13 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 ### Changed
 - `hosts` is a `wh` command, so the hosts file refuses it as a host name, as it refuses `ps` and `stop`.
 
+### Fixed
+- A sync no longer ends with exit 0 while a tool it installs does not run. A recipe's step fails when its
+  probe still reports the tool `missing` after the install, and `sync.sh status` names that step.
+- `rustup` installs stable again when an earlier install cut short left a `rustc` that does not run, and
+  `dotnet` removes the SDK folders such an install left without `dotnet`, which Microsoft's installer
+  would otherwise skip. Global tools in `~/.dotnet/tools` stay.
+
 ## 2026.11.14
 
 ### Added

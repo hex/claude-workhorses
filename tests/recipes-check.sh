@@ -102,4 +102,23 @@ for version in "uv 0.13.10 (e3e7c1eac 2026-11-24 aarch64-apple-darwin)" "uv 0.13
 done
 echo "ok   uv's probe prints one release the same from a Mac and a Linux host"
 
+# An install cut short can leave a tool that does not run where the next run's check sees a finished
+# install. rustup without a rustc that runs installs stable again; a rustc that runs is left as it is.
+mkdir -p "$HOME/.cargo/bin"
+printf '%s\n' '#!/bin/bash' 'echo "rustup $*" >>"$RECIPES_CHECK_LOG"' >"$HOME/.cargo/bin/rustup"
+chmod +x "$HOME/.cargo/bin/rustup"
+expect_install "rustup whose rustc does not run" "" 0 "rustup toolchain uninstall stable
+rustup default stable" rustup Linux
+printf '%s\n' '#!/bin/bash' 'echo "rustc 1.100.0"' >"$HOME/.cargo/bin/rustc"
+chmod +x "$HOME/.cargo/bin/rustc"
+expect_install "rustup whose rustc runs" "" 0 "" rustup Linux
+# Microsoft's installer skips an SDK whose folder exists, so an SDK folder without the dotnet that runs
+# it goes first; the global tools in ~/.dotnet/tools stay.
+mkdir -p "$HOME/.dotnet/sdk/10.0.404" "$HOME/.dotnet/tools"
+touch "$HOME/.dotnet/tools/keep"
+expect_install "dotnet with an SDK folder but no dotnet" "" 0 "curl -fsSL https://dot.net/v1/dotnet-install.sh" dotnet Linux 10.0
+[ ! -e "$HOME/.dotnet/sdk" ] || fail "dotnet left the SDK folder of an install without dotnet: $(ls "$HOME/.dotnet/sdk")"
+[ -e "$HOME/.dotnet/tools/keep" ] || fail "dotnet removed ~/.dotnet/tools"
+echo "ok   rustup and dotnet install again over an install that left a tool that does not run, and keep one that does"
+
 echo "all recipe checks passed"

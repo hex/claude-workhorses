@@ -154,5 +154,12 @@ while read -r -a words <&3; do
   echo "=== ${words[*]}"
   run_step "$(declares_sudo "./recipes/$step" && echo yes || echo no)" ./recipes/"$step" install "${words[@]:1}" </dev/null 3<&-
   build_env
+  # An install can exit 0 and leave its tool unusable, when an earlier run cut short left a folder the
+  # installer takes for a finished install; the step counts only when its probe finds the tool.
+  missing=$(run_step no ./recipes/"$step" probe "${words[@]:1}" </dev/null 3<&- | grep -E '(^| )missing$' || true)
+  if [ -n "$missing" ]; then
+    echo "$step: the install ended, but its probe reports: $(paste -sd ',' - <<<"$missing")" >&2
+    exit 1
+  fi
 done 3<./tools
 step=""

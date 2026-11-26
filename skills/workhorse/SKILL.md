@@ -88,8 +88,8 @@ arguments per line, then optional filters, `@arch=x86_64` or `arm64`, `@os=macos
    prose, before sync.sh runs. The question shows the exact line, and the recommended option appends
    it and syncs the hosts it targets. When no built-in recipe fits, write a user recipe instead: an
    executable in `~/.config/workhorses/recipes/<name>`, owned by the user, writable only by
-   them, that answers `install [args]` and `probe [args]` (probe prints `<name> <version>` lines and
-   exits 0). Show its full text in the question. A recipe that runs `sudo -A` must carry the
+   them, that answers `install [args]` and `probe [args]` (probe prints `<name> <version>` lines, or `<name> missing`,
+   and exits 0). Show its full text in the question. A recipe that runs `sudo -A` must carry the
    line `# needs: sudo`, and the question must say it runs as root on every host it targets.
 3. On yes, append the line, then run `bash <sync.sh> <host>...` for the hosts it targets (the policy
    names sync.sh's path). The sync runs detached on each host; `bash <sync.sh> status <host>` says

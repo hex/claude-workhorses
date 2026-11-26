@@ -280,6 +280,8 @@ bash provision/sync.sh diff        # compare the hosts, tools line by tools line
 
 Before it contacts any host, `sync.sh` checks the hosts file, the tools file and every recipe it
 names. A run stops at the first step that fails, and `status` names that step and its exit code.
+A recipe's step fails when its install exits non-zero, or when its probe still prints a `missing`
+line after the install, as it does when an earlier run cut short left a tool that does not run.
 `status` reports every host and exits non-zero when one does not answer or its last run failed.
 On the host, the run adds one line, marked `# workhorses`, which loads the `PATH` the recipes
 set, to the file the login shell reads for an ssh command: the end of `~/.zshenv` on a Mac or for
@@ -342,7 +344,7 @@ before it asks for the sudo password or takes the host's lock, with a message th
 #### Your own recipes
 
 A recipe is an executable that answers `install [args]` and `probe [args]`. `probe` prints one
-`<name> <version>` line per tool and exits 0; the policy's tool list shows those lines on the
+`<name> <version>` line per tool, or `<name> missing` for a tool it does not find, and exits 0; the policy's tool list shows those lines on the
 recipe's line, each without the recipe's name and the space or dash after it. Put yours in
 `~/.config/workhorses/recipes/<name>`. The name is lower-case letters, digits and
 dashes, and may not be a built-in recipe's name. `sync.sh` refuses a recipe unless you own it, its

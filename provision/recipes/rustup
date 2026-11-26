@@ -1,12 +1,17 @@
 #!/bin/bash
 # ABOUTME: Recipe: Rust through rustup, installed into ~/.cargo without touching shell files.
-# ABOUTME: install takes no arguments and leaves an installed toolchain as it is. probe prints "rustc <version>".
+# ABOUTME: install takes no arguments and leaves a toolchain whose rustc runs as it is. probe prints "rustc <version>".
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
 install() {
   if ! [ -x "$HOME/.cargo/bin/rustup" ]; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+  elif ! "$HOME/.cargo/bin/rustc" --version >/dev/null 2>&1; then
+    # An install cut short leaves rustup with no default, or a stable toolchain without its manifest,
+    # which "rustup default stable" alone would keep; stable is installed again.
+    "$HOME/.cargo/bin/rustup" toolchain uninstall stable
+    "$HOME/.cargo/bin/rustup" default stable
   fi
   env_snippet rustup <<<'workhorse_path_add "$HOME/.cargo/bin"'
 }
