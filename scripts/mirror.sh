@@ -827,9 +827,11 @@ list_hosts() {
   local host mine reports
   load_hosts || exit 2
   all_hosts=("${host_names[@]}")
+  # A pid has one run going: when the log holds two live starts with one pid (the pid was used again after
+  # a run ended without its end line), the newer is that run, so a pid gets at most one Stop.
   mine=$(live_runs | while IFS= read -r start; do
     jq -c --arg work "$(work_name "$(jq -r .dir <<<"$start")")" '.work = ($work | ltrimstr("work/"))' <<<"$start"
-  done | jq -sc .)
+  done | jq -sc 'group_by(.pid) | map(max_by(.at))')
   # Global, not local: the EXIT trap removes the folder however this script ends, a failed report or a
   # SIGTERM included, and runs after this function has returned.
   hosts_answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-hosts.XXXX")

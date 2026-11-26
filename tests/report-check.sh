@@ -52,12 +52,12 @@ echo "ok   a start line names the session from CLAUDE_CODE_SESSION_ID only when 
 # wh hosts end to end, with a fake ssh first on PATH. For cayde, xur and ikora it runs the probe in a
 # scratch home of that host, under bash and zsh; eris refuses the connection, slow never answers, and odd and
 # mangled answer something that is not a probe's answer, and linuxy gives a Linux host's answer. The laptop's home is a scratch one too, its
-# run log naming three runs going, each one's mirror.sh a sleeping stand-in: two from the same folder
-# started by different Claude Code sessions (on xur and ikora, since a folder has one lock a host), and
-# one whose start line names no session. A run's lock on a host is named as run names it: the folder's
+# run log naming the runs going, each one's mirror.sh a sleeping stand-in: two from the same folder
+# started by different Claude Code sessions (on xur and ikora, since a folder has one lock a host), one
+# whose start line names no session, and one on twice. A run's lock on a host is named as run names it: the folder's
 # name and the first 8 hex digits of the SHA-1 of its path. On xur a decoy lock's owner names the xur
-# run's pid; twice lists one run's lock twice, and the run log has a start there with that same pid, as
-# when a pid is used again.
+# run's pid. twice lists its run's lock twice, and the lock of a run whose start line is older than the
+# xur run's and names the same pid, as when a pid is used again: that start is the stale one.
 me=$(hostname -s)
 work_of() { printf '%s-%s' "${1##*/}" "$(printf '%s' "$1" | shasum | cut -c1-8)"; }
 cores=$(/usr/sbin/sysctl -n hw.physicalcpu)
@@ -87,7 +87,7 @@ case "$5" in
   slow@slow.local) exec sleep 30 ;;
   odd@odd.local) printf 'Last login: Thu Nov 26 \033[1mon ttys000\n%s\n' "$(printf 'x%.0s' $(seq 250))" ;;
   mangled@mangled.local) printf '{ 1.00 1.00 1.00 }\n6\nlock\tok-1\towner\nnot a lock line\n1\n' ;;
-  twice@twice.local) printf '0.50 0.40 0.30 1/215 1245\n6\n%s\n%s\n2\n' "$TWICE_LOCK" "$TWICE_LOCK" ;;
+  twice@twice.local) printf '0.50 0.40 0.30 1/215 1245\n6\n%s\n%s\n%s\n3\n' "$TWICE_LOCK" "$TWICE_LOCK" "$TWICE_STALE" ;;
   linuxy@linuxy.local) printf '0.50 0.40 0.30 1/215 1245\n6\nlock\tlx-1\tother-mac pid 7 since 2026-11-26 08:00:00: cargo test\n1\n' ;;
   *) echo "fake ssh: unexpected arguments: $*" >&2; exit 99 ;;
 esac
@@ -101,16 +101,20 @@ stand_in=$!
 stand_in_b=$!
 "$scratch/mirror.sh" run 2>/dev/null &
 stand_in_c=$!
-trap 'for p in $stand_in $stand_in_b $stand_in_c; do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done; rm -rf "$scratch"' EXIT
+"$scratch/mirror.sh" run 2>/dev/null &
+stand_in_d=$!
+trap 'for p in $stand_in $stand_in_b $stand_in_c $stand_in_d; do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done; rm -rf "$scratch"' EXIT
 batch=$laptop/proj/.claude/worktrees/ai-batch
 {
+  jq -nc --argjson pid "$stand_in" --arg dir "$laptop/proj" \
+    '{event: "start", id: "r0", at: 0, host: "twice", dir: $dir, sub: "", command: "make stale", pid: $pid}'
   jq -nc --argjson pid "$stand_in" --arg dir "$batch" \
     '{event: "start", id: "r1", at: 1, host: "xur", dir: $dir, sub: "", command: "gtimeout 45m make test", pid: $pid, session: "sess-A1"}'
   jq -nc --argjson pid "$stand_in_b" --arg dir "$batch" \
     '{event: "start", id: "r2", at: 2, host: "ikora", dir: $dir, sub: "", command: "make lint", pid: $pid, session: "sess-B2"}'
   jq -nc --argjson pid "$stand_in_c" --arg dir "$laptop/proj" \
     '{event: "start", id: "r3", at: 3, host: "ikora", dir: $dir, sub: "", command: "make docs", pid: $pid}'
-  jq -nc --argjson pid "$stand_in" --arg dir "$batch" \
+  jq -nc --argjson pid "$stand_in_d" --arg dir "$batch" \
     '{event: "start", id: "r4", at: 4, host: "twice", dir: $dir, sub: "", command: "make twice", pid: $pid, session: "sess-D4"}'
 } >"$laptop/.local/state/workhorse/runs.jsonl"
 batch_work=$(work_of "$batch")
@@ -129,11 +133,12 @@ printf 'other-mac pid 412 since 2026-11-26 09:05:01: make\ttest\n' >"$locks/othe
 # Escape sequences, C1 and CR, and the characters that reorder or hide text: U+202E, U+200B, U+FEFF, U+2066.
 printf '%s pid 999 since 2026-11-26 10:00:00: printf \033[31mred\033[0m \302\233d\342\200\256o\342\200\213n\357\273\277e\342\201\246\r\n' "$me" >"$locks/esc-11111111.lock/owner"
 
-twice_lock=$(printf 'lock\t%s\t%s pid %s since 2026-11-26 16:00:00: make twice' "$batch_work" "$me" "$stand_in")
+twice_lock=$(printf 'lock\t%s\t%s pid %s since 2026-11-26 16:00:00: make twice' "$batch_work" "$me" "$stand_in_d")
+twice_stale=$(printf 'lock\t%s\t%s pid %s since 2026-11-26 08:00:00: make stale' "$proj_work" "$me" "$stand_in")
 
 mkdir "$scratch/tmp"
 wh() {
-  HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts TWICE_LOCK=$twice_lock TMPDIR=$scratch/tmp PATH=$scratch/bin:$PATH \
+  HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts TWICE_LOCK=$twice_lock TWICE_STALE=$twice_stale TMPDIR=$scratch/tmp PATH=$scratch/bin:$PATH \
     "$BASH" "$here/../bin/wh" "$@"
 }
 
@@ -161,15 +166,18 @@ want="{\"host\":\"cayde\",\"state\":\"ok\",\"load\":\"L\",\"cores\":$cores,\"run
 {\"host\":\"odd\",\"state\":\"unexpected\",\"answer\":\"Last login: Thu Nov 26 [1mon ttys000 $(printf 'x%.0s' $(seq 163))\"}
 {\"host\":\"mangled\",\"state\":\"unexpected\",\"answer\":\"{ 1.00 1.00 1.00 } 6 lock ok-1 owner not a lock line 1\"}
 {\"host\":\"twice\",\"state\":\"ok\",\"load\":0.50,\"cores\":6,\"runs\":[\
-{\"work\":\"$batch_work\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 16:00:00\",\"command\":\"make twice\",\"dir\":\"$batch\",\"session\":\"sess-D4\",\"stoppable\":true},\
-{\"work\":\"$batch_work\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 16:00:00\",\"command\":\"make twice\",\"dir\":null,\"session\":null,\"stoppable\":false}]}
+{\"work\":\"$batch_work\",\"machine\":\"$me\",\"pid\":$stand_in_d,\"since\":\"2026-11-26 16:00:00\",\"command\":\"make twice\",\"dir\":\"$batch\",\"session\":\"sess-D4\",\"stoppable\":true},\
+{\"work\":\"$batch_work\",\"machine\":\"$me\",\"pid\":$stand_in_d,\"since\":\"2026-11-26 16:00:00\",\"command\":\"make twice\",\"dir\":null,\"session\":null,\"stoppable\":false},\
+{\"work\":\"$proj_work\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 08:00:00\",\"command\":\"make stale\",\"dir\":null,\"session\":null,\"stoppable\":false}]}
 {\"host\":\"linuxy\",\"state\":\"ok\",\"load\":0.50,\"cores\":6,\"runs\":[{\"work\":\"lx-1\",\"machine\":\"other-mac\",\"pid\":7,\"since\":\"2026-11-26 08:00:00\",\"command\":\"cargo test\",\"dir\":null,\"session\":null,\"stoppable\":false}]}"
 [ "$got" = "$want" ] || fail "wh hosts --json: wanted
 $want
 got
 $got"
 echo "ok   wh hosts --json reports each host in file order: its load and runs, unreachable, or its answer made plain text"
-echo "ok   only the lock named for a run's folder gets its folder, session and Stop, once a pid"
+twice_stoppable=$(jq -s '[.[] | select(.state == "ok") | .runs[] | select(.stoppable) | .pid] | group_by(.) | map(select(length > 1) | .[0])' "$scratch/out")
+[ "$twice_stoppable" = "[]" ] || fail "wh hosts --json has more than one Stop for pids $twice_stoppable"
+echo "ok   only the lock named for a run's folder gets its folder, session and Stop, and a pid gets one Stop across hosts"
 
 code=0
 wh hosts >"$scratch/out" 2>"$scratch/err" || code=$?
@@ -189,9 +197,10 @@ eris     unreachable
 slow     unreachable
 odd      unexpected answer: Last login: Thu Nov 26 [1mon ttys000 $(printf 'x%.0s' $(seq 163))
 mangled  unexpected answer: { 1.00 1.00 1.00 } 6 lock ok-1 owner not a lock line 1
-twice    load 0.50 of 6 cores, 2 runs
-         $stand_in  ~/proj/.claude/worktrees/ai-batch  since 16:00  make twice
-         from $me pid $stand_in since 2026-11-26 16:00:00: make twice
+twice    load 0.50 of 6 cores, 3 runs
+         $stand_in_d  ~/proj/.claude/worktrees/ai-batch  since 16:00  make twice
+         from $me pid $stand_in_d since 2026-11-26 16:00:00: make twice
+         from $me pid $stand_in since 2026-11-26 08:00:00: make stale
 linuxy   load 0.50 of 6 cores, 1 run
          from other-mac pid 7 since 2026-11-26 08:00:00: cargo test"
 [ "$got" = "$want" ] || fail "wh hosts: wanted
@@ -226,7 +235,7 @@ PATH=$scratch/failing-jq:$PATH wh hosts --json >"$scratch/out" 2>"$scratch/err" 
 [ -z "$(ls -A "$scratch/tmp")" ] || fail "wh hosts left $(ls -A "$scratch/tmp") in TMPDIR when a host's report failed"
 # Not through the wh function: in the background that is a subshell, and the TERM must reach mirror.sh,
 # which bin/wh execs.
-HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts TWICE_LOCK=$twice_lock TMPDIR=$scratch/tmp PATH=$scratch/bin:$PATH \
+HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts TWICE_LOCK=$twice_lock TWICE_STALE=$twice_stale TMPDIR=$scratch/tmp PATH=$scratch/bin:$PATH \
   "$BASH" "$here/../bin/wh" hosts --json >/dev/null 2>&1 &
 stopped=$!
 for _ in $(seq 50); do [ -z "$(ls -A "$scratch/tmp")" ] || break; sleep 0.1; done
