@@ -6,7 +6,20 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 work=$(mktemp -d)
 server=""
-trap '[ -z "$server" ] || { kill "$server"; wait "$server"; } 2>/dev/null; rm -rf "$work"' EXIT
+cleanup() {
+  local status=$? recorder_status=0
+  if [ -n "$server" ]; then
+    kill "$server" 2>/dev/null || true
+    wait "$server" || recorder_status=$?
+    if [ "$recorder_status" -ne 0 ] && [ "$recorder_status" -ne 143 ]; then
+      echo "recorder exited $recorder_status" >&2
+      [ "$status" -ne 0 ] || status=$recorder_status
+    fi
+  fi
+  rm -rf "$work"
+  exit "$status"
+}
+trap cleanup EXIT
 
 # A scratch config whose notes end in a token unique to this run, so only the policy can carry it into a request.
 token=wh-check-$RANDOM$RANDOM
