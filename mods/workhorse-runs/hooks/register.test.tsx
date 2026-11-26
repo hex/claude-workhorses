@@ -24,7 +24,9 @@ const BAND_PROPS = {
   view: {},
 }
 
-// The run lines the band above the prompt draws now, one per run, top to bottom.
+// The run rows the band above the prompt draws now, top to bottom, each as "host · time · repo · command".
+// The band opens with the green bold label, as a row of the claude-bloodhounds band does, and every row
+// has a Stop button with no hotkey: a digit typed into an empty composer must never stop a run.
 async function bandNow($: Parameters<TestBody>[0], props: Partial<typeof BAND_PROPS> = {}): Promise<string[]> {
   const ui = await $.ui.mount({
     plugin: 'claude-workhorses',
@@ -32,19 +34,13 @@ async function bandNow($: Parameters<TestBody>[0], props: Partial<typeof BAND_PR
     component: 'AbovePrompt',
     props: { ...BAND_PROPS, ...props },
   })
-  // Each run is a green bold label ("wh gamma:") followed by its grey italic command, then its repository and time.
-  const texts = await ui.findAll({ type: 'Text' })
+  const rows = (await ui.findAll({ type: 'Text' })).filter(text => text.props.wrap === 'truncate-end').map(text => text.text)
+  const label = await ui.find({ type: 'Text', text: '↗ workhorses' })
+  const stops = await ui.findAll({ type: 'Button' })
   await ui.unmount()
-  const lines: string[] = []
-  texts.forEach((label, at) => {
-    if (!/^wh \S+:$/.test(label.text)) return
-    const [command, repoAndTime] = [texts[at + 1], texts[at + 2]]
-    expect(label.props).toMatchObject({ color: BADGE_GREEN, weight: 'bold' })
-    expect(command?.props).toMatchObject({ dimColor: true, italic: true })
-    expect(repoAndTime?.props).toMatchObject({ dimColor: true, italic: true })
-    lines.push(`${label.text} ${command?.text} ${repoAndTime?.text}`)
-  })
-  return lines
+  if (rows.length > 0) expect(label?.props).toMatchObject({ color: BADGE_GREEN, weight: 'bold' })
+  expect(stops.map(stop => [stop.props.label, stop.props.hotkey])).toEqual(rows.map(() => ['Stop', undefined]))
+  return rows
 }
 
 // The badge's text as the footer draws it now, or undefined when it shows none.
@@ -69,7 +65,13 @@ function end(id: string, at: number, exit: number, reason?: string): string {
 
 // The log and the live pids are this world's whole state; the test changes them between polls.
 function world(on: On) {
-  const state = { log: '', live: new Set<number>(), toasts: [] as string[], status: undefined as string | undefined }
+  const state = {
+    log: '',
+    live: new Set<number>(),
+    toasts: [] as string[],
+    status: undefined as string | undefined,
+    whCalls: [] as string[][],
+  }
   mock.env(on, { HOME })
   on('fs.exists', (_, e) => ({ value: e.path === LOG }))
   on('fs.stat', () => ({
@@ -81,6 +83,19 @@ function world(on: On) {
     return { value: new TextDecoder().decode(bytes.slice(from, from + (e.length ?? bytes.length))) }
   })
   on('process.run', (_, e) => {
+    if (e.argv[0]?.endsWith('/bin/wh')) {
+      state.whCalls.push(e.argv.slice(1))
+      const stopped = state.live.delete(Number(e.argv[2]))
+      return {
+        value: {
+          stdout: stopped ? `wh stop: stopped run ${e.argv[2]} on gamma: sleep 300\n` : '',
+          stderr: stopped ? '' : `wh stop: no wh run going has the number ${e.argv[2]}; wh ps lists the runs going\n`,
+          exitCode: stopped ? 0 : 1,
+          isStdoutTruncated: false,
+          isStderrTruncated: false,
+        },
+      }
+    }
     const asked = (e.argv[e.argv.length - 1] ?? '').split(',').map(Number)
     const stdout = asked.filter(pid => state.live.has(pid)).map(pid => `${pid} /bin/bash mirror.sh run gamma\n`).join('')
     return {
@@ -124,7 +139,7 @@ test('a run seen going whose mirror.sh then dies gets one toast and leaves the b
 
   await $.session.start({ cwd: '/repo/demo', surface: 'terminal', isInteractive: true })
   expect(await badgeNow($)).toBe('↗ wh - gamma 0:10')
-  expect(await bandNow($)).toEqual(['wh gamma: sleep 300 (demo) · 0:10'])
+  expect(await bandNow($)).toEqual(['gamma · copying 0:10 · demo · sleep 300'])
   // The engine draws every mod's status line as a warning, so a run never pins one.
   expect(state.status).toBe(undefined)
 
@@ -320,7 +335,7 @@ test('the band above the prompt names each run of this folder on its own line, a
   for (const pid of [4261, 4262]) state.live.add(pid)
   await clock.advance(1_000)
 
-  expect(await bandNow($)).toEqual(['wh gamma: sleep 300 (demo) · 0:11', 'wh alpha: sleep 300 (demo) · 0:02'])
+  expect(await bandNow($)).toEqual(['gamma · 0:11 · demo · sleep 300', 'alpha · copying 0:02 · demo · sleep 300'])
   expect(await bandNow($, { hasSurvey: true })).toEqual([])
 })
 
@@ -334,11 +349,33 @@ test('the band row stays three runs tall, so the rows of other mods keep their r
   await clock.advance(1_000)
 
   expect(await bandNow($)).toEqual([
-    'wh gamma: sleep 300 (demo) · 0:10',
-    'wh gamma: sleep 300 (demo) · 0:09',
-    'wh gamma: sleep 300 (demo) · 0:08',
+    'gamma · copying 0:10 · demo · sleep 300',
+    'gamma · copying 0:09 · demo · sleep 300',
+    'gamma · copying 0:08 · demo · sleep 300',
   ])
   const ui = await $.ui.mount({ plugin: 'claude-workhorses', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS })
-  expect((await ui.find({ type: 'Text', text: /more/ }))?.text).toBe('and 2 more runs')
+  expect((await ui.find({ type: 'Text', text: /more/ }))?.text).toBe('and 2 more runs; wh ps lists them')
   await ui.unmount()
+})
+
+test("a run's Stop button runs wh stop for that run, and a stop that fails says why in a toast", async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  const state = world(on)
+  await $.session.start({ cwd: '/repo/demo', surface: 'terminal', isInteractive: true })
+
+  state.log = [start('a', 4261, 990), synced('a', 995), start('b', 4262, 999), synced('b', 999)].join('\n') + '\n'
+  for (const pid of [4261, 4262]) state.live.add(pid)
+  await clock.advance(1_000)
+
+  const band = await $.ui.mount({ plugin: 'claude-workhorses', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS })
+  await band.press({ key: 'stop:b' })
+  expect(state.whCalls).toEqual([['stop', '4262']])
+  expect(state.toasts).toEqual([])
+
+  // The run ended between the drawing and the press.
+  state.live.delete(4261)
+  await band.press({ key: 'stop:a' })
+  await band.unmount()
+  expect(state.whCalls).toEqual([['stop', '4262'], ['stop', '4261']])
+  expect(state.toasts).toEqual(['wh stop: no wh run going has the number 4261; wh ps lists the runs going'])
 })

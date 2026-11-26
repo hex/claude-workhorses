@@ -1,6 +1,6 @@
 // ABOUTME: Watches the workhorse run log that mirror.sh writes and shows the wh runs started from this session's folder.
 // ABOUTME: While one runs, a green wh badge sits in the prompt footer, counting the copy to the workhorse, then spinning while the job runs;
-// ABOUTME: the band above the prompt names each run, and a toast marks a long or BLOCKED end.
+// ABOUTME: the band above the prompt names each run with a Stop button, and a toast marks a long, BLOCKED or stopped end.
 import { atom, read, update } from 'claude-code'
 import type { Register, Timer } from 'claude-code'
 
@@ -30,7 +30,11 @@ const ROUND_LEFT = '\ue0b6'
 const ROUND_RIGHT = '\ue0b4'
 
 const badge = atom({ plugin: 'claude-workhorses', key: 'badge' } as const, null as Badge)
-const runLines = atom({ plugin: 'claude-workhorses', key: 'runLines' } as const, [] as RunLines)
+const runLines = atom({ plugin: 'claude-workhorses', key: 'runLines' } as const, [] as RunLines, { shape: 'run-lines-2' })
+// The band's label, as the claude-bloodhounds band opens its row; later rows keep its width blank.
+const BAND_LABEL = `${COPYING_MARK} workhorses`
+// The grey of the rule between the label and the runs.
+const RULE = 'gray'
 
 // pid is the laptop pid of the mirror.sh run; log lines written before it was recorded lack it.
 type Start = { event: 'start'; id: string; at: number; host: string; dir: string; command: string; pid?: number }
@@ -95,7 +99,7 @@ export function deservesToast(start: Start | undefined, end: End): boolean {
 export function endToast(start: Start | undefined, end: End): string {
   const what = start === undefined ? `run ${end.id}` : describe(start)
   const took = start === undefined ? '' : ` after ${duration(end.at - start.at)}`
-  const result = isBlocked(end) ? `BLOCKED: ${end.reason}` : `exit ${end.exit}`
+  const result = isBlocked(end) ? `BLOCKED: ${end.reason}` : end.reason === 'stopped' ? 'stopped' : `exit ${end.exit}`
   return `wh ${what} ended${took}, ${result}`
 }
 
@@ -135,13 +139,17 @@ export function badgeText(active: Iterable<Start>, copying: ReadonlySet<string>,
   return `${SPINNER[Math.floor(nowMs / SPIN_MS) % SPINNER.length]} wh - ${hosts} ${clock(nowMs / 1000 - oldest)}`
 }
 
-// The band's lines: each run on its own, in the order the runs started. The band, not the engine's
-// status line, because the engine draws every mod's status line as a warning.
-export function bandLines(active: Iterable<Start>, nowSeconds: number): RunLines {
+// The band's lines: each run on its own, in the order the runs started, its time counting the copy
+// while the copy runs. The band, not the engine's status line, because the engine draws every mod's
+// status line as a warning. pid is what wh stop takes; a run logged without one has no Stop button.
+export function bandLines(active: Iterable<Start>, copying: ReadonlySet<string>, nowSeconds: number): RunLines {
   return [...active].map(start => ({
-    label: `wh ${start.host}:`,
+    id: start.id,
+    pid: start.pid ?? null,
+    host: start.host,
+    time: `${copying.has(start.id) ? 'copying ' : ''}${clock(nowSeconds - start.at)}`,
+    repo: repoName(start.dir),
     command: runCommand(start),
-    repoAndTime: `(${repoName(start.dir)}) · ${clock(nowSeconds - start.at)}`,
   }))
 }
 
@@ -170,32 +178,42 @@ export const register: Register = on => {
     const lines = await read($, runLines)
     if (lines.length === 0) return next(e)
     const hidden = lines.length - BAND_MAX_RUNS
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const stop = async (pid: number) => {
+      const said = await $.process.run([`${$.plugin.root}/bin/wh`, 'stop', String(pid)])
+      if (said.exitCode !== 0) $.ui.toast(said.stderr.trim() || `wh stop ${pid} failed with exit ${said.exitCode}`, { timeoutMs: 8000 })
+    }
+    // One row a run: the label and its rule, then the run, cut at its end on a narrow band so the
+    // command gives way first, then the run's Stop button, pressed by a click or by ctrl+x tab and
+    // enter. No digit hotkey: a bare digit typed into an empty composer presses a band button, so
+    // a prompt that starts "1." would stop a run.
     return (
-      <Box flexDirection="column">
-        {lines.slice(0, BAND_MAX_RUNS).map(line => (
+      <Box flexDirection="column" paddingTop={1}>
+        {lines.slice(0, BAND_MAX_RUNS).map((line, at) => (
           <Box flexDirection="row" gap={1}>
-            {/* Only the command gives way on a narrow band, cut in its middle so both of its ends show. */}
-            <Box flexShrink={0}>
+            <Box flexShrink={0} flexDirection="row" gap={1}>
               <Text color={BADGE_GREEN} weight="bold">
-                {line.label}
+                {at === 0 ? BAND_LABEL : ' '.repeat(BAND_LABEL.length)}
               </Text>
+              <Text color={RULE}>│</Text>
             </Box>
             <Box flexShrink={1}>
-              <Text dimColor italic wrap="truncate-middle">
-                {line.command}
+              <Text wrap="truncate-end">
+                <Text weight="bold">{line.host}</Text>
+                <Text dimColor>{` · ${line.time} · ${line.repo} · `}</Text>
+                <Text italic>{line.command}</Text>
               </Text>
             </Box>
-            <Box flexShrink={0}>
-              <Text dimColor italic>
-                {line.repoAndTime}
-              </Text>
-            </Box>
+            {line.pid === null ? null : (
+              <Box flexShrink={0}>
+                <Button key={`stop:${line.id}`} label="Stop" onPress={() => stop(line.pid as number)} />
+              </Box>
+            )}
           </Box>
         ))}
         {hidden > 0 ? (
           <Text dimColor italic>
-            {`and ${hidden} more ${hidden === 1 ? 'run' : 'runs'}`}
+            {`and ${hidden} more ${hidden === 1 ? 'run' : 'runs'}; wh ps lists them`}
           </Text>
         ) : null}
       </Box>
@@ -255,8 +273,8 @@ export const register: Register = on => {
     }
 
     const show = async (nowMs: number) => {
-      const lines = bandLines(active.values(), nowMs / 1000)
-      const flat = (rows: RunLines) => rows.map(row => `${row.label} ${row.command} ${row.repoAndTime}`).join('\n')
+      const lines = bandLines(active.values(), copying, nowMs / 1000)
+      const flat = (rows: RunLines) => rows.map(row => `${row.id} ${row.time}`).join('\n')
       if (flat(await read($, runLines)) !== flat(lines)) await update($, runLines, () => lines)
       await drawBadge(nowMs)
       const spinning = active.size > 0 && copying.size === 0
