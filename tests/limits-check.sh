@@ -97,6 +97,24 @@ wait "$runner" || code=$?
 [ ! -e "$scratch/work/demo.lock" ] || fail "the shell that ran the job left its lock on SIGHUP"
 echo "ok   when the shell that runs a job with a limit dies by signal, it stops the job before it frees the lock"
 
+# wh stop ends a run by sending SIGTERM to the shell that runs its job, which has no limit as often as not.
+mkdir -p "$scratch/work/demo/" "$scratch/work/demo.lock"
+rm -f "$scratch/work/demo/leader.pid" "$scratch/work/demo/child"
+HOME=$scratch /bin/bash -c "$run_job" _ work/demo . "" "node_modules" 0 sh -c 'echo $$ >leader.pid; sleep 60 & echo $! >child; wait' 2>"$scratch/err" &
+runner=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ ! -s "$scratch/work/demo/child" ] || break; sleep 0.5; done
+[ -s "$scratch/work/demo/child" ] || fail "the job with no limit never started"
+start=$(now)
+kill -s TERM "$runner"
+code=0
+wait "$runner" || code=$?
+[ $(($(now) - start)) -le 5 ] || fail "a job with no limit took $(($(now) - start)) s to stop on SIGTERM"
+! kill -0 "$(cat "$scratch/work/demo/leader.pid")" 2>/dev/null || fail "a job with no limit outlived the shell that ran it, which exited $code on SIGTERM"
+! kill -0 "$(cat "$scratch/work/demo/child")" 2>/dev/null || fail "a job with no limit left its child running on SIGTERM"
+[ "$code" = 143 ] || fail "the shell that ran a job with no limit exited $code on SIGTERM, not 143"
+[ ! -e "$scratch/work/demo.lock" ] || fail "the shell that ran a job with no limit left its lock on SIGTERM"
+echo "ok   SIGTERM to the shell that runs a job with no limit stops the job and its children before the lock goes"
+
 start=$(now)
 code=0
 job 20 sh -c 'exit 3' || code=$?

@@ -255,10 +255,10 @@ SCRIPT
 
 # Runs the job in the given subfolder of the work copy and releases the lock when it ends, even if the
 # laptop disconnects. Before the job starts, it stores the copy's listing and the Watchman clock the
-# patch went by (none when $3 is empty), which the next run compares against. With a limit of $5
-# seconds (0: none), the job runs in its own process group, and past the limit the whole group gets
-# SIGTERM, then SIGKILL 10 seconds later; the run then exits 124, as gtimeout does. If this shell dies
-# by signal first, the group gets the same before the lock goes.
+# patch went by (none when $3 is empty), which the next run compares against. The job runs in its own
+# process group. With a limit of $5 seconds (0: none), past the limit the whole group gets SIGTERM,
+# then SIGKILL 10 seconds later; the run then exits 124, as gtimeout does. If this shell dies by
+# signal first (wh stop sends SIGTERM), the group gets the same before the lock goes.
 run_job="$list_copy"$'\n'$(cat <<'SCRIPT'
 lock=$HOME/$1.lock work=$HOME/$1 limited=$HOME/$1.limit
 job="" timer="" job_ended=""
@@ -304,19 +304,21 @@ fi
 cd "$work/$2" || exit 1
 limit=$5
 shift 5
-[ "$limit" != 0 ] || { "$@"; exit; }
 # The timer leaves this file when the limit passes; it lies outside the lock, which a signal can remove first.
 /bin/rm -f "$limited"
-# Job control gives the job, and the timer, a process group of its own. While it is on, bash 5
+# Job control gives the job, and the timer, a process group of its own, so a signal to this shell
+# (wh stop sends SIGTERM) reaches the whole job whether or not it has a limit. While it is on, bash 5
 # reports a job that has already ended (a builtin, say) on this shell's stderr, which is the job's, so
 # this shell's stderr goes to /dev/null until it is off and the job gets the real one as descriptor 2.
 exec 3>&2 2>/dev/null
 set -m
 "$@" 2>&3 3>&- &
 job=$!
-(/bin/sleep "$limit" && : >"$limited" && kill -s TERM -- "-$job" && /bin/sleep 10 && kill -s KILL -- "-$job") \
-  </dev/null >/dev/null 2>&1 3>&- &
-timer=$!
+if [ "$limit" != 0 ]; then
+  (/bin/sleep "$limit" && : >"$limited" && kill -s TERM -- "-$job" && /bin/sleep 10 && kill -s KILL -- "-$job") \
+    </dev/null >/dev/null 2>&1 3>&- &
+  timer=$!
+fi
 set +m
 exec 2>&3 3>&-
 status=0
@@ -324,10 +326,12 @@ wait "$job" || status=$?
 # The job's first process can end while others it started ignore the SIGTERM; they get SIGKILL now.
 [ ! -e "$limited" ] || reap_job
 job_ended=yes
-kill -s TERM -- "-$timer" 2>/dev/null || true
-# bash reports the timer it stopped on wait's stderr, which is the job's.
-wait "$timer" 2>/dev/null || true
-timer=""
+if [ -n "$timer" ]; then
+  kill -s TERM -- "-$timer" 2>/dev/null || true
+  # bash reports the timer it stopped on wait's stderr, which is the job's.
+  wait "$timer" 2>/dev/null || true
+  timer=""
+fi
 if [ -e "$limited" ]; then
   echo "mirror.sh run: the command ran past its $limit s limit and was stopped" >&2
   exit 124
