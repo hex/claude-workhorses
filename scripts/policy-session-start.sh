@@ -1,5 +1,5 @@
 #!/bin/bash
-# ABOUTME: Fits the Claude Code, Cursor, VS Code and Grok Build startup context into 8500 JSON bytes.
+# ABOUTME: Fits the Claude Code, Cursor, VS Code, Grok Build and Kimi Code startup context into 8500 JSON bytes.
 # ABOUTME: Drops the tools first, then notes, so host selection and offload rules take priority.
 set -euo pipefail
 

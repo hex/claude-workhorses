@@ -4,5 +4,7 @@
   "description": "Run jobs on the Macs and Linux machines in your workhorses hosts file.",
   "skills": "./skills",
   "sessionStart": { "skill": "workhorse" },
-  "hooks": []
+  "hooks": [
+    { "event": "SessionStart", "command": "bash \"$KIMI_PLUGIN_ROOT/scripts/policy-session-start.sh\"" }
+  ]
 }

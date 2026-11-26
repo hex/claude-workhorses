@@ -9,10 +9,10 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 ### Added
 - One npx command installs the workhorse skill for Claude Code, Codex, Cursor, GitHub Copilot CLI,
   VS Code, Grok Build and Kimi Code. Install checks verified the startup hook files for Cursor and VS Code
-  and the startup skill for Kimi. Live startup remains unverified in all three.
+  and verified Kimi’s startup skill registration and policy hook output. Live startup remains unverified in all three.
 
 ### Fixed
-- The startup policy fits four package inventories and 1.65 KB of notes within 8,500 JSON bytes. The hook installed for Claude Code, Cursor, VS Code and Grok Build omits tool lists first and notes next when needed. Grok leaves hook output out of model context. Codex, pi, OpenCode, Antigravity and Copilot CLI receive the whole condensed policy.
+- The startup policy fits four package inventories and 1.65 KB of notes within 8,500 JSON bytes. The hook installed for Claude Code, Cursor, VS Code, Grok Build and Kimi Code omits tool lists first and notes next when needed. Grok leaves hook output out of model context. Codex, pi, OpenCode, Antigravity and Copilot CLI receive the whole condensed policy.
 
 ## 2026.11.13
 

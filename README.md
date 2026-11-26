@@ -21,7 +21,7 @@ front of you.
 | Codex, pi, OpenCode or Antigravity on your Mac | The offload policy and your host table in every session, which give `wh`'s full path, and the `workhorse` skill. No badge, band or `/workhorses:setup`: those are Claude Code's. |
 | GitHub Copilot CLI on your Mac | The offload policy and your host table at the start of an interactive session, and the `workhorse` skill. |
 | Cursor or VS Code on your Mac | Verified npx installs include the skill and startup hook. Enable plugin hooks and, in Cursor, third-party imports. Live startup remains unverified in both. |
-| Grok Build or Kimi Code on your Mac | Grok listed the workhorse skill in a live session. Its installed startup hook runs, but Grok leaves the output out of model context. Kimi’s verified npx install includes the startup skill file. Its live startup remains unverified. |
+| Grok Build or Kimi Code on your Mac | Grok listed the workhorse skill in a live session. Its installed startup hook runs, but Grok leaves the output out of model context. Kimi’s installed startup hook returned the policy in `additionalContext`, and its manifest registers the startup skill. The suspended account prevented a live session. |
 | Your own terminal | `wh` by its full path, or linked into a folder on your `PATH`. Its runs show in the badge and band of a Claude Code session whose folder holds the repository or sits inside it. |
 | The workhorses | Spare Macs, Intel or Apple silicon, with Remote Login on, or Linux machines with sshd. `wh` reaches them over ssh and needs nothing installed on a Mac; see [Linux and WSL hosts](#linux-and-wsl-hosts) for Linux. `sync.sh` gives each one the tools you list. |
 
@@ -224,8 +224,8 @@ version under a recipe shaped as a recipe name, presents them as data, and count
 recipe's line stops at 2000 characters and a host's recipe lines at 6000. A separate line counts the omitted recipes.
 `sync.sh status` marks the end of a run's log as the host's text, and `sync.sh diff` shows a host's
 lines in the same shape. For what no record shows (no code signing, a tool that needs a license),
-write `~/.config/workhorses/notes`. The plain policy includes the complete notes. The SessionStart hook installed for Claude Code, Cursor, VS Code
-and Grok Build limits its JSON to 8,500 bytes. When needed, their hook drops the tool lists first and the
+write `~/.config/workhorses/notes`. The plain policy includes the complete notes. The SessionStart hook installed for Claude Code, Cursor, VS Code,
+Grok Build and Kimi Code limits its JSON to 8,500 bytes. When needed, their hook drops the tool lists first and the
 notes next. A notice above the host table names the omissions and gives the full-policy command. From the plugin directory, run `bash scripts/policy.sh --full` for all validated
 tool versions and the complete notes. The last sync records also remain in the manifests directory
 named in the policy. The `workhorse` skill

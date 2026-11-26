@@ -84,10 +84,6 @@ def check(target, scratch, home):
     skill = plugin / manifest.get("skills", "skills") / "workhorse/SKILL.md"
     require(skill.read_bytes() == (ROOT / "skills/workhorse/SKILL.md").read_bytes(),
             "installed workhorse skill differs from checkout")
-    if target == "kimi":
-        require(manifest.get("sessionStart") == {"skill": "workhorse"} and manifest.get("hooks") == [],
-                "Kimi needs its static startup skill and no output-only startup command")
-        return
     if target == "grok":
         details = run(["grok", "plugin", "details", "workhorses"], env)
         require("1 skill dir(s)" in details and "hooks" in details, "Grok component discovery failed")
@@ -103,7 +99,7 @@ def check(target, scratch, home):
                 (ROOT / "mods/workhorse-runs/hooks/register.tsx").read_bytes(), "Claude mod missing")
     if target == "codex":
         hooks = read(plugin / manifest["hooks"])
-    root_var = {"vscode": "PLUGIN_ROOT", "github-copilot": "COPILOT_PLUGIN_ROOT"}.get(
+    root_var = {"vscode": "PLUGIN_ROOT", "github-copilot": "COPILOT_PLUGIN_ROOT", "kimi": "KIMI_PLUGIN_ROOT"}.get(
         target, "CLAUDE_PLUGIN_ROOT")
     env[root_var] = str(plugin)
     plain = run(["bash", str(plugin / "scripts/policy.sh")], env)
@@ -119,7 +115,13 @@ def check(target, scratch, home):
             require(json.loads(output)["additionalContext"] == expected, "Copilot context differs")
             return
         require(not output, "VS Code ran the Copilot CLI hook twice")
-    command = hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+    if target == "kimi":
+        require(manifest.get("sessionStart") == {"skill": "workhorse"}, "missing Kimi startup skill")
+        startup = [hook for hook in manifest["hooks"] if hook["event"] == "SessionStart"]
+        require(len(startup) == 1, "expected one Kimi SessionStart hook")
+        command = startup[0]["command"]
+    else:
+        command = hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"]
     output = run(["bash", "-eu", "-c", command], env)
     if target == "codex":
         require(output == plain, "Codex hook output differs from installed policy")

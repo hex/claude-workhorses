@@ -39,18 +39,18 @@ The check needs network access for npx, Node.js, Python 3, jq, and the Grok and 
 fictional host. To check a single target, pass its ID, for example `python3 tests/npx-check.py cursor`.
 
 It follows each install registration to the skill on disk. For Claude Code it also checks the mod
-entry point. For Claude Code, Codex, Cursor, Copilot CLI and VS Code it runs the installed hook
+entry point. For Claude Code, Codex, Cursor, Copilot CLI, VS Code and Kimi it runs the installed hook
 command and compares the context field or stdout with the installed policy. For Grok it checks
 the native component inventory. Grok’s npx install carries `hooks/hooks.json` and runs the same
-8,500-byte SessionStart hook as Claude Code, Cursor and VS Code. Grok leaves its output out of
-model context. For Kimi it checks the startup skill. The check removes the
+8,500-byte SessionStart hook as Claude Code, Cursor, VS Code and Kimi. Grok leaves its output out of
+model context. For Kimi it also checks that the manifest registers the startup skill. The check removes the
 temporary homes and npm cache on exit. It runs separately from `tests/run.sh` and does not open
 an agent session.
 
 Separate live checks covered Claude Code and interactive Copilot CLI. Grok Build listed the
 workhorse skill in a live session. The Codex manifest and hook file are unchanged since 2026.11.13. The policy
 text Codex receives has changed. The recorder in `tests/agents-check.sh` checked the new text.
-A live Codex session with that text is still unverified. Only the installs were verified for Cursor, VS Code and Kimi. Cursor hit a usage limit,
+A live Codex session with that text is still unverified. For Cursor, VS Code and Kimi, the checks cover the installed files and hook commands. Cursor hit a usage limit,
 VS Code required an editor window, and the Kimi account was suspended.
 
 ## The policy in each agent
