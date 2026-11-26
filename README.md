@@ -215,7 +215,8 @@ locks it, copies `.git`, patches the working tree, then runs the command:
 
 ![Claude Code runs wh in bash mode: the band above the prompt names the run and its time, and the footer badge counts the copy, then spins while the job runs](assets/claude-band.svg)
 
-Every run writes a start, a synced and an end line to `~/.local/state/workhorse/runs.jsonl`. The
+Every run writes a start, a synced and an end line to `~/.local/state/workhorse/runs.jsonl`. When
+Claude Code runs `wh`, the start line also names its session, from `CLAUDE_CODE_SESSION_ID`. The
 mod reads that log and shows the runs started from the session's folder:
 
 - The green footer badge names the host and counts the copy, its arrows swapping while the copy
@@ -225,9 +226,10 @@ mod reads that log and shows the runs started from the session's folder:
   runs `wh stop` for that run; click it, or press ctrl+x tab to reach it and enter to press it. A
   stop that fails says why in a toast.
 - A run that took over 2 minutes, or ended `BLOCKED`, ends with a toast.
-- `/workhorses` opens a pane with every host's load and the runs going on it, from `wh hosts --json`,
-  with the runs of this session's folder first. A run this machine started has a Stop button that
-  runs `wh stop`. The pane asks again when it opens, when you press Refresh, and every 60 seconds while
+- `/workhorses` opens a pane with every host's load and the runs going on it, from `wh hosts --json`.
+  A run this machine started shows the folder it started from and has a Stop button that runs
+  `wh stop`. A run this Claude Code session started comes first, marked `this session`; the mark
+  goes by session id, so another session's run from the same folder never gets it. The pane asks again when it opens, when you press Refresh, and every 60 seconds while
   the pane is on screen. Nothing opens it unasked.
 
 The mod makes no network calls of its own and writes no files. Only its Stop buttons and the

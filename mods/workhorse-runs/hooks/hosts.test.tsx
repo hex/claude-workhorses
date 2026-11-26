@@ -7,6 +7,8 @@ import type { TestBody } from 'claude-code/testing'
 const HOME = '/home/alice'
 const SESSION = '/home/alice/proj'
 const NOW = Date.parse('2026-11-26T14:00:00Z')
+// This Claude Code session's id, as $.session.id() answers it.
+const SESSION_ID = 'sess-a1'
 
 const TYPED = { command: 'workhorses', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as const
 
@@ -21,10 +23,10 @@ const PANE = {
 type Doc = Record<string, unknown>
 
 function run(overrides: Doc = {}): Doc {
-  return { work: 'w-1', machine: null, pid: null, since: null, command: '', dir: null, stoppable: false, ...overrides }
+  return { work: 'w-1', machine: null, pid: null, since: null, command: '', dir: null, session: null, stoppable: false, ...overrides }
 }
 
-// A report of three hosts: xur with one run of this session, one of another folder on this laptop and one
+// A report of three hosts: xur with one run of this session, one of another session and folder on this laptop and one
 // from another Mac; cayde idle; eris unreachable. The file order puts cayde first.
 const REPORT = [
   { host: 'cayde', state: 'ok', load: 0.1, cores: 6, runs: [] },
@@ -34,7 +36,7 @@ const REPORT = [
     load: 2.58,
     cores: 6,
     runs: [
-      run({ work: 'house-1', machine: 'erp-mac', pid: 3800, since: '2026-11-26 15:10:00', command: 'make lint', dir: `${HOME}/house`, stoppable: true }),
+      run({ work: 'house-1', machine: 'erp-mac', pid: 3800, since: '2026-11-26 15:10:00', command: 'make lint', dir: `${HOME}/house`, session: 'sess-b2', stoppable: true }),
       run({ work: 'other-2', machine: 'other-mac', pid: 412, since: '2026-11-26 09:05:01', command: 'make test' }),
       run({
         work: 'ai-batch-3',
@@ -43,6 +45,7 @@ const REPORT = [
         since: '2026-11-26 15:53:42',
         command: 'gtimeout 45m mise exec node@26 -- npm test',
         dir: `${SESSION}/.claude/worktrees/ai-batch`,
+        session: SESSION_ID,
         stoppable: true,
       }),
     ],
@@ -94,6 +97,7 @@ function world(on: On) {
     state.logs.push(e.text)
     return { value: undefined }
   })
+  on('session.id', () => ({ value: SESSION_ID }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -252,4 +256,26 @@ test("a run's Stop runs wh stop for its pid, a failure says why in a toast, and 
   await ui.unmount()
   expect(state.whCalls.slice(3)).toEqual([['stop', '3800'], ['hosts', '--json']])
   expect(state.toasts).toEqual(['wh stop: no wh run going has the number 3800; wh ps lists the runs going'])
+})
+
+test('only a run this Claude Code session started is marked, not another run from the same folder', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const state = world(on)
+  const laptopRun = (pid: number, session: string | null) =>
+    run({ work: `proj-${pid}`, machine: 'erp-mac', pid, since: '2026-11-26 10:00:00', command: `make ${pid}`, dir: SESSION, session, stoppable: true })
+  state.hosts = {
+    stdout: jsonLines([{ host: 'xur', state: 'ok', load: 1, cores: 6, runs: [laptopRun(3, null), laptopRun(2, 'sess-b2'), laptopRun(1, SESSION_ID)] }]),
+    stderr: '',
+    exitCode: 0,
+  }
+  await start($)
+  await $.command.run(TYPED)
+
+  expect((await paneNow($)).rows).toEqual([
+    'checked 0s ago',
+    'xur · load 1.00 of 6 · 3 runs',
+    '~/proj · this session · since 10:00 · make 1',
+    '~/proj · since 10:00 · make 3',
+    '~/proj · since 10:00 · make 2',
+  ])
 })

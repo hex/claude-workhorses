@@ -38,8 +38,9 @@ const BAND_LABEL = '↗ workhorses'
 // The grey of the rule between the label and the runs.
 const RULE = 'gray'
 
-// pid is the laptop pid of the mirror.sh run; log lines written before it was recorded lack it.
-type Start = { event: 'start'; id: string; at: number; host: string; dir: string; command: string; pid?: number }
+// pid is the laptop pid of the mirror.sh run; log lines written before it was recorded lack it. session is
+// the Claude Code session that started the run, absent for a run started elsewhere or logged before it.
+type Start = { event: 'start'; id: string; at: number; host: string; dir: string; command: string; pid?: number; session?: string }
 // The copy on the workhorse matches the laptop and the job is starting.
 type Synced = { event: 'synced'; id: string; at: number }
 type End = { event: 'end'; id: string; at: number; exit: number; reason?: string }
@@ -194,14 +195,32 @@ function parseHostLine(line: string): HostView {
     typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fail('a field that is not a whole number')
   const orNull = <T,>(value: unknown, read: (value: unknown) => T): T | null => (value === null ? null : read(value))
   const run = (value: unknown): HostRun => {
-    const doc = fields(value, ['work', 'machine', 'pid', 'since', 'command', 'dir', 'stoppable'])
+    const doc = fields(value, ['work', 'machine', 'pid', 'since', 'command', 'dir', 'session', 'stoppable'])
     const work = text(doc.work)
     const command = text(doc.command)
     if (doc.stoppable === true) {
-      return { work, machine: text(doc.machine), pid: count(doc.pid), since: text(doc.since), command, dir: text(doc.dir), stoppable: true }
+      return {
+        work,
+        machine: text(doc.machine),
+        pid: count(doc.pid),
+        since: text(doc.since),
+        command,
+        dir: text(doc.dir),
+        session: orNull(doc.session, text),
+        stoppable: true,
+      }
     }
-    if (doc.stoppable !== false || doc.dir !== null) return fail('a run that is neither stoppable nor another\'s')
-    return { work, machine: orNull(doc.machine, text), pid: orNull(doc.pid, count), since: orNull(doc.since, text), command, dir: null, stoppable: false }
+    if (doc.stoppable !== false || doc.dir !== null || doc.session !== null) return fail('a run that is neither stoppable nor another\'s')
+    return {
+      work,
+      machine: orNull(doc.machine, text),
+      pid: orNull(doc.pid, count),
+      since: orNull(doc.since, text),
+      command,
+      dir: null,
+      session: null,
+      stoppable: false,
+    }
   }
   let value: unknown
   try {
@@ -229,10 +248,16 @@ function folderLabel(dir: string, home: string): string {
   return worktree === null ? under : `${worktree[1]} ⎇ ${worktree[2]}`
 }
 
+// Whether this Claude Code session (its id, or null when unknown) started the run: by id alone, so another
+// session's run from the same folder, or a run started outside Claude Code, is never its own.
+function isThisSession(run: HostRun, sessionId: string | null): boolean {
+  return sessionId !== null && run.session === sessionId
+}
+
 // Where the pane's rows put a run: this session's first, then this laptop's others, then the rest.
-function runRank(run: HostRun, sessionDir: string): number {
+function runRank(run: HostRun, sessionId: string | null): number {
   if (!run.stoppable) return 2
-  return belongsTo(run.dir, sessionDir) ? 0 : 1
+  return isThisSession(run, sessionId) ? 0 : 1
 }
 
 function hostHeader(host: HostView): string {
@@ -242,11 +267,11 @@ function hostHeader(host: HostView): string {
   return `${host.host} · load ${host.load.toFixed(2)} of ${host.cores} · ${runs}`
 }
 
-function runRow(run: HostRun, home: string, sessionDir: string): string {
+function runRow(run: HostRun, home: string, sessionId: string | null): string {
   const since = run.since === null ? '' : ` · since ${run.since.slice(11, 16)}`
   const command = runCommand(run) || 'no owner recorded'
   if (run.stoppable) {
-    const mine = belongsTo(run.dir, sessionDir) ? ' · this session' : ''
+    const mine = isThisSession(run, sessionId) ? ' · this session' : ''
     return `${folderLabel(run.dir, home)}${mine}${since} · ${command}`
   }
   return run.machine === null ? `${run.work} · ${command}` : `from ${run.machine}${since} · ${command}`
@@ -290,8 +315,7 @@ async function askHosts($: EngineInterface, refresh: Refresh): Promise<void> {
 }
 
 export const register: Register = on => {
-  // The session's folder and home, which the pane's rows are measured against; session.start sets them.
-  let paneSessionDir = ''
+  // The home folder the pane's folders are shown under; session.start sets it.
   let paneHome = ''
 
   const refresh: Refresh = { inFlight: undefined, startedMs: 0 }
@@ -312,6 +336,8 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e) => {
     const view = await read($, hostsView)
     const nowMs = await $.clock.now()
+    // Read at each drawing, since a /clear goes on under a new id without a session.start.
+    const sessionId = await $.session.id().catch(() => null)
     const { Box, Button, Text } = $.ui.resolve(e)
     const stop = async (pid: number) => {
       const said = await $.process.run([`${$.plugin.root}/bin/wh`, 'stop', String(pid)])
@@ -339,11 +365,11 @@ export const register: Register = on => {
             <Text wrap="truncate-end" weight="bold">
               {hostHeader(host)}
             </Text>
-            {(host.state === 'ok' ? [...host.runs].sort((a, b) => runRank(a, paneSessionDir) - runRank(b, paneSessionDir)) : []).map(run => (
+            {(host.state === 'ok' ? [...host.runs].sort((a, b) => runRank(a, sessionId) - runRank(b, sessionId)) : []).map(run => (
               <Box flexDirection="row" gap={1} paddingLeft={2}>
                 <Box flexShrink={1}>
                   <Text wrap="truncate-end" dimColor={!run.stoppable}>
-                    {runRow(run, paneHome, paneSessionDir)}
+                    {runRow(run, paneHome, sessionId)}
                   </Text>
                 </Box>
                 {run.stoppable ? (
@@ -428,7 +454,6 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const path = `${await $.env.get('HOME')}/${LOG}`
     const sessionDir = e.cwd
-    paneSessionDir = sessionDir
     paneHome = (await $.env.get('HOME')) ?? ''
     const active = new Map<string, Start>()
     // Runs still copying the repository to the workhorse: no synced line yet.

@@ -16,12 +16,22 @@ export type RunLines = readonly {
 }[]
 
 // One run going on a workhorse, as wh hosts --json reports it: its lock's name in ~/work and its
-// command. A run this laptop started and its run log lists carries the folder it started from and the
-// pid wh stop takes. Any other run carries the machine, pid and start time its lock's owner line names,
-// each null when the owner line is not one wh wrote.
+// command. A run this laptop started and its run log lists carries the folder it started from, the pid
+// wh stop takes and the id of the Claude Code session that started it (null when it was started outside
+// Claude Code, or before wh recorded it). Any other run carries the machine, pid and start time its
+// lock's owner line names, each null when the owner line is not one wh wrote.
 export type HostRun =
-  | { work: string; machine: string; pid: number; since: string; command: string; dir: string; stoppable: true }
-  | { work: string; machine: string | null; pid: number | null; since: string | null; command: string; dir: null; stoppable: false }
+  | { work: string; machine: string; pid: number; since: string; command: string; dir: string; session: string | null; stoppable: true }
+  | {
+      work: string
+      machine: string | null
+      pid: number | null
+      since: string | null
+      command: string
+      dir: null
+      session: null
+      stoppable: false
+    }
 // One workhorse in the hosts file's order: its 1-minute load and physical cores with the runs going
 // there, unreachable, or the answer it gave that is not a probe's, as plain text.
 export type HostView =

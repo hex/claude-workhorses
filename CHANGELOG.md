@@ -11,8 +11,11 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   machine's with their folder and the number `wh stop` takes, others' with the machine that started
   them. A host that does not answer within 5 seconds shows as unreachable. `wh hosts --json` prints one
   object per host.
-- `/workhorses` opens a pane of the same report, with this session's runs first and a Stop button for
-  each run this machine started. It refreshes when opened, on Refresh, and every 60 seconds only while
+- A run's start line in the run log names the Claude Code session that started it, from
+  `CLAUDE_CODE_SESSION_ID`; a run started elsewhere has no session.
+- `/workhorses` opens a pane of the same report. Each run this machine started shows its folder and a
+  Stop button, and the runs this Claude Code session started come first, marked by session id, never
+  by folder. It refreshes when opened, on Refresh, and every 60 seconds only while
   the pane is on screen, so a session with the pane closed opens no ssh connection for it.
 
 ### Changed
