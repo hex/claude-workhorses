@@ -37,6 +37,18 @@ $got"
   echo "ok   $shell lists a live lock with its owner on one line and a young lock without one, not a dead or abandoned lock"
 done
 
+# A run's start line names the Claude Code session that started it when CLAUDE_CODE_SESSION_ID holds an
+# id, and leaves the key out when it is unset or holds anything else.
+eval "$(sed -n '/^log_start() {$/,/^}$/p' "$mirror")"
+for case in "sess-1A-b2|sess-1A-b2" "|" "bad id;rm|" "$(printf 'x%.0s' $(seq 65))|"; do
+  value=${case%|*} want=${case#*|}
+  run_log=$scratch/runs-$RANDOM.jsonl
+  if [ -n "$value" ]; then CLAUDE_CODE_SESSION_ID=$value log_start xur /repo "" make test; else (unset CLAUDE_CODE_SESSION_ID; log_start xur /repo "" make test); fi
+  got=$(jq -r 'if has("session") then .session else "" end' "$run_log")
+  [ "$got" = "$want" ] || fail "a start line with CLAUDE_CODE_SESSION_ID='$value' gave session '$got', wanted '$want'"
+done
+echo "ok   a start line names the session from CLAUDE_CODE_SESSION_ID only when it is an id"
+
 # wh hosts end to end, with a fake ssh first on PATH. For cayde and xur it runs the probe in a scratch
 # home of that host, under bash and zsh; eris refuses the connection, slow never answers, and odd and
 # mangled answer something that is not a probe's answer, and linuxy gives a Linux host's answer. The laptop's home is a scratch one too, its
@@ -77,7 +89,7 @@ stand_in=$!
 trap 'pkill -P "$stand_in" 2>/dev/null || true; kill "$stand_in" 2>/dev/null || true; rm -rf "$scratch"' EXIT
 batch=$laptop/proj/.claude/worktrees/ai-batch
 jq -nc --argjson pid "$stand_in" --arg dir "$batch" \
-  '{event: "start", id: "r1", at: 1, host: "xur", dir: $dir, sub: "", command: "gtimeout 45m make test", pid: $pid}' \
+  '{event: "start", id: "r1", at: 1, host: "xur", dir: $dir, sub: "", command: "gtimeout 45m make test", pid: $pid, session: "sess-A1"}' \
   >"$laptop/.local/state/workhorse/runs.jsonl"
 locks=$scratch/hosts/xur/work
 mkdir "$locks/ai-batch-7f7532ed.lock" "$locks/other-1234abcd.lock" "$locks/bare-00000000.lock" "$locks/esc-11111111.lock"
@@ -102,15 +114,15 @@ loads=$(jq -r 'select(.state == "ok") | .load | type' "$scratch/out" | sort -u)
 got=$(jq -c 'if .host == "cayde" or .host == "xur" then .load = "L" else . end' "$scratch/out")
 want="{\"host\":\"cayde\",\"state\":\"ok\",\"load\":\"L\",\"cores\":$cores,\"runs\":[]}
 {\"host\":\"xur\",\"state\":\"ok\",\"load\":\"L\",\"cores\":$cores,\"runs\":[\
-{\"work\":\"ai-batch-7f7532ed\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 15:53:42\",\"command\":\"gtimeout 45m make test\",\"dir\":\"$batch\",\"stoppable\":true},\
-{\"work\":\"bare-00000000\",\"machine\":null,\"pid\":null,\"since\":null,\"command\":\"\",\"dir\":null,\"stoppable\":false},\
-{\"work\":\"esc-11111111\",\"machine\":\"$me\",\"pid\":999,\"since\":\"2026-11-26 10:00:00\",\"command\":\"printf [31mred[0m done\",\"dir\":null,\"stoppable\":false},\
-{\"work\":\"other-1234abcd\",\"machine\":\"other-mac\",\"pid\":412,\"since\":\"2026-11-26 09:05:01\",\"command\":\"make test\",\"dir\":null,\"stoppable\":false}]}
+{\"work\":\"ai-batch-7f7532ed\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 15:53:42\",\"command\":\"gtimeout 45m make test\",\"dir\":\"$batch\",\"session\":\"sess-A1\",\"stoppable\":true},\
+{\"work\":\"bare-00000000\",\"machine\":null,\"pid\":null,\"since\":null,\"command\":\"\",\"dir\":null,\"session\":null,\"stoppable\":false},\
+{\"work\":\"esc-11111111\",\"machine\":\"$me\",\"pid\":999,\"since\":\"2026-11-26 10:00:00\",\"command\":\"printf [31mred[0m done\",\"dir\":null,\"session\":null,\"stoppable\":false},\
+{\"work\":\"other-1234abcd\",\"machine\":\"other-mac\",\"pid\":412,\"since\":\"2026-11-26 09:05:01\",\"command\":\"make test\",\"dir\":null,\"session\":null,\"stoppable\":false}]}
 {\"host\":\"eris\",\"state\":\"unreachable\"}
 {\"host\":\"slow\",\"state\":\"unreachable\"}
 {\"host\":\"odd\",\"state\":\"unexpected\",\"answer\":\"Last login: Thu Nov 26 [1mon ttys000 $(printf 'x%.0s' $(seq 163))\"}
 {\"host\":\"mangled\",\"state\":\"unexpected\",\"answer\":\"{ 1.00 1.00 1.00 } 6 lock ok-1 owner not a lock line 1\"}
-{\"host\":\"linuxy\",\"state\":\"ok\",\"load\":0.50,\"cores\":6,\"runs\":[{\"work\":\"lx-1\",\"machine\":\"other-mac\",\"pid\":7,\"since\":\"2026-11-26 08:00:00\",\"command\":\"cargo test\",\"dir\":null,\"stoppable\":false}]}"
+{\"host\":\"linuxy\",\"state\":\"ok\",\"load\":0.50,\"cores\":6,\"runs\":[{\"work\":\"lx-1\",\"machine\":\"other-mac\",\"pid\":7,\"since\":\"2026-11-26 08:00:00\",\"command\":\"cargo test\",\"dir\":null,\"session\":null,\"stoppable\":false}]}"
 [ "$got" = "$want" ] || fail "wh hosts --json: wanted
 $want
 got

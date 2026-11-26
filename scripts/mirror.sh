@@ -83,7 +83,9 @@ blocked() {
 # Every run appends a start line and an end line, one JSON object each, to the run log that the
 # workhorse-runs mod reads: which mini, which repository and subfolder, which command, and how the
 # run ended. The start line carries this script's pid, so a run killed before it could write its end
-# line (SIGKILL, power loss) can be told apart from one still going.
+# line (SIGKILL, power loss) can be told apart from one still going, and the Claude Code session that
+# started the run when CLAUDE_CODE_SESSION_ID holds one (Claude Code sets it for the commands it runs;
+# other agents and terminals do not).
 run_log=$HOME/.local/state/workhorse/runs.jsonl
 run_id="" run_ended=0 end_reason=""
 # What a signal or the way out acts on: the phase (prepare while the host takes the lock, copy while the
@@ -92,13 +94,15 @@ run_id="" run_ended=0 end_reason=""
 phase="" run_host="" run_target="" run_work="" run_owner="" job_ssh=""
 
 log_start() {
-  local host=$1 dir=$2 sub=$3
+  local host=$1 dir=$2 sub=$3 session=""
   shift 3
   run_id="$(hostname -s)-$$-$(date +%s)"
+  [[ ${CLAUDE_CODE_SESSION_ID:-} =~ ^[A-Za-z0-9-]{1,64}$ ]] && session=$CLAUDE_CODE_SESSION_ID
   mkdir -p "$(dirname "$run_log")"
   jq -nc --arg id "$run_id" --argjson at "$(date +%s)" --arg host "$host" --arg dir "$dir" --arg sub "$sub" \
-    --arg command "$*" --argjson pid "$$" \
-    '{event: "start", id: $id, at: $at, host: $host, dir: $dir, sub: $sub, command: $command, pid: $pid}' >>"$run_log"
+    --arg command "$*" --argjson pid "$$" --arg session "$session" \
+    '{event: "start", id: $id, at: $at, host: $host, dir: $dir, sub: $sub, command: $command, pid: $pid}
+      + (if $session == "" then {} else {session: $session} end)' >>"$run_log"
 }
 
 log_synced() {
@@ -752,8 +756,8 @@ list_runs() {
 # and cut at 200 characters. A run's owner line, as run writes it ("<machine> pid <n> since
 # <date> <time>: <command>"), gives its machine, pid, start and command; any other owner text is the
 # command, and the rest is null. A run of this machine ($3) that the run log's live runs ($4, a JSON
-# array of start lines) list for this host has the folder it started from and can be stopped with wh
-# stop. What a host sends is data: control characters never reach the report.
+# array of start lines) list for this host has the folder it started from, the Claude Code session
+# that started it (null when its start line names none) and can be stopped with wh stop. What a host sends is data: control characters never reach the report.
 host_report() {
   local host=$1 answers=$2 me=$3 mine=$4 state load cores
   read -r _ state load cores _ <<<"$(probe_answer "$host" "$(cat "$answers/$host.status")" \
@@ -763,11 +767,13 @@ host_report() {
     def plain: gsub("[\\t\\n\\r]"; " ") | gsub("[\\x{0}-\\x{1f}\\x{7f}-\\x{9f}]"; "") | sub("^ +"; "") | sub(" +$"; "");
     def owned: "^(?<machine>[A-Za-z0-9._-]+) pid (?<pid>[0-9]{1,10}) since (?<since>[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}): (?<command>.*)$";
     def run: (.owner | capture(owned)? // null) as $owner
-      | if $owner == null then {work, machine: null, pid: null, since: null, command: .owner, dir: null, stoppable: false}
+      | if $owner == null then {work, machine: null, pid: null, since: null, command: .owner, dir: null, session: null, stoppable: false}
         else ($owner.pid | tonumber) as $pid
           | (if $owner.machine == $me then first($mine[] | select(.pid == $pid and .host == $host)) // null else null end) as $start
           | {work, machine: $owner.machine, pid: $pid, since: $owner.since, command: $owner.command,
-             dir: ($start.dir // null), stoppable: ($start != null)}
+             dir: ($start.dir // null),
+             session: ($start.session | if type == "string" and test("^[A-Za-z0-9-]{1,64}$") then . else null end),
+             stoppable: ($start != null)}
         end;
     def unexpected: {host: $host, state: "unexpected", answer: ($answer | plain | .[:200])};
     ($answer | split("\n")[2:] | map(select(. != ""))) as $rest
