@@ -4,7 +4,7 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
-## Unreleased
+## 2026.11.13
 
 ### Added
 - GitHub Copilot CLI reads the workhorse policy at the start of an interactive session.
