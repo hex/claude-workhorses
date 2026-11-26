@@ -4,7 +4,7 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
-## Unreleased
+## 2026.11.12
 
 ### Fixed
 - `wh` now applies the first-copy size limit when a Tailscale subnet router carries the copy to the
