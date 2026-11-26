@@ -46,6 +46,10 @@ expect_load "a name with capitals or other characters is refused" \
 "claude-workhorses: $config/hosts line 1: host name \"Gamma\" is not lower-case letters, digits and dashes" \
 "Gamma g x86_64 6 16"
 
+expect_load "a name wh takes as a command is refused" \
+"claude-workhorses: $config/hosts line 1: host name \"stop\" is a wh command (wh ps, wh stop); give the host another name" \
+"stop g x86_64 6 16"
+
 expect_load "a name used twice is refused" \
 "claude-workhorses: $config/hosts line 2: host name \"gamma\" is already on line 1" \
 "gamma g x86_64 6 16

@@ -79,6 +79,9 @@ load_hosts() {
       echo "$where host name \"$name\" is not lower-case letters, digits and dashes" >&2
       return 1
     fi
+    case "$name" in
+      ps | stop) echo "$where host name \"$name\" is a wh command (wh ps, wh stop); give the host another name" >&2; return 1 ;;
+    esac
     for i in "${!host_names[@]}"; do
       if [ "${host_names[$i]}" = "$name" ]; then
         echo "$where host name \"$name\" is already on line ${host_lines[$i]}" >&2
