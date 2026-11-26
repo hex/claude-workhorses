@@ -163,8 +163,8 @@ export function bandLines(active: Iterable<Start>, copying: ReadonlySet<string>,
 const PANE_ID = 'workhorses'
 // wh hosts gives each host 5 seconds; the rest is jq and margin.
 const HOSTS_TIMEOUT_MS = 15_000
-// While the pane is placed, its age line moves on every tick and wh hosts runs once a minute. Nothing runs
-// ssh while it is not: this mod loads in every session.
+// While the pane is on screen (placed, and not a tab behind another pane), its age line moves on every tick
+// and wh hosts runs about once a minute. Nothing runs ssh while it is not: this mod loads in every session.
 const PANE_TICK_MS = 10_000
 const HOSTS_REFRESH_MS = 60_000
 
@@ -560,7 +560,7 @@ export const register: Register = on => {
       await $.command.register({ name: 'workhorses', description: 'Open the workhorses pane: each workhorse, its load and the wh runs going on it' })
       $.clock.every(PANE_TICK_MS, async () => {
         try {
-          if (!(await $.ui.panes()).some(pane => pane.id === PANE_ID && pane.isPlaced)) return
+          if (!(await $.ui.panes()).some(pane => pane.id === PANE_ID && pane.isPlaced && pane.isShown)) return
           if ((await $.clock.now()) - refresh.startedMs >= HOSTS_REFRESH_MS) await refreshHosts($, refresh)
           else $.ui.invalidate('ui.render')
         } catch (error) {

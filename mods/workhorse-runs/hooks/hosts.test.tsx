@@ -1,5 +1,5 @@
 // ABOUTME: Tests the /workhorses pane against what wh hosts --json prints, held in memory: each host's load and runs,
-// ABOUTME: Stop and Refresh, a failing report, and that no wh hosts runs while the pane is not placed.
+// ABOUTME: Stop and Refresh, a failing report, and that no wh hosts runs while the pane is not on screen.
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
@@ -106,8 +106,9 @@ function world(on: On) {
   return state
 }
 
-function placed(state: ReturnType<typeof world>, isPlaced: boolean) {
-  state.panes = [{ id: 'workhorses', title: 'workhorses', isShown: isPlaced, isFocused: false, isPlaced }]
+// The pane as $.ui.panes() lists it: placed or waiting undrawn, and shown or a tab behind another pane.
+function placed(state: ReturnType<typeof world>, isPlaced: boolean, isShown = isPlaced) {
+  state.panes = [{ id: 'workhorses', title: 'workhorses', isShown, isFocused: false, isPlaced }]
 }
 
 // The pane's rows, top to bottom, and the label and key of each button it draws.
@@ -158,13 +159,16 @@ test('/workhorses says why when the surface does not place the pane', async ($, 
   expect(await $.command.run(TYPED)).toEqual({ text: 'workhorses pane: the terminal is 60 columns wide' })
 })
 
-test('the timer runs wh hosts only while the pane is placed, once a minute', async ($, on) => {
+test('the timer runs wh hosts only while the pane is on screen, once a minute', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   const state = world(on)
   await start($)
 
   await clock.advance(180_000)
   placed(state, false)
+  await clock.advance(180_000)
+  // Placed, but a tab behind another pane.
+  placed(state, true, false)
   await clock.advance(180_000)
   expect(state.whCalls).toEqual([])
 
