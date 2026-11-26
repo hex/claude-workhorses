@@ -2,7 +2,7 @@
   "title": "The wh badge and band in Claude Code while a run goes",
   "description": "Claude Code runs wh in bash mode. The band above the prompt names the run and its time; the footer badge counts the copy, then spins while the job runs, and both go when it ends. Each state lasts 2.5 seconds.",
   "provenance": {
-    "checkout_head": "e1fe59a73499ee6e329f691a4162c1c1f2028f05",
+    "checkout_head": "f8c470453ce0c961b7b0efc0e7a19eeb86389846",
     "host": "alpha, a real workhorse; its ssh target stays outside the capture",
     "versions": {
       "host": {
@@ -42,17 +42,17 @@
           "file": "claude-band-0-light.ansi",
           "crop": [
             0,
-            11
+            12
           ],
-          "sha256": "5408c1a84c9b5fbcf434929f612875bb19d16568f871b0887c8bf349d1059222"
+          "sha256": "ac0736fc52f83e60263912f920ba4668a15380eb7d84039903569c9535e454bd"
         },
         "dark": {
           "file": "claude-band-0-dark.ansi",
           "crop": [
             0,
-            10
+            12
           ],
-          "sha256": "9e26ecf042a81b7c9a7b966347b2bd392ac9b283abd39038d279e06d735675aa"
+          "sha256": "34fc56bdaff60e942624b046d5f5456aad3df7df7174106a4c7cbb5d05162cb8"
         }
       }
     },
@@ -63,17 +63,17 @@
           "file": "claude-band-1-light.ansi",
           "crop": [
             0,
-            13
+            15
           ],
-          "sha256": "4edf00ddd5528fdadc453790cbdc7733255f131529842e296b1918f49e3c2065"
+          "sha256": "54ab0367d21e50aa5d03833f56a21a97114d81a2f7cd3d27b1051e6e1542f5e8"
         },
         "dark": {
           "file": "claude-band-1-dark.ansi",
           "crop": [
             0,
-            13
+            15
           ],
-          "sha256": "b365bc3a67b4af29a45c815643d182efc82852a0cbc80a3f78eca6eeaac92d55"
+          "sha256": "d539b8ca237694a07f291de8d7bc309f0d9bcf1fa09fa79ec28bc4270677304e"
         }
       }
     },
@@ -84,17 +84,17 @@
           "file": "claude-band-2-light.ansi",
           "crop": [
             0,
-            21
+            22
           ],
-          "sha256": "36401e65651c85176d188333e60c6352db275c7ce62887256f4a3d20e4757bec"
+          "sha256": "aa004abade8bd7ea878f3d7eba0beff626fc6f824249cbb80203f720365d820b"
         },
         "dark": {
           "file": "claude-band-2-dark.ansi",
           "crop": [
             0,
-            21
+            22
           ],
-          "sha256": "f4abe585584b8c8eb0aa921e6e7eadbfa38926de86d720bf7c42e74797e52c3b"
+          "sha256": "94ff31ff5cc7794014f45e670ca0e5f9860cb4a0d9018474d88f55bf41c25c3a"
         }
       }
     },
@@ -107,7 +107,7 @@
             0,
             20
           ],
-          "sha256": "b628f4b92b6f1827e13da9e13da48f4cc271c9c141fa388067810f25b0db689d"
+          "sha256": "4246931aae95a9da555fbaa8800f223b02623efbe5942bcba69d89697081232f"
         },
         "dark": {
           "file": "claude-band-3-dark.ansi",
@@ -115,7 +115,7 @@
             0,
             20
           ],
-          "sha256": "b6a51449adfb6baaf45a932042bf7361aad832a69d41210cc0ca8142c5d809ca"
+          "sha256": "e4d6497e521bec7085a6875475c40308dff777eec6cbf2e633ffcd10bdebe47a"
         }
       }
     }

@@ -268,7 +268,7 @@ class Capture:
     def band(self, running):
         def check(text):
             lines = text.splitlines()
-            self.expect(sum(line.startswith(f"wh {HOST}:") for line in lines) == (1 if running else 0),
+            self.expect(sum(line.startswith(f"↗ workhorses │ {HOST} · ") for line in lines) == (1 if running else 0),
                         f"{'one' if running else 'no'} band line")
             self.expect(text.count(f"wh - {HOST}") == (1 if running else 0), f"{'one' if running else 'no'} badge")
         return check
