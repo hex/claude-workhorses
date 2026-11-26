@@ -52,7 +52,7 @@ remote() {
 
 blocked() {
   echo "mirror.sh run: BLOCKED: $*" >&2
-  blocked_reason=$(head -n 1 <<<"$*")
+  end_reason=$(head -n 1 <<<"$*")
   exit 3
 }
 
@@ -61,7 +61,8 @@ blocked() {
 # run ended. The start line carries this script's pid, so a run killed before it could write its end
 # line (SIGKILL, power loss) can be told apart from one still going.
 run_log=$HOME/.local/state/workhorse/runs.jsonl
-run_id="" run_ended=0 blocked_reason=""
+run_id="" run_ended=0 end_reason=""
+job_ssh="" job_host="" job_target="" job_work=""
 
 log_start() {
   local host=$1 dir=$2 sub=$3
@@ -80,7 +81,7 @@ log_synced() {
 log_end() {
   [ -n "$run_id" ] && [ "$run_ended" = 0 ] || return 0
   run_ended=1
-  jq -nc --arg id "$run_id" --argjson at "$(date +%s)" --argjson exit "$1" --arg reason "$blocked_reason" \
+  jq -nc --arg id "$run_id" --argjson at "$(date +%s)" --argjson exit "$1" --arg reason "$end_reason" \
     '{event: "end", id: $id, at: $at, exit: $exit} + (if $reason == "" then {} else {reason: $reason} end)' >>"$run_log"
 }
 
@@ -499,6 +500,11 @@ run() {
 
   log_start "$host" "$dir" "${sub%/}" "$@"
   trap 'log_end $?' EXIT
+  # wh stop sends SIGTERM, and Ctrl-C or a closed terminal the others. While the copy is made, the EXIT
+  # trap then frees the host's lock; once the job runs, stop_job ends it on the host as well.
+  trap 'stop_copy 143' TERM
+  trap 'stop_copy 130' INT
+  trap 'stop_copy 129' HUP
 
   for ignore in "${ignores[@]}"; do
     rsync_excludes+=(--exclude "$ignore")
@@ -580,13 +586,98 @@ $tracked"
     report_patched <<<"$out"
   fi
 
-  # From here the remote job owns the lock and releases it itself.
+  # From here the remote job owns the lock and releases it itself. ssh runs in the background, its
+  # stdin kept, so a signal to this shell interrupts the wait at once instead of after the job.
   trap 'log_end $?' EXIT
   log_synced
-  remote "$target" /bin/bash -c "$run_job" _ "$work" "${sub:-.}" "$clock" "$(printf '%s\n' "${names[@]}")" "$limit" "$@"
+  remote "$target" /bin/bash -c "$run_job" _ "$work" "${sub:-.}" "$clock" "$(printf '%s\n' "${names[@]}")" "$limit" "$@" <&0 &
+  job_ssh=$! job_host=$host job_target=$target job_work=$work
+  trap 'stop_job 143' TERM
+  trap 'stop_job 130' INT
+  trap 'stop_job 129' HUP
+  local status=0
+  wait "$job_ssh" || status=$?
+  return "$status"
+}
+
+# Ends a run stopped before its job started, exiting $1 through the EXIT trap, which frees the lock.
+stop_copy() {
+  end_reason=stopped
+  echo "mirror.sh run: stopped before the job started" >&2
+  exit "$1"
+}
+
+# Ends this run's job on $job_host and exits $1. SIGTERM goes to the shell that runs the job there,
+# whose pid run_job writes into the lock as it starts: that shell stops the job's process group and
+# frees the lock. Without the ssh that started it, the job would run on, as nothing reaches a host's
+# process once its laptop side is gone. A job whose ssh has already ended needs nothing.
+stop_job() {
+  trap '' TERM INT HUP
+  end_reason=stopped
+  if kill -0 "$job_ssh" 2>/dev/null; then
+    if remote "$job_target" /bin/sh -c 'for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$1" ] && exec kill -s TERM "$(cat "$1")"; sleep 1; done; exit 1' _ "$job_work.lock/pid"; then
+      wait "$job_ssh" 2>/dev/null || true
+      echo "mirror.sh run: stopped the job on $job_host" >&2
+    else
+      echo "mirror.sh run: could not reach the job on $job_host to stop it; it may still be running in ~/$job_work" >&2
+    fi
+  fi
+  exit "$1"
+}
+
+# The run log's runs still going: a start line with no end line whose mirror.sh still lives. Prints one
+# JSON object a run, its start line, oldest first.
+live_runs() {
+  local starts pid
+  [ -f "$run_log" ] || return 0
+  starts=$(jq -c -s 'map(select(.event == "start" or .event == "end")) | group_by(.id)
+    | map(select(length == 1 and .[0].event == "start" and (.[0].pid | type) == "number") | .[0]) | sort_by(.at) | .[]' "$run_log")
+  while IFS= read -r start; do
+    [ -n "$start" ] || continue
+    pid=$(jq -r .pid <<<"$start")
+    if ps -o command= -p "$pid" 2>/dev/null | grep -q 'mirror\.sh run'; then printf '%s\n' "$start"; fi
+  done <<<"$starts"
+}
+
+# Lists the runs going from this machine, one a line: the number wh stop takes (the run's pid here),
+# the host, how long it has run, the repository and subfolder, and the command.
+list_runs() {
+  local runs now
+  runs=$(live_runs)
+  if [ -z "$runs" ]; then
+    echo "no wh runs going"
+    return 0
+  fi
+  now=$(date +%s)
+  jq -r --argjson now "$now" '
+    def age: (($now - .at) | if . < 60 then "\(.)s" elif . < 3600 then "\(. / 60 | floor)m" else "\(. / 3600 | floor)h\(. % 3600 / 60 | floor)m" end);
+    "\(.pid)\t\(.host)\t\(age)\t\(.dir | split("/") | last)\(if .sub == "" then "" else "/" + .sub end)\t\(.command)"' <<<"$runs"
+}
+
+# Stops the run whose pid here is $1, as Ctrl-C in its terminal would: SIGTERM to its mirror.sh, whose
+# traps end the job on the host and free the lock. Waits up to 30 s for the run to end.
+stop_run() {
+  [ $# = 1 ] && [[ $1 =~ ^[1-9][0-9]{0,9}$ ]] || { echo "usage: wh stop <run>  (wh ps lists the runs going)" >&2; exit 2; }
+  local pid=$1 start waited=0
+  start=$(live_runs | jq -c --argjson pid "$pid" 'select(.pid == $pid)')
+  [ -n "$start" ] || { echo "wh stop: no wh run going has the number $pid; wh ps lists the runs going" >&2; exit 1; }
+  # While the copy is made, mirror.sh waits on rsync or ssh in the foreground, which holds its trap
+  # back until they end, so they get SIGTERM too. Once the job runs, its traps act at once.
+  if ! jq -e --arg id "$(jq -r .id <<<"$start")" 'select(.event == "synced" and .id == $id)' "$run_log" >/dev/null; then
+    pkill -TERM -P "$pid" 2>/dev/null || true
+  fi
+  kill -s TERM "$pid" 2>/dev/null || true
+  while kill -0 "$pid" 2>/dev/null; do
+    [ $waited -lt 300 ] || { echo "wh stop: run $pid is still going 30 s after SIGTERM" >&2; exit 1; }
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  echo "wh stop: stopped run $pid on $(jq -r .host <<<"$start"): $(jq -r .command <<<"$start")"
 }
 
 case "${1:-}" in
   run) shift; run "$@" ;;
+  ps) [ $# = 1 ] || { echo "usage: wh ps" >&2; exit 2; }; list_runs ;;
+  stop) shift; stop_run "$@" ;;
   *) echo "usage: $0 run [--timeout <seconds>] <host|auto> <dir> <command...>" >&2; exit 2 ;;
 esac

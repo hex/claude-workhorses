@@ -160,6 +160,31 @@ events=$(jq -r --arg id "$last_id" 'select(.id == $id) | .event' "$run_log" | pa
 [ "$events" = "start synced end" ] || { echo "FAIL the last run logged '$events', wanted 'start synced end'" >&2; exit 1; }
 echo "ok   the run log marks when the copy was ready"
 
+# wh stop ends a run going: its job and the job's children on the host, its lock, and the run itself,
+# which exits 143 and logs the end as stopped. The job's child writes its pid outside the copy, where
+# the next run's patch leaves it.
+sleeper=/tmp/wh-check-sleeper-$$
+"$wh" "$host" -- sh -c "sleep 300 & echo \$! >$sleeper; wait" >/dev/null 2>&1 &
+stopped_run=$!
+stop_id=""
+for _ in $(seq 100); do
+  stop_id=$(grep '"event":"start"' "$run_log" | tail -n 1 | jq -r --arg cmd "sh -c sleep 300 & echo \$! >$sleeper; wait" 'select(.command == $cmd) | .id')
+  [ -n "$stop_id" ] && jq -e --arg id "$stop_id" 'select(.id == $id and .event == "synced")' "$run_log" >/dev/null && break
+  sleep 0.3
+done
+[ -n "$stop_id" ] || { echo "FAIL the run to stop never logged its start and synced lines" >&2; exit 1; }
+sleep 2
+"$wh" stop "$(jq -r --arg id "$stop_id" 'select(.id == $id and .event == "start") | .pid' "$run_log")" >/dev/null ||
+  { echo "FAIL wh stop could not stop a run going" >&2; exit 1; }
+code=0
+wait "$stopped_run" || code=$?
+[ "$code" = 143 ] || { echo "FAIL a stopped run exited $code, not 143" >&2; exit 1; }
+end=$(jq -c --arg id "$stop_id" 'select(.id == $id and .event == "end") | {exit, reason}' "$run_log")
+[ "$end" = '{"exit":143,"reason":"stopped"}' ] || { echo "FAIL a stopped run logged its end as '$end'" >&2; exit 1; }
+left=$("$wh" "$host" -- sh -c "kill -0 \$(cat $sleeper) 2>/dev/null && echo running || echo gone; rm -f $sleeper" 2>/dev/null)
+[ "$left" = gone ] || { echo "FAIL the stopped job's child is $left on $host" >&2; exit 1; }
+echo "ok   wh stop ends the job and its children on the host, frees the lock and logs the run as stopped"
+
 # Git in the copy sees what git on the laptop sees: a plain repository, and a linked worktree of it,
 # whose .git on the laptop is a file naming a folder the workhorse does not have.
 gitroot=${TMPDIR:-/tmp}/wh-check-git
