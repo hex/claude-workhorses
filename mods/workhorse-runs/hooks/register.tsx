@@ -337,7 +337,11 @@ export const register: Register = on => {
     const view = await read($, hostsView)
     const nowMs = await $.clock.now()
     // Read at each drawing, since a /clear goes on under a new id without a session.start.
-    const sessionId = await $.session.id().catch(() => null)
+    // Without this session's id no run is marked as this session's; the failure goes to the log.
+    const sessionId = await $.session.id().catch((error: unknown) => {
+      $.ui.log(`workhorses pane: no session id, so no run is marked this session's: ${(error as Error).message}`)
+      return null
+    })
     const { Box, Button, Text } = $.ui.resolve(e)
     const stop = async (pid: number) => {
       const said = await $.process.run([`${$.plugin.root}/bin/wh`, 'stop', String(pid)])
