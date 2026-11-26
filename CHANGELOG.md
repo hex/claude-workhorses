@@ -4,6 +4,19 @@ This file lists the notable changes to claude-workhorses. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+- `wh ps` lists the runs going from this machine and `wh stop <run>` ends one: its job and everything the job started stop on the host, the copy's lock goes, the run's `wh` exits 143 and the run log records the end as stopped.
+- The band gives each run a Stop button that runs `wh stop`, and a toast says why when the stop fails.
+
+### Changed
+- The band draws a row per run in the style of the claude-bloodhounds band: `↗ workhorses │ alpha · 0:43 · demo · pnpm test [ Stop ]`, the time reading `copying 0:02` while the copy runs.
+- The hosts file refuses a host named `ps` or `stop`, since `wh` takes those as commands.
+
+### Fixed
+- `Ctrl-C` on a run's `wh`, or a closed terminal, now stops the job on the host. Before, the job ran on and held the copy's lock, and the run log recorded the run as ended with exit 0.
+
 ## 2026.11.9
 
 ### Added

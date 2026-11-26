@@ -117,6 +117,17 @@ shell running it on the host first. The host needs no
 `gtimeout`. Exit 3 with `BLOCKED` on stderr means the command did not run, and the message says
 why. Exit 2 is a usage error, an unknown host, or a missing or bad hosts file.
 
+### Stopping a run
+
+`wh ps` lists the runs going from this machine, one a line: the run's number, its host, how long it
+has run, its repository and its command. `wh stop <run>` ends one: the job and everything it
+started stop on the host, the copy's lock goes, and that run's `wh` exits 143. A run stopped while
+it still copies leaves a partial copy, which the next run completes.
+
+`Ctrl-C` on a run's `wh`, or closing its terminal, stops the job on the host the same way, and `wh`
+exits 130 or 129. The run log records each of these as stopped. The band's Stop button runs
+`wh stop`.
+
 ### Choosing a host
 
 With no host named, `wh` asks every host at once for its 1-minute load and physical core count (on
@@ -157,11 +168,14 @@ mod reads that log and shows the runs started from the session's folder:
 
 - The green footer badge names the host and counts the copy (`↗ wh - alpha 0:42`), then spins while the
   job runs (`⠋ wh - alpha 0:43`).
-- The band above the prompt has a line per run (`wh alpha: pnpm test (demo) · 0:43`), at most
-  three, then a count of the rest.
+- The band above the prompt has a row per run (`↗ workhorses │ alpha · 0:43 · demo · pnpm test [ Stop ]`),
+  at most three, then a count of the rest. The time reads `copying 0:02` while the copy runs. Stop
+  runs `wh stop` for that run; click it, or press ctrl+x tab to reach it and enter to press it. A
+  stop that fails says why in a toast.
 - A run that took over 2 minutes, or ended `BLOCKED`, ends with a toast.
 
-The mod makes no network calls and writes no files. It reads the log once a second. While it shows a
+The mod makes no network calls and writes no files; only its Stop button runs `wh stop`, which
+reaches the host over ssh. It reads the log once a second. While it shows a
 run, it runs `ps -o pid=,command= -p <pids>` every 15 seconds and drops a run whose `mirror.sh` has
 gone without writing its end line. A run it saw going gets a toast that says so.
 
@@ -376,7 +390,8 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | `wh: command not found` in your own terminal | Claude Code puts the plugin's `bin/` on the path of the commands Claude runs, not on your shell's. Call `bin/wh` in the installed plugin by its full path, or link it into a folder on your `PATH`. |
 | `wh` exits 124 | The job ran past `--timeout`. Give it a longer limit, or split it. |
 | `BLOCKED: no workhorse is free` | The message lists each host's reason. Every host is at its core count or unreachable; run the job locally. |
-| `... is in use: ...` | Another run holds that copy's lock. If that run has ended, remove the `.lock` folder the message names. |
+| `... is in use: ...` | Another run holds that copy's lock. The message gives its number; `wh stop <number>` ends it from the machine that started it. If that run has ended, remove the `.lock` folder the message names. |
+| A run must stop | `wh ps` lists the runs going; `wh stop <run>` ends one, its job on the host included. |
 | Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
 | `git` fails on a new host | macOS's `git` stays a stub until the Command Line Tools arrive. Add the `command-line-tools` line. On Linux, install `git` (`apt git @os=linux`). |
 | `sync.sh` says a host "runs Linux, where host options do not apply" | Remove the options it names from that host's line in the hosts file. |

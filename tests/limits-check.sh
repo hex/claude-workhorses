@@ -141,7 +141,9 @@ expect_wh() {
   echo "ok   $label"
 }
 
-usage="usage: wh [host] [--timeout <limit>] -- <command...>  (no host: a free workhorse, by load; limit: 90s, 30m, 2h)"
+usage="usage: wh [host] [--timeout <limit>] -- <command...>  (no host: a free workhorse, by load; limit: 90s, 30m, 2h)
+       wh ps          (the wh runs going from this machine)
+       wh stop <run>  (ends a run, its job on the host included; <run> is the number wh ps shows)"
 expect_wh "a limit that is not a whole number with s, m or h is refused" \
 "wh: --timeout takes a whole number of seconds, minutes or hours (90s, 30m, 2h), not \"5x\"" 2 --timeout 5x -- true
 expect_wh "a limit of zero is refused" \

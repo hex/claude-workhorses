@@ -28,9 +28,9 @@ wh alpha --timeout 20m -- cargo test   # a named host
   clone or worktree works at once.
 - Every run shows up for the user in the sessions whose folder holds the repo, or sits inside it (the
   workhorse-runs mod): a green `wh` badge in the prompt footer, which names the host and counts the copy
-  (`↗ wh - alpha 0:42`), then spins (`⠋ wh - alpha 0:43`) while the job runs, a line per run above the
-  prompt (`wh alpha: pnpm test (demo) · 0:43`), at most three of them and a count of the rest, and a
-  toast when one that took over 2 minutes ends or a run ends with `BLOCKED`.
+  (`↗ wh - alpha 0:42`), then spins (`⠋ wh - alpha 0:43`) while the job runs, a row per run above the
+  prompt (`↗ workhorses │ alpha · 0:43 · demo · pnpm test [ Stop ]`), at most three of them and a
+  count of the rest, and a toast when one that took over 2 minutes ends or a run ends with `BLOCKED`.
 - With no host, `wh` picks among the hosts whose 1-minute load is below their core count: the least
   busy by load plus runs going, per core, though a host with the repo's copy wins while under half
   busy, and it skips a host whose copy another run holds. Name the host when the job needs
@@ -46,6 +46,8 @@ wh alpha --timeout 20m -- cargo test   # a named host
   user to add it.
 - Run it from a background shell (`run_in_background: true` in Claude Code) when it takes minutes, and wait for the
   exit notification instead of polling.
+- To cancel a run, `wh ps` lists the runs going with their numbers and `wh stop <run>` ends one, its
+  job on the host included. Stopping the shell that runs `wh` stops the job on the host too.
 
 ## When to use it
 
@@ -129,6 +131,7 @@ holding the worktree's branch and index. Lock files (`*.lock`) stay on this mach
 |------|---------|
 | the command's own | The command ran; this is its result. |
 | 124 | The command ran past `--timeout`; `wh` stopped it and everything it started. |
+| 143, 130, 129 | `wh stop`, `Ctrl-C` or a closed terminal stopped the run, and the job with it. |
 | 3, with `BLOCKED` on stderr | The command did not run. The message says why: no host free or reachable, another run holds the lock, copying `.git` or the patch from this machine failed, git tracks files `wh` skips, or the repo's first copy on that host would send over 1 GB (`.git` and files together) through Tailscale (make it from a network that reaches the host without Tailscale, or name a host on this network). |
 | 2 | Usage error: missing `--`, not inside a git repo, an unknown host, or a missing or bad hosts file. |
 

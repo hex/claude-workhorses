@@ -1,6 +1,6 @@
 # The claude-workhorses hosts file: copy it to ~/.config/claude-workhorses/hosts and edit it.
 # One host per line: name, ssh target, arch, cores, RAM in GB, then any host options.
-# - name: lower-case letters, digits and dashes; wh and sync.sh take it as the host's name.
+# - name: lower-case letters, digits and dashes, and not ps or stop; wh and sync.sh take it as the host's name.
 # - ssh target: an alias from ~/.ssh/config or user@host. ~/.ssh/config decides the route.
 # - arch: x86_64 or arm64. cores and RAM: whole numbers, shown to Claude in the host table.
 # - A Linux host, WSL2 on a Windows PC included, takes the same five fields and no options:
