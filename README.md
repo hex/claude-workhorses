@@ -221,7 +221,7 @@ The list comes from the record `sync.sh status` stores, so a host never synced h
 whose tools lines changed since its last sync shows as out of date. A host writes its own record,
 and any job on it can change it, so the hook passes on only lines shaped as a tool name and its
 version under a recipe shaped as a recipe name, presents them as data, and counts the rest. A
-recipe's line stops at 2000 characters and a host's list at 6000, each saying how much it cut.
+recipe's line stops at 2000 characters and a host's recipe lines at 6000. A separate line counts the omitted recipes.
 `sync.sh status` marks the end of a run's log as the host's text, and `sync.sh diff` shows a host's
 lines in the same shape. For what no record shows (no code signing, a tool that needs a license),
 write `~/.config/workhorses/notes`. The plain policy includes the complete notes. Claude Code, Cursor and VS Code limit

@@ -185,17 +185,19 @@ for n in $(seq 300); do echo "port tool$n 1.$n.$zeros"; done >>"$state/manifests
 for n in $(seq 100); do printf '%s\n' "#line r$n" "r$n tool $n.$more_zeros"; done >>"$state/manifests/alpha"
 printf '%s\n' "port many" >"$config/tools"
 out=$("$BASH" "$root/scripts/policy.sh")
-if [[ $out != "Workhorse policy exceeds"* ]]; then
-  listed=$(sed -n '/^alpha (/,/^$/p' <<<"$out")
-  [ "$(sed 1d <<<"$listed" | wc -c)" -le 6100 ] || fail "host list exceeds its limit"
-  grep -Eq '^- and [0-9]+ more recipes$' <<<"$listed" || fail "missing count of omitted recipes"
-fi
+listed=$(sed -n '/^alpha (/,/^$/p' <<<"$out")
+[ -n "$listed" ] || fail "plain policy omitted the host list before its 6000-character cap could be checked"
+recipes=$(sed -n '/^- .*: /p' <<<"$listed")
+[ -n "$recipes" ] || fail "empty host recipe list"
+[ "$(wc -c <<<"$recipes")" -le 6000 ] || fail "host list exceeds its limit"
+shown=$(wc -l <<<"$recipes")
+grep -qxF -- "- and $((101 - shown)) more recipes" <<<"$listed" || fail "wrong count of omitted recipes"
 out=$("$BASH" "$root/scripts/policy.sh" --full)
 listed=$(sed -n '/^alpha (/,/^$/p' <<<"$out")
 [ "$(head -n 1 <<<"$listed")" = "alpha (macOS 15.5, synced 2026-11-20 10:00 UTC) has:" ] || fail "wrong lone host heading"
 [ "$(grep -o 'tool[0-9][0-9]* ' <<<"$listed" | wc -l | tr -d ' ')" = 300 ] || fail "full policy lost package versions"
 [ "$(grep -c '^- r[0-9]*: tool ' <<<"$listed")" = 100 ] || fail "full policy lost recipes"
-# Isolate the long package list so its compact form fits inside the whole-policy budget.
+# Isolate the long package list to check the per-recipe limit separately.
 sed '/^#line r1$/,$d' "$state/manifests/alpha" >"$config/packages"
 cp "$config/packages" "$state/manifests/alpha"
 out=$("$BASH" "$root/scripts/policy.sh")
