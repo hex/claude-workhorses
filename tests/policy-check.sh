@@ -13,6 +13,21 @@ export WORKHORSES_STATE_DIR=$state
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 
+# An OS filter on a host whose manifest omits its OS warns on stderr but renders successfully.
+(
+  export WORKHORSES_CONFIG_DIR="$config/warning" WORKHORSES_STATE_DIR="$config/warning/state"
+  mkdir -p "$WORKHORSES_STATE_DIR/manifests"
+  echo 'alpha me@alpha.example.test arm64 8 16' >"$WORKHORSES_CONFIG_DIR/hosts"
+  echo 'mise node@26 @os=linux' >"$WORKHORSES_CONFIG_DIR/tools"
+  printf '%s\n' '#synced 2026-11-20 10:00 UTC' '#exit 0' '#line mise node@26' 'mise node 26.0.0' >"$WORKHORSES_STATE_DIR/manifests/alpha"
+  json="$config/warning.json"
+  "$BASH" "$root/scripts/policy-session-start.sh" >"$json" || fail "SessionStart failed on an unknown host OS warning"
+  jq -e '.hookSpecificOutput.additionalContext | contains("the OS alpha runs is not known") and contains("| alpha |")' "$json" >/dev/null ||
+    fail "SessionStart lost the warning or the host table"
+  [ "$(wc -c <"$json")" -le 8500 ] || fail "warning exceeded the startup budget"
+  echo "ok   SessionStart includes the unknown OS warning alongside the policy"
+)
+
 # Four records share some tools but have different package builds and host-only tools.
 (
   export WORKHORSES_CONFIG_DIR="$config/budget" WORKHORSES_STATE_DIR="$config/budget/state"

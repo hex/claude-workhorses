@@ -8,10 +8,20 @@ def fit_table($title; $table; $rules; $notice):
     ($prefix; if (. + $row + "\n" + $rules | fits) then . + $row + "\n" else . end) |
   . + $rules;
 
-(join("") | rtrimstr("\n")) as $whole |
+# Keep warnings with the rules when optional sections are removed.
+def add_warnings($message):
+  if $message == "" then .
+  elif length >= 3 then .[2] += ($message + "\n")
+  else . + [$message]
+  end;
+
+add_warnings($warnings) as $all |
+($all | join("") | rtrimstr("\n")) as $whole |
 if ($whole | fits) then $whole
 else
-  . as [$title, $table, $rules, $tools, $notes] |
+  add_warnings(if ($warnings | tojson | utf8bytelength) > 1200
+               then $warnings[:180] + " [additional warnings omitted]\n"
+               else $warnings end) as [$title, $table, $rules, $tools, $notes] |
   def notice($omitted): "\($omitted) omitted from startup. Read the full policy: \($command)\n\n";
   ($title + notice("Tool lists") + $table + $rules + $notes | rtrimstr("\n")) as $with_notes |
   ($title + notice("Tool lists and notes") + $table + $rules | rtrimstr("\n")) as $core |
