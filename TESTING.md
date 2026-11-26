@@ -43,7 +43,10 @@ entry point. For Claude Code, Codex, Cursor, Copilot CLI, VS Code and Kimi it ru
 command and compares the context field or stdout with the installed policy. For Grok it checks
 the native component inventory. Grok’s npx install carries `hooks/hooks.json` and runs the same
 8,500-byte SessionStart hook as Claude Code, Cursor, VS Code and Kimi. Grok leaves its output out of
-model context. For Kimi it also checks that the manifest registers the startup skill. The check removes the
+model context by design. Cursor also drops startup context because of a confirmed timing bug.
+Both rely on the skill to run the installed policy script. [Grok hook behavior](https://docs.x.ai/build/features/hooks) · [Cursor staff confirmation](https://forum.cursor.com/t/sessionstart-hook-additional-context-is-never-injected-into-agents-initial-system-context/158452)
+
+For Kimi it also checks that the manifest registers the startup skill. The check removes the
 temporary homes and npm cache on exit. It runs separately from `tests/run.sh` and does not open
 an agent session.
 

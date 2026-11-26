@@ -25,6 +25,10 @@ front of you.
 | Your own terminal | `wh` by its full path, or linked into a folder on your `PATH`. Its runs show in the badge and band of a Claude Code session whose folder holds the repository or sits inside it. |
 | The workhorses | Spare Macs, Intel or Apple silicon, with Remote Login on, or Linux machines with sshd. `wh` reaches them over ssh and needs nothing installed on a Mac; see [Linux and WSL hosts](#linux-and-wsl-hosts) for Linux. `sync.sh` gives each one the tools you list. |
 
+Grok Build and Cursor rely on the workhorse skill to read the policy before choosing a host.
+Grok ignores stdout from passive hooks by design. Cursor staff confirmed a timing bug that
+drops startup context. [Grok hook behavior](https://docs.x.ai/build/features/hooks) · [Cursor staff confirmation](https://forum.cursor.com/t/sessionstart-hook-additional-context-is-never-injected-into-agents-initial-system-context/158452)
+
 ## Install
 
 ```bash
@@ -69,7 +73,7 @@ interactive sessions. `copilot -p` skips the hook.
   accepted by the workhorse user, or Linux hosts as [Linux and WSL hosts](#linux-and-wsl-hosts)
   describes.
 
-Each one reads the same hosts file and tools records as Claude Code, so set up the workhorses once.
+All supported agents read the same workhorses hosts file and tool records, so you only need to configure the hosts once.
 
 ## First run
 

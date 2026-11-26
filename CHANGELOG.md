@@ -4,12 +4,16 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
-## Unreleased
+## 2026.11.14
 
 ### Added
 - One npx command installs the workhorse skill for Claude Code, Codex, Cursor, GitHub Copilot CLI,
   VS Code, Grok Build and Kimi Code. Install checks verified the startup hook files for Cursor and VS Code
   and verified Kimi’s startup skill registration and policy hook output. Live startup remains unverified in all three.
+
+- The workhorse skill reads the policy when startup context is missing. Grok relies on this
+  fallback because passive hooks ignore stdout. Cursor relies on it because a confirmed timing
+  bug drops startup context. [Grok hook behavior](https://docs.x.ai/build/features/hooks) · [Cursor staff confirmation](https://forum.cursor.com/t/sessionstart-hook-additional-context-is-never-injected-into-agents-initial-system-context/158452)
 
 ### Fixed
 - The startup policy fits four package inventories and 1.65 KB of notes within 8,500 JSON bytes. The hook installed for Claude Code, Cursor, VS Code, Grok Build and Kimi Code omits tool lists first and notes next when needed. Grok leaves hook output out of model context. Codex, pi, OpenCode, Antigravity and Copilot CLI receive the whole condensed policy.
