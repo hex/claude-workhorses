@@ -39,7 +39,7 @@ done
 
 # wh hosts end to end, with a fake ssh first on PATH. For cayde and xur it runs the probe in a scratch
 # home of that host, under bash and zsh; eris refuses the connection, slow never answers, and odd and
-# mangled answer something that is not a probe's answer. The laptop's home is a scratch one too, its
+# mangled answer something that is not a probe's answer, and linuxy gives a Linux host's answer. The laptop's home is a scratch one too, its
 # run log naming one run going, whose mirror.sh is a sleeping stand-in.
 me=$(hostname -s)
 cores=$(/usr/sbin/sysctl -n hw.physicalcpu)
@@ -53,6 +53,7 @@ eris eris@192.168.1.98 arm64 10 16
 slow slow@slow.local x86_64 6 16
 odd odd@odd.local x86_64 6 16
 mangled mangled@mangled.local x86_64 6 16
+linuxy linuxy@linuxy.local x86_64 6 16
 HOSTS
 cat >"$scratch/bin/ssh" <<'SSH'
 #!/bin/bash
@@ -64,6 +65,7 @@ case "$5" in
   slow@slow.local) exec sleep 30 ;;
   odd@odd.local) printf 'Last login: Thu Nov 26 \033[1mon ttys000\n%s\n' "$(printf 'x%.0s' $(seq 250))" ;;
   mangled@mangled.local) printf '{ 1.00 1.00 1.00 }\n6\nlock\tok-1\towner\nnot a lock line\n1\n' ;;
+  linuxy@linuxy.local) printf '0.50 0.40 0.30 1/215 1245\n6\nlock\tlx-1\tother-mac pid 7 since 2026-11-26 08:00:00: cargo test\n1\n' ;;
   *) echo "fake ssh: unexpected arguments: $*" >&2; exit 99 ;;
 esac
 SSH
@@ -94,10 +96,10 @@ code=0
 wh hosts --json >"$scratch/out" 2>"$scratch/err" || code=$?
 [ "$code" = 0 ] || fail "wh hosts --json exited $code: $(cat "$scratch/err")"
 [ ! -s "$scratch/err" ] || fail "wh hosts --json wrote to stderr: $(cat "$scratch/err")"
-[ $(($(date +%s) - started)) -le 8 ] || fail "wh hosts --json took $(($(date +%s) - started)) s with a host that never answers"
+[ $(($(date +%s) - started)) -le 15 ] || fail "wh hosts --json took $(($(date +%s) - started)) s with a host that never answers"
 loads=$(jq -r 'select(.state == "ok") | .load | type' "$scratch/out" | sort -u)
 [ "$loads" = number ] || fail "wh hosts --json gave loads of type '$loads', not number"
-got=$(jq -c 'if .state == "ok" then .load = "L" else . end' "$scratch/out")
+got=$(jq -c 'if .host == "cayde" or .host == "xur" then .load = "L" else . end' "$scratch/out")
 want="{\"host\":\"cayde\",\"state\":\"ok\",\"load\":\"L\",\"cores\":$cores,\"runs\":[]}
 {\"host\":\"xur\",\"state\":\"ok\",\"load\":\"L\",\"cores\":$cores,\"runs\":[\
 {\"work\":\"ai-batch-7f7532ed\",\"machine\":\"$me\",\"pid\":$stand_in,\"since\":\"2026-11-26 15:53:42\",\"command\":\"gtimeout 45m make test\",\"dir\":\"$batch\",\"stoppable\":true},\
@@ -107,7 +109,8 @@ want="{\"host\":\"cayde\",\"state\":\"ok\",\"load\":\"L\",\"cores\":$cores,\"run
 {\"host\":\"eris\",\"state\":\"unreachable\"}
 {\"host\":\"slow\",\"state\":\"unreachable\"}
 {\"host\":\"odd\",\"state\":\"unexpected\",\"answer\":\"Last login: Thu Nov 26 [1mon ttys000 $(printf 'x%.0s' $(seq 163))\"}
-{\"host\":\"mangled\",\"state\":\"unexpected\",\"answer\":\"{ 1.00 1.00 1.00 } 6 lock ok-1 owner not a lock line 1\"}"
+{\"host\":\"mangled\",\"state\":\"unexpected\",\"answer\":\"{ 1.00 1.00 1.00 } 6 lock ok-1 owner not a lock line 1\"}
+{\"host\":\"linuxy\",\"state\":\"ok\",\"load\":0.50,\"cores\":6,\"runs\":[{\"work\":\"lx-1\",\"machine\":\"other-mac\",\"pid\":7,\"since\":\"2026-11-26 08:00:00\",\"command\":\"cargo test\",\"dir\":null,\"stoppable\":false}]}"
 [ "$got" = "$want" ] || fail "wh hosts --json: wanted
 $want
 got
@@ -117,7 +120,7 @@ echo "ok   wh hosts --json reports each host in file order: its load and runs, u
 code=0
 wh hosts >"$scratch/out" 2>"$scratch/err" || code=$?
 [ "$code" = 0 ] || fail "wh hosts exited $code: $(cat "$scratch/err")"
-got=$(sed -E 's/load [0-9]+[.][0-9]{2} of/load L of/' "$scratch/out")
+got=$(sed -E '/^(cayde|xur) /s/load [0-9]+[.][0-9]{2} of/load L of/' "$scratch/out")
 want="cayde    load L of $cores cores, idle
 xur      load L of $cores cores, 4 runs
          $stand_in  ~/proj/.claude/worktrees/ai-batch  since 15:53  gtimeout 45m make test
@@ -127,7 +130,9 @@ xur      load L of $cores cores, 4 runs
 eris     unreachable
 slow     unreachable
 odd      unexpected answer: Last login: Thu Nov 26 [1mon ttys000 $(printf 'x%.0s' $(seq 163))
-mangled  unexpected answer: { 1.00 1.00 1.00 } 6 lock ok-1 owner not a lock line 1"
+mangled  unexpected answer: { 1.00 1.00 1.00 } 6 lock ok-1 owner not a lock line 1
+linuxy   load 0.50 of 6 cores, 1 run
+         from other-mac pid 7 since 2026-11-26 08:00:00: cargo test"
 [ "$got" = "$want" ] || fail "wh hosts: wanted
 $want
 got

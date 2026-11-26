@@ -304,6 +304,7 @@ export const register: Register = on => {
     } catch (error) {
       return { text: `workhorses pane: ${(error as Error).message}` }
     }
+    // The pane is open and shows "checking…" while this runs; $ is not usable once the hook has answered.
     await refreshHosts($, refresh)
     return { text }
   })
@@ -427,6 +428,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const path = `${await $.env.get('HOME')}/${LOG}`
     const sessionDir = e.cwd
+    paneSessionDir = sessionDir
+    paneHome = (await $.env.get('HOME')) ?? ''
     const active = new Map<string, Start>()
     // Runs still copying the repository to the workhorse: no synced line yet.
     const copying = new Set<string>()
@@ -523,8 +526,6 @@ export const register: Register = on => {
     await poll()
     $.clock.every(POLL_MS, poll)
 
-    paneSessionDir = sessionDir
-    paneHome = (await $.env.get('HOME')) ?? ''
     // Without /workhorses nothing opens the pane, so the timer starts only once the command is registered.
     try {
       await $.command.register({ name: 'workhorses', description: 'Open the workhorses pane: each workhorse, its load and the wh runs going on it' })

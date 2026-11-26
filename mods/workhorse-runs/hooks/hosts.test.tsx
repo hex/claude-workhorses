@@ -65,6 +65,7 @@ function world(on: On) {
     placed: { isPlaced: true } as { isPlaced: true } | { isPlaced: false; reason: string },
     panes: [] as { id: string; title: string; isShown: boolean; isFocused: boolean; isPlaced: boolean }[],
     toasts: [] as string[],
+    logs: [] as string[],
   }
   mock.env(on, { HOME })
   on('fs.exists', () => ({ value: false }))
@@ -87,6 +88,10 @@ function world(on: On) {
   on('ui.panes', () => ({ value: state.panes }))
   on('ui.toast', (_, e) => {
     state.toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.log', (_, e) => {
+    state.logs.push(e.text)
     return { value: undefined }
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -172,6 +177,7 @@ test('the timer runs wh hosts only while the pane is placed, once a minute', asy
   state.panes = []
   await clock.advance(180_000)
   expect(state.whCalls.length).toBe(2)
+  expect(state.logs).toEqual([])
 })
 
 test('a failing wh hosts shows its error and keeps the hosts it last reported, with their age', async ($, on) => {
@@ -205,6 +211,7 @@ test('a failing wh hosts shows its error and keeps the hosts it last reported, w
   state.hosts = { stdout: jsonLines([{ host: 'cayde', state: 'unreachable' }]), stderr: '', exitCode: 0 }
   await clock.advance(60_000)
   expect((await paneNow($)).rows).toEqual(['checked 0s ago', 'cayde · unreachable'])
+  expect(state.logs).toEqual([])
 })
 
 test('what a host sent reaches the pane as plain text', async ($, on) => {
