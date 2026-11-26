@@ -243,6 +243,12 @@ test('what a host sent reaches the pane as plain text', async ($, on) => {
     'from other]0;x · since 15:00 · make [31mred',
     'odd · unexpected answer: Last login [1mtoday2J',
   ])
+
+  state.hosts = { stdout: '', stderr: 'jq: error \u001b[31mred\u0007\n', exitCode: 5 }
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'refresh' })
+  await ui.unmount()
+  expect((await paneNow($)).rows[0]).toBe('wh hosts exited 5: jq: error [31mred · hosts as of 0s ago')
 })
 
 test("a run's Stop runs wh stop for its pid, a failure says why in a toast, and the hosts are asked again", async ($, on) => {

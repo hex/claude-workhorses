@@ -311,7 +311,9 @@ async function askHosts($: EngineInterface, refresh: Refresh): Promise<void> {
     error = (failed as Error).message
   }
   const nowMs = await $.clock.now()
-  await update($, hostsView, (view: HostsView): HostsView => (hosts === undefined ? { ...view, error } : { checkedAt: nowMs, hosts, error: null }))
+  // stderr and an error's message are as untrusted as the report: plain text, like every other string.
+  const said = error?.replace(CONTROL, '') ?? null
+  await update($, hostsView, (view: HostsView): HostsView => (hosts === undefined ? { ...view, error: said } : { checkedAt: nowMs, hosts, error: null }))
 }
 
 export const register: Register = on => {
