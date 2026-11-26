@@ -6,9 +6,15 @@
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
+# Prints the version on the Command Line Tools package receipt, or fails when there is none. A selected Xcode
+# makes xcode-select -p succeed without them, so the receipt is what install and probe both test.
+clt_version() {
+  pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | sed -n "s/^version: //p" | grep .
+}
+
 install() {
   macos_only command-line-tools
-  xcode-select -p >/dev/null 2>&1 && return 0
+  clt_version >/dev/null && return 0
   # This marker makes softwareupdate list the Command Line Tools package.
   local marker=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress label update_pid
   touch "$marker"
@@ -36,11 +42,13 @@ install() {
     "$(dirname "$0")/../clt-direct.sh"
   fi
   rm -f "$marker"
-  xcode-select -p >/dev/null || { echo "the Command Line Tools are still missing after the install" >&2; exit 1; }
+  clt_version >/dev/null || { echo "the Command Line Tools are still missing after the install" >&2; exit 1; }
 }
 
 probe() {
-  echo "command-line-tools $(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | sed -n 's/^version: //p' | grep . || echo missing)"
+  local version
+  version=$(clt_version) || version=missing
+  echo "command-line-tools $version"
 }
 
 "$@"

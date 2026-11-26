@@ -65,6 +65,21 @@ run_step() {
   )
 }
 
+# Prints why the step of tools line $@ fails although its install exited 0, or nothing when its probe
+# finds the tool. An install can exit 0 and leave its tool unusable, when an earlier run cut short left
+# a folder the installer takes for a finished install. A probe that exits non-zero fails the step,
+# whatever it printed, as manifest.sh records it probe-failed; otherwise a line ending in missing does.
+probe_verdict() {
+  local out code=0 missing
+  out=$(run_step no ./recipes/"$1" probe "${@:2}" </dev/null 3<&-) || code=$?
+  if [ $code -ne 0 ]; then
+    echo "its probe failed with exit $code"
+    return 0
+  fi
+  missing=$(grep -E '(^| )missing$' <<<"$out" | paste -sd ',' - || true)
+  [ -z "$missing" ] || echo "its probe reports: $missing"
+}
+
 # Rebuilds env.sh from the base and every recipe's snippet, then reads the environment the next step
 # runs in into step_env, as NAME=value records. A separate bash, started fresh so it holds no variable
 # of this shell, with stdin from /dev/null and no descriptor but its output, sources env.sh and prints
@@ -154,11 +169,9 @@ while read -r -a words <&3; do
   echo "=== ${words[*]}"
   run_step "$(declares_sudo "./recipes/$step" && echo yes || echo no)" ./recipes/"$step" install "${words[@]:1}" </dev/null 3<&-
   build_env
-  # An install can exit 0 and leave its tool unusable, when an earlier run cut short left a folder the
-  # installer takes for a finished install; the step counts only when its probe finds the tool.
-  missing=$(run_step no ./recipes/"$step" probe "${words[@]:1}" </dev/null 3<&- | grep -E '(^| )missing$' || true)
-  if [ -n "$missing" ]; then
-    echo "$step: the install ended, but its probe reports: $(paste -sd ',' - <<<"$missing")" >&2
+  verdict=$(probe_verdict "${words[@]}")
+  if [ -n "$verdict" ]; then
+    echo "$step: the install ended, but $verdict" >&2
     exit 1
   fi
 done 3<./tools

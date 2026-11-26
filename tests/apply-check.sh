@@ -205,8 +205,20 @@ grep -qxF "hollow: the install ended, but its probe reports: hollow-tool missing
   fail "a hollow install is not named: $(tail -3 "$scratch/apply.log")"
 grep -q '^after' "$scratch/home/calls" && fail "the recipe after a hollow install ran"
 grep -qx 'hollow-tool missing' "$scratch/home/workhorse/manifest" || fail "the manifest lacks the hollow probe: $(cat "$scratch/home/workhorse/manifest")"
+# A probe that exits non-zero fails its step whatever it printed, so run.status and the manifest agree.
+printf '#!/bin/bash\n[ "$1" = install ] || { echo "crashing 1.0"; exit 127; }\n' >"$stage/recipes/crashing"
+chmod 700 "$stage/recipes/crashing"
+printf '%s\n' "crashing" "after" >"$stage/tools"
+apply ""
+[ "$(cat "$scratch/home/workhorse/run.status")" = "1 crashing" ] || fail "a probe that exits 127 gave run.status '$(cat "$scratch/home/workhorse/run.status")'"
+grep -qxF "crashing: the install ended, but its probe failed with exit 127" "$scratch/apply.log" ||
+  fail "a probe that exits 127 is not named: $(tail -3 "$scratch/apply.log")"
+grep -q '^after' "$scratch/home/calls" && fail "the recipe after a failed probe ran"
+[ "$(grep -xE '#exit .*|crashing .*' "$scratch/home/workhorse/manifest")" = "#exit 1 crashing
+crashing probe-failed 127
+crashing 1.0" ] || fail "the manifest of a failed probe: $(cat "$scratch/home/workhorse/manifest")"
 printf '%s\n' "slurp" "loose" "after" >"$stage/tools"
-echo "ok   an install that exits 0 while its probe still reports the tool missing fails its step, named, and the steps after it do not run"
+echo "ok   an install that exits 0 while its probe still reports the tool missing, or exits non-zero, fails its step, named, and the steps after it do not run"
 
 rm -f "$scratch/home/.zshenv"
 apply ""

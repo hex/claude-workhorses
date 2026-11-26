@@ -18,7 +18,8 @@ install() {
 
 probe() {
   local name rest installed version
-  installed=$(npm ls -g --depth 0 2>/dev/null | sed -n 's/^[├└]── //p')
+  # npm ls exits 1 over a problem in any package, a peer dependency say, and still lists them all.
+  installed=$(npm ls -g --depth 0 2>/dev/null | sed -n 's/^[├└]── //p' || true)
   for name in "$@"; do
     # The package's name without a pinned version: pkg@2 is pkg, @scope/pkg@2 is @scope/pkg.
     rest=${name:1}

@@ -4,12 +4,20 @@
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
+# Prints where the jar of version $1 goes. It exists only once its download finished, which install
+# skips on and probe reports.
+jar_path() {
+  echo "$HOME/.local/share/bundletool/bundletool-all-${1:?bundletool takes a version, like 1.18.3}.jar"
+}
+
 install() {
   local version=${1:?bundletool takes a version, like 1.18.3} jar
-  jar="$HOME/.local/share/bundletool/bundletool-all-$version.jar"
+  jar=$(jar_path "$version")
   if ! [ -f "$jar" ]; then
     mkdir -p "$(dirname "$jar")"
-    curl -fsSL -o "$jar" "https://github.com/google/bundletool/releases/download/$version/bundletool-all-$version.jar"
+    # A download cut short stays under the .part name, so no run takes it for the jar.
+    curl -fsSL -o "$jar.part" "https://github.com/google/bundletool/releases/download/$version/bundletool-all-$version.jar"
+    mv "$jar.part" "$jar"
   fi
   mkdir -p "$HOME/.local/bin"
   printf '#!/bin/sh\nexec java -jar "%s" "$@"\n' "$jar" >"$HOME/.local/bin/bundletool"
@@ -17,7 +25,9 @@ install() {
 }
 
 probe() {
-  echo "bundletool $(ls "$HOME/.local/share/bundletool" 2>/dev/null | paste -sd ' ' - | grep . || echo missing)"
+  local jar
+  jar=$(jar_path "${1:-}")
+  if [ -f "$jar" ]; then echo "bundletool ${jar##*/}"; else echo "bundletool missing"; fi
 }
 
 "$@"

@@ -121,4 +121,41 @@ expect_install "dotnet with an SDK folder but no dotnet" "" 0 "curl -fsSL https:
 [ -e "$HOME/.dotnet/tools/keep" ] || fail "dotnet removed ~/.dotnet/tools"
 echo "ok   rustup and dotnet install again over an install that left a tool that does not run, and keep one that does"
 
+# A recipe's probe finds the tool by the same test its install skips on.
+# dotnet: the SDK of the line's channel, not whichever SDK is newest.
+printf '%s\n' '#!/bin/bash' 'case "$1" in --list-sdks) printf "%s\n" $RECIPES_CHECK_SDKS | sed "s#\$# [/x/sdk]#" ;; --version) echo 11.0.100 ;; esac' >"$HOME/.dotnet/dotnet"
+chmod +x "$HOME/.dotnet/dotnet"
+out=$(RECIPES_CHECK_SDKS="10.0.404 11.0.100" PATH=$path "$BASH" "$scratch/recipes/dotnet" probe 10.0)
+[ "$out" = "dotnet 10.0.404" ] || fail "dotnet's probe of channel 10.0 beside an 11.0 SDK printed '$out'"
+out=$(RECIPES_CHECK_SDKS="11.0.100" PATH=$path "$BASH" "$scratch/recipes/dotnet" probe 10.0)
+[ "$out" = "dotnet missing" ] || fail "dotnet's probe of channel 10.0 with only an 11.0 SDK printed '$out'"
+# command-line-tools: the pkgutil receipt, so a Mac with Xcode selected and no Command Line Tools installs them.
+printf '%s\n' '#!/bin/bash' 'echo "pkgutil $*" >>"$RECIPES_CHECK_LOG"' '[ -n "${RECIPES_CHECK_CLT:-}" ] || exit 1' 'printf "package-id: com.apple.pkg.CLTools_Executables\nversion: %s\n" "$RECIPES_CHECK_CLT"' >"$bin/pkgutil"
+expect_install "command-line-tools with Xcode selected and no receipt" "softwareupdate lists no Command Line Tools package" 1 "pkgutil --pkg-info=com.apple.pkg.CLTools_Executables
+touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+softwareupdate -l" command-line-tools Darwin
+RECIPES_CHECK_CLT=16.4.0.0.1 expect_install "command-line-tools with the receipt" "" 0 "pkgutil --pkg-info=com.apple.pkg.CLTools_Executables" command-line-tools Darwin
+# bundletool: a download cut short leaves no jar, so the next install downloads it again and the probe says missing until then.
+printf '%s\n' 'out=""; while [ $# -gt 0 ]; do [ "$1" != -o ] || out=$2; shift; done' \
+  '[ -z "$out" ] || { echo part >"$out"; [ -z "${RECIPES_CHECK_CUT:-}" ] || exit 18; echo whole >"$out"; }' >>"$bin/curl"
+code=0
+RECIPES_CHECK_CUT=1 PATH=$path "$BASH" "$scratch/recipes/bundletool" install 1.18.3 || code=$?
+[ $code = 18 ] || fail "bundletool with its download cut short exited $code"
+out=$(PATH=$path "$BASH" "$scratch/recipes/bundletool" probe 1.18.3)
+[ "$out" = "bundletool missing" ] || fail "bundletool's probe after a download cut short printed '$out'"
+: >"$log"
+PATH=$path "$BASH" "$scratch/recipes/bundletool" install 1.18.3
+[ "$(grep -c '^curl ' "$log")" = 1 ] || fail "the install after a download cut short made these calls: '$(cat "$log")'"
+out=$(PATH=$path "$BASH" "$scratch/recipes/bundletool" probe 1.18.3)
+[ "$out" = "bundletool bundletool-all-1.18.3.jar" ] || fail "bundletool's probe after a whole download printed '$out'"
+[ "$(cat "$HOME/.local/share/bundletool/bundletool-all-1.18.3.jar")" = whole ] || fail "the jar holds '$(cat "$HOME/.local/share/bundletool/bundletool-all-1.18.3.jar")'"
+# npm: npm ls exits 1 over a problem in any package it lists, and still lists them.
+printf '%s\n' '#!/bin/bash' 'printf "/x/lib\n├── foo@1.2.3\n└── @s/bar@2.0.0\n"' 'exit 1' >"$bin/npm"
+chmod +x "$bin/npm"
+out=$(PATH=$path "$BASH" "$scratch/recipes/npm" probe foo @s/bar@2 baz) || fail "npm's probe exited $? over an npm ls that exits 1"
+[ "$out" = "npm foo@1.2.3
+npm @s/bar@2.0.0
+npm baz missing" ] || fail "npm's probe over an npm ls that exits 1 printed '$out'"
+echo "ok   dotnet, command-line-tools and bundletool probe for what their install skips on, and npm's probe lists what npm ls lists when it exits 1"
+
 echo "all recipe checks passed"

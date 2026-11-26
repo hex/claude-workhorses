@@ -1,12 +1,17 @@
 #!/bin/bash
 # ABOUTME: Recipe: the .NET SDK of one channel, dotnet <channel> (dotnet 10.0), from Microsoft's install script into ~/.dotnet.
-# ABOUTME: install adds the channel's SDK when ~/.dotnet has none of it that runs. probe prints "dotnet <version>".
+# ABOUTME: install adds the channel's SDK when ~/.dotnet has none of it that runs. probe prints "dotnet <the channel's newest SDK>".
 set -euo pipefail
 . "$(dirname "$0")/../recipe-lib.sh"
 
+# Prints the newest SDK of channel $1 that ~/.dotnet/dotnet lists, or fails when it lists none.
+channel_sdk() {
+  "$HOME/.dotnet/dotnet" --list-sdks 2>/dev/null | awk -v prefix="$1." 'index($1, prefix) == 1 {sdk = $1} END {if (sdk == "") exit 1; print sdk}'
+}
+
 install() {
   local channel=${1:?dotnet takes a channel, like 10.0}
-  if ! "$HOME/.dotnet/dotnet" --list-sdks 2>/dev/null | grep -q "^${channel}[.]"; then
+  if ! channel_sdk "$channel" >/dev/null; then
     # The installer skips an SDK whose folder exists, so the folders an install cut short left without a
     # dotnet go first; the global tools in ~/.dotnet/tools stay.
     [ -x "$HOME/.dotnet/dotnet" ] || rm -rf "$HOME/.dotnet/sdk"
@@ -19,7 +24,9 @@ ENV
 }
 
 probe() {
-  echo "dotnet $("$HOME/.dotnet/dotnet" --version 2>/dev/null || echo missing)"
+  local sdk
+  sdk=$(channel_sdk "${1:?dotnet takes a channel, like 10.0}") || sdk=missing
+  echo "dotnet $sdk"
 }
 
 "$@"

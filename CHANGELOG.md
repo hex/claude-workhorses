@@ -50,7 +50,12 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   it does only with `wh`'s usage or hosts-file message on stderr, and is otherwise the command's own 2,
   as `make` returns when a build fails.
 - A sync no longer ends with exit 0 while a tool it installs does not run. A recipe's step fails when its
-  probe still reports the tool `missing` after the install, and `sync.sh status` names that step.
+  probe still reports the tool `missing` after the install, or exits non-zero, and `sync.sh status` names that step.
+- `dotnet`'s probe reports the SDK of its line's channel, not the newest SDK in `~/.dotnet`.
+  `command-line-tools` installs on a Mac with Xcode selected and no Command Line Tools, and skips on the
+  same package receipt its probe reads. `bundletool` downloads under a `.part` name, so the next run fetches a download cut
+  short again instead of taking it for the jar, and its probe reports the line's version only.
+  `npm`'s probe lists the global packages when `npm ls` exits 1 over a problem in one of them.
 - `rustup` installs stable again when an earlier install cut short left a `rustc` that does not run, and
   `dotnet` removes the SDK folders such an install left without `dotnet`, which Microsoft's installer
   would otherwise skip. Global tools in `~/.dotnet/tools` stay.
