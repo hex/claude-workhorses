@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/policy.sh\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/policy-session-start.sh\"",
             "timeout": 10
           }
         ]
