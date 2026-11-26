@@ -28,6 +28,7 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 - `rustup` installs stable again when an earlier install cut short left a `rustc` that does not run, and
   `dotnet` removes the SDK folders such an install left without `dotnet`, which Microsoft's installer
   would otherwise skip. Global tools in `~/.dotnet/tools` stay.
+- `tests/wh-check.sh` finds its own run to stop when another session's `wh` run starts at the same moment.
 
 ## 2026.11.14
 

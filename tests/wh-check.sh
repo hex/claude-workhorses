@@ -168,7 +168,8 @@ sleeper=/tmp/wh-check-sleeper-$$
 stopped_run=$!
 stop_id=""
 for _ in $(seq 100); do
-  stop_id=$(grep '"event":"start"' "$run_log" | tail -n 1 | jq -r --arg cmd "sh -c sleep 300 & echo \$! >$sleeper; wait" 'select(.command == $cmd) | .id')
+  # Another session's wh run can log its start after this one's, so the newest start of this command counts.
+  stop_id=$(grep '"event":"start"' "$run_log" | jq -r --arg cmd "sh -c sleep 300 & echo \$! >$sleeper; wait" 'select(.command == $cmd) | .id' | tail -n 1)
   [ -n "$stop_id" ] && jq -e --arg id "$stop_id" 'select(.id == $id and .event == "synced")' "$run_log" >/dev/null && break
   sleep 0.3
 done
