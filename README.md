@@ -180,7 +180,7 @@ eris   unreachable
 ```
 
 A run is a lock in the host's `~/work` whose job runs in a live process, or one under an hour old
-that is still copying. A stale lock is not a run: its process has ended, the host has restarted since
+that is still copying. A stale lock does not count as a run: its process is gone (its job may still run), the host has restarted since
 the run took it, or it has no process and is over an hour old, though a run still making a large first copy can hold such a lock. A run this machine started leads with the number `wh stop` takes and the folder it
 started from. A run from another machine names that machine and its pid there. A host that does not
 answer within 5 seconds is unreachable, and a host whose answer is not a probe's shows that answer.
