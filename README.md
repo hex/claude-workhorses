@@ -195,7 +195,7 @@ other than `--json`, and on a missing or bad hosts file.
 `wh stats` reports the finished runs this machine started, per host, from the run log:
 
 ```
-wh stats: 1834 finished runs in the last 2d; times in whole seconds, median and 90th percentile
+wh stats: 765 finished runs in the last 2d; times in whole seconds, median and 90th percentile
 host          runs   ok failed stopped blocked copy p50   p90 job p50   p90
 alpha          509  393     66       3      47        3     7      18   241
 beta           255  207     39       4       5        3    10      38   602
@@ -262,7 +262,7 @@ locks it, copies `.git`, patches the working tree, then runs the command:
 Every run writes a start, a synced and an end line to `~/.local/state/workhorse/runs.jsonl`. When
 Claude Code runs `wh`, the start line also names its session, from `CLAUDE_CODE_SESSION_ID`. The
 start line says how `wh` chose the host and, when `wh` picked it, that host's load, cores and runs
-going then; the synced line says how `wh` made the copy and how many files it sent. `wh stats` reports
+going then; the synced line says how `wh` made the copy and how many paths rsync changed in it. `wh stats` reports
 on them ([Run metrics](#run-metrics)). The mod reads that log and shows the runs started from the session's folder:
 
 - The green footer badge names the host, its arrows swapping while the copy syncs (`wh ⇄ alpha`),

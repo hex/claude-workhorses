@@ -12,7 +12,7 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   times, how `wh` made the copies and how it chose the hosts. `--since 7d` or `12h` narrows it; `--json` prints one object.
 - A run's start line in the run log says how `wh` chose its host (`named`, `auto` or `list`) and,
   when `wh` picked it, that host's load, cores and runs going then. Its synced line says how `wh` made
-  the copy (`patch`, `walk` with why, or `first`) and how many files it sent.
+  the copy (`patch`, `walk` with why, or `first`) and how many paths rsync changed in it.
 
 ## 2026.11.16
 

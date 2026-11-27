@@ -115,7 +115,8 @@ log_start() {
 }
 
 # The copy is ready: says how it was made, $1 (first, walk or patch), why a walk walked ($2, empty for
-# the others), and how many files report_patched counted.
+# the others), and how many paths rsync changed in the copy as report_patched counts them: files sent,
+# folders made and deletions; the paths a patch deletes or relinks through apply_records are not among them.
 log_synced() {
   jq -nc --arg id "$run_id" --argjson at "$(date +%s)" --arg copy "$1" --arg why "$2" --argjson files "$files_sent" \
     '{event: "synced", id: $id, at: $at, copy: $copy} + (if $why == "" then {} else {why: $why} end) + {files: $files}' >>"$run_log"
