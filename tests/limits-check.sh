@@ -570,6 +570,33 @@ for list in alpha,delta alpha, ,alpha alpha,,gamma; do
 done
 echo "ok   a list with an unknown or empty name is refused with the known hosts"
 
+# The synced line says how the copy was made: a first copy, a walk of every file and why, or a patch of
+# the paths Watchman listed; and how many files it sent. The stand-in Watchman never answers, so a copy
+# that exists is walked.
+last_synced() { jq -c 'select(.event == "synced") | del(.id, .at, .event)' "$runs" | tail -n 1; }
+# Runs wh alpha -- true from the repository; fails on any exit but 0.
+run_alpha() {
+  code=0
+  (cd "$scratch/repo" && HOME=$laptop WORKHORSES_CONFIG_DIR=$scratch/config FAKE_HOST_HOME=$host_home \
+    PATH=$scratch/fake-bin:$PATH "$BASH" "$here/../bin/wh" alpha -- true) >/dev/null 2>"$scratch/err" || code=$?
+  [ "$code" = 0 ] || fail "wh alpha -- true: exit $code: $(cat "$scratch/err")"
+}
+rm -rf "$host_home/work/$name" "$host_home/work/$name.times" "$host_home/work/$name.listing" "$host_home/work/$name.clock" \
+  "$host_home/work/$name.lock"
+printf 'one\n' >"$scratch/repo/extra"
+run_alpha
+[ "$(last_synced)" = '{"copy":"first","files":2}' ] || fail "a first copy logged its sync as $(last_synced)"
+echo "ok   a first copy logs itself as first, with the files it sent"
+printf 'two two\n' >"$scratch/repo/extra"
+run_alpha
+[ "$(last_synced)" = '{"copy":"walk","why":"Watchman could not answer","files":1}' ] ||
+  fail "a walk that sent one changed file logged its sync as $(last_synced)"
+run_alpha
+[ "$(last_synced)" = '{"copy":"walk","why":"Watchman could not answer","files":0}' ] ||
+  fail "a walk that found nothing to send logged its sync as $(last_synced)"
+rm "$scratch/repo/extra"
+echo "ok   a walk logs itself as a walk, with why and the files it sent, none when nothing changed"
+
 # Runs bin/wh from a folder inside this repository with an empty config folder, so it stops at the
 # missing hosts file at the latest and never reaches a host. Compares stderr and the exit code.
 expect_wh() {

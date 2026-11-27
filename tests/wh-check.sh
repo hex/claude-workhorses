@@ -29,6 +29,7 @@ done'
 # Which way the patch must go: "any" for the first run, "list" for Watchman's change list, "walk" for
 # a comparison of every file.
 want_path=any
+run_log=$HOME/.local/state/workhorse/runs.jsonl
 
 # Runs a command in the probe folder of the copy and compares its stdout and exit code with the
 # expected ones. Before the command, the copy's probe folder must match the laptop's.
@@ -56,6 +57,15 @@ expect() {
   if { [ "$want_path" = list ] && [ $walked = yes ]; } || { [ "$want_path" = walk ] && [ $walked = no ]; }; then
     echo "FAIL $label: wanted the $want_path path, got walked=$walked:" >&2
     cat "$err" >&2
+    exit 1
+  fi
+  # The run log's synced line names the same path: patch for the list, walk for the walk. Other runs
+  # from this laptop write to the log too, so the run is found by its command.
+  local id copy
+  id=$(jq -r --arg cd "cd $probe && " 'select(.event == "start" and (.command | contains($cd))) | .id' "$run_log" | tail -n 1)
+  copy=$(jq -r --arg id "$id" 'select(.event == "synced" and .id == $id) | .copy' "$run_log")
+  if { [ "$want_path" = list ] && [ "$copy" != patch ]; } || { [ "$want_path" = walk ] && [ "$copy" != walk ]; }; then
+    echo "FAIL $label: wanted the $want_path path, the run log says the copy was '$copy'" >&2
     exit 1
   fi
   rm -f "$err"
@@ -154,7 +164,6 @@ expect absent 0 "a file deleted on the laptop goes" 'test -e file && echo presen
 expect "" 7 "the command's exit code comes back" 'exit 7'
 
 # The run log says when the copy was ready: a synced line between the run's start and its end.
-run_log=$HOME/.local/state/workhorse/runs.jsonl
 last_id=$(grep '"event":"start"' "$run_log" | tail -n 1 | jq -r .id)
 events=$(jq -r --arg id "$last_id" 'select(.id == $id) | .event' "$run_log" | paste -sd ' ' -)
 [ "$events" = "start synced end" ] || { echo "FAIL the last run logged '$events', wanted 'start synced end'" >&2; exit 1; }

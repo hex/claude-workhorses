@@ -89,7 +89,7 @@ blocked() {
 # every host, or list among the hosts given) and, when wh picked it, that host's probe answer then: its
 # 1-minute load, physical cores and runs going.
 run_log=$HOME/.local/state/workhorse/runs.jsonl
-run_id="" run_ended=0 end_reason="" pick="" pick_load="" pick_cores="" pick_runs=""
+run_id="" run_ended=0 end_reason="" pick="" pick_load="" pick_cores="" pick_runs="" files_sent=0
 # What a signal or the way out acts on: the phase (prepare while the host takes the lock, copy while the
 # copy is made, then job; refused when another run's lock turned this run away, so it holds none), the
 # host, the copy and this run's line in its lock's owner file, and the ssh that runs the job.
@@ -114,8 +114,11 @@ log_start() {
   start_line "$@" >>"$run_log"
 }
 
+# The copy is ready: says how it was made, $1 (first, walk or patch), why a walk walked ($2, empty for
+# the others), and how many files report_patched counted.
 log_synced() {
-  jq -nc --arg id "$run_id" --argjson at "$(date +%s)" '{event: "synced", id: $id, at: $at}' >>"$run_log"
+  jq -nc --arg id "$run_id" --argjson at "$(date +%s)" --arg copy "$1" --arg why "$2" --argjson files "$files_sent" \
+    '{event: "synced", id: $id, at: $at, copy: $copy} + (if $why == "" then {} else {why: $why} end) + {files: $files}' >>"$run_log"
 }
 
 # Prints the run's end line, exit $1 and end_reason, once: later calls print nothing.
@@ -541,16 +544,19 @@ exit "$status"
 SCRIPT
 )
 
-# Reports how many files an rsync patched, from its -i output on stdin. openrsync itemizes neither a
-# changed executable bit nor a retargeted symlink, so the count leaves both out. It takes itemized
-# lines only, less those whose only flag is t (time); rsync's warnings go to stderr.
+# Reports how many files an rsync patched, from its -i output on stdin, and adds them to files_sent.
+# openrsync itemizes neither a changed executable bit nor a retargeted symlink, so the count leaves both
+# out. It takes itemized lines only, less those whose only flag is t (time); rsync's warnings go to stderr.
 report_patched() {
-  local out patched
+  local out patched count
   out=$(cat)
   [ -z "$out" ] && return 0
   grep -vE '^[<>ch.*][fdLDS]' <<<"$out" >&2 || true
   patched=$(grep -E '^[<>ch.*][fdLDS]' <<<"$out" | grep -vE '^\.[a-zA-Z]\.\.[Tt]\.+ ' || true)
-  [ -z "$patched" ] || echo "mirror.sh run: patched $(wc -l <<<"$patched" | tr -d ' ') files from the laptop" >&2
+  [ -n "$patched" ] || return 0
+  count=$(wc -l <<<"$patched" | tr -d ' ')
+  files_sent=$((files_sent + count))
+  echo "mirror.sh run: patched $count files from the laptop" >&2
 }
 
 # Asks Watchman which paths in the repository at $1 changed since clock $2; with no clock, it asks
@@ -811,7 +817,9 @@ $tracked"
 
   # From here the remote job owns the lock and releases it itself. ssh runs in the background, its
   # stdin kept, so a signal to this shell interrupts the wait at once instead of after the job.
-  log_synced
+  if [ -z "$reason" ]; then log_synced patch ""
+  elif [ "$state" != warm ]; then log_synced first ""
+  else log_synced walk "$reason"; fi
   phase=job
   remote "$target" /bin/bash -c "$run_job" _ "$work" "$run_owner" "${sub:-.}" "$clock" "$(printf '%s\n' "${names[@]}")" "$limit" "$@" <&0 &
   job_ssh=$!
