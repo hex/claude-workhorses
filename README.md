@@ -190,6 +190,32 @@ reads. Both strip control characters from what a host sends, so it prints as pla
 `wh hosts` exits 0 when hosts are unreachable, since the report says so. It exits 2 on any argument
 other than `--json`, and on a missing or bad hosts file.
 
+### Run metrics
+
+`wh stats` reports the finished runs this machine started, per host, from the run log:
+
+```
+wh stats: 1834 finished runs in the last 2d; times in whole seconds, median and 90th percentile
+host          runs   ok failed stopped blocked copy p50   p90 job p50   p90
+alpha          509  393     66       3      47        3     7      18   241
+beta           255  207     39       4       5        3    10      38   602
+none free        1    0      0       0       1        -     -       -     -
+copies: 36 patch, 5 walk, 1 first (of the 42 finished runs that logged how)
+picks: 0 auto, 0 list, 42 named (of the 42 finished runs that logged how)
+```
+
+A run is ok when it exits 0, blocked when it ends `BLOCKED` (exit 3 with a reason; a job's own exit 3
+is a failure), stopped when `wh stop` or a signal stopped it, and failed otherwise, timeouts included.
+`none free` holds the runs that found no host free. The copy time runs from the start line to the
+synced line, the job time from the synced line to the end line; the log keeps whole seconds, and the
+percentiles take the nearest rank. The report leaves out a run still going, or one killed before its
+end line. `copies` counts how `wh` made each copy: a patch of the paths Watchman listed, a walk of every file, or a
+first copy. `picks` counts how `wh` chose the host: by `wh` among every host (auto), among the hosts
+given (list), or named. Both count only the runs logged since `wh` records them.
+
+`--since 7d` or `--since 12h` keeps the runs that started since then; `--json` prints one JSON object
+instead, with `null` where a host has no times. `wh stats` exits 2 on any other argument.
+
 ### Choosing a host
 
 With no host named, `wh` asks every host at once for its 1-minute load and physical core count (on
@@ -235,7 +261,9 @@ locks it, copies `.git`, patches the working tree, then runs the command:
 
 Every run writes a start, a synced and an end line to `~/.local/state/workhorse/runs.jsonl`. When
 Claude Code runs `wh`, the start line also names its session, from `CLAUDE_CODE_SESSION_ID`. The
-mod reads that log and shows the runs started from the session's folder:
+start line says how `wh` chose the host and, when `wh` picked it, that host's load, cores and runs
+going then; the synced line says how `wh` made the copy and how many files it sent. `wh stats` reports
+on them ([Run metrics](#run-metrics)). The mod reads that log and shows the runs started from the session's folder:
 
 - The green footer badge names the host, its arrows swapping while the copy syncs (`wh ⇄ alpha`),
   then a spinner takes their place while the job runs (`wh ⠋ alpha`).

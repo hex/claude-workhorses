@@ -4,6 +4,16 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+- `wh stats` reports each host's finished runs from this machine's run log: how many passed, failed,
+  ended `BLOCKED` or ended at `wh stop` or a signal, the median and 90th-percentile copy and job
+  times, how `wh` made the copies and how it chose the hosts. `--since 7d` or `12h` narrows it; `--json` prints one object.
+- A run's start line in the run log says how `wh` chose its host (`named`, `auto` or `list`) and,
+  when `wh` picked it, that host's load, cores and runs going then. Its synced line says how `wh` made
+  the copy (`patch`, `walk` with why, or `first`) and how many files it sent.
+
 ## 2026.11.16
 
 ### Changed
