@@ -93,6 +93,10 @@ export function duration(seconds: number): string {
   return minutes === 0 ? `${total}s` : `${minutes}m${String(total % 60).padStart(2, '0')}s`
 }
 
+// Control characters, C1 included, which a terminal would act on rather than show, and the characters that
+// reorder or hide text: bidi controls and zero-width characters.
+const UNPRINTABLE = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g
+
 function isBlocked(end: End): boolean {
   return end.exit === 3 && end.reason !== undefined
 }
@@ -116,7 +120,8 @@ export function deservesToast(start: Start | undefined, end: End): boolean {
 export function endToast(start: Start | undefined, end: End): string {
   const what = start === undefined ? `run ${end.id}` : describe(start)
   const took = start === undefined ? '' : ` after ${duration(end.at - start.at)}`
-  const result = isBlocked(end) ? `BLOCKED: ${end.reason}` : end.reason === 'stopped' ? 'stopped' : (unsettled(end) ?? `exit ${end.exit}`)
+  // A BLOCKED reason can quote what a host wrote, such as a lock's owner file.
+  const result = isBlocked(end) ? `BLOCKED: ${end.reason?.replace(UNPRINTABLE, '')}` : end.reason === 'stopped' ? 'stopped' : (unsettled(end) ?? `exit ${end.exit}`)
   return `wh ${what} ended${took}, ${result}`
 }
 
@@ -187,10 +192,6 @@ const HOSTS_REFRESH_MS = 60_000
 const hostsView = atom({ plugin: 'workhorses', key: 'hostsView' } as const, { checkedAt: null, hosts: [], error: null } as HostsView, {
   shape: 'hosts-view-1',
 })
-
-// Control characters, C1 included, which a terminal would act on rather than show, and the characters that
-// reorder or hide text: bidi controls and zero-width characters.
-const UNPRINTABLE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g
 
 type Fields = Record<string, unknown>
 

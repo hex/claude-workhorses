@@ -191,6 +191,18 @@ test('a run started in a worktree inside the session folder shows, and its BLOCK
 
   expect(state.toasts).toEqual(['wh gamma: sleep 300 (fix) ended after 5s, BLOCKED: no workhorse is free:'])
   expect(await badgeNow($)).toBe(undefined)
+
+  // A run BLOCKED after its copy was made, with host text in the reason: an escape sequence, and U+202E,
+  // which shows the text after it reversed.
+  state.live.add(4247)
+  state.log += `${start('later', 4247, 1004, '/repo/demo')}\n${synced('later', 1005)}\n`
+  await clock.advance(2_000)
+  expect(await badgeNow($)).toMatch(SPINNING)
+  state.log += `${end('later', 1007, 3, 'gamma:~/work/demo is in use by another run: lap\u001b[2J‮ lave')}\n`
+  await clock.advance(2_000)
+
+  expect(state.toasts.slice(1)).toEqual(['wh gamma: sleep 300 (demo) ended after 3s, BLOCKED: gamma:~/work/demo is in use by another run: lap[2J lave'])
+  expect(await badgeNow($)).toBe(undefined)
 })
 
 test('a folder that only shares a name prefix with the session folder is not its own', async ($, on) => {

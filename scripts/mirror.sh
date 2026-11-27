@@ -153,6 +153,18 @@ narrow_hosts() {
   all_hosts=("${kept[@]}")
 }
 
+# What a host sends is data. plain, a jq function, makes a string one line of text: tabs and line breaks
+# become spaces, and control characters and the characters that reorder or hide text (bidi controls,
+# zero-width characters) go.
+plain_jq='def plain: gsub("[\\t\\n\\r]"; " ")
+  | gsub("[\\x{0}-\\x{1f}\\x{7f}-\\x{9f}\\x{200b}-\\x{200f}\\x{202a}-\\x{202e}\\x{2066}-\\x{2069}\\x{feff}]"; "")
+  | sub("^ +"; "") | sub(" +$"; "");'
+plain() { jq -nr --arg text "$1" "$plain_jq"' $text | plain'; }
+
+# The reasons lock_state gives for a stale lock. A host's answer that names a stale lock is taken only
+# with one of these.
+stale_why='(the host has restarted since the lock was taken|its process [0-9]+ is gone|its pid file holds no process id|it holds no pid and is over an hour old)'
+
 # Turns host $1's answer to pick_host's probe, from an ssh that exited $2, into one probe line for
 # choose_host. The answer's lines come joined by spaces: the load line, the physical core count, the
 # number of runs going there (locks in ~/work), and whether it holds the copy: copy, busy when another
@@ -168,10 +180,10 @@ probe_answer() {
     "{ "*) read -r _ load _ _ _ cores runs copy <<<"$answer" ;;
     *) read -r load _ _ _ _ cores runs copy <<<"$answer" ;;
   esac
-  if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[1-9][0-9]*$ && $runs =~ ^[0-9]+$ && $copy =~ ^(copy|busy|none|stale .+)$ ]]; then
+  if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[1-9][0-9]*$ && $runs =~ ^[0-9]+$ && $copy =~ ^(copy|busy|none|stale\ $stale_why)$ ]]; then
     echo "$host ok $load $cores $runs $copy"
   else
-    echo "$host unexpected $answer"
+    echo "$host unexpected $(plain "$answer")"
   fi
 }
 
@@ -687,7 +699,8 @@ $tracked"
   if ! prepared=$(remote "$target" /bin/bash -c "$prepare_work_copy" _ "$work" \
     "$run_owner: $*" "$seed" "$(printf '%s\n' "${names[@]}")" "${rsync_excludes[@]}"); then
     held=$(sed -n 1p <<<"$prepared")
-    holder=$(sed -n '2,$p' <<<"$prepared" | tr '\n\t' '  ' | sed 's/ *$//')
+    holder=$(plain "$(sed -n '2,$p' <<<"$prepared")")
+    [[ $held =~ ^locked\ (running\ [1-9][0-9]*|preparing|stale\ $stale_why)$ ]] || held=""
     case "$held" in
       "locked running "*) blocked "$host:~/$work is in use by another run, its job running as pid ${held#locked running } there: $holder" ;;
       "locked preparing") blocked "$host:~/$work is in use by another run still copying to it: $holder" ;;
@@ -853,9 +866,10 @@ SCRIPT
 # left holding its output, or a dead connection, can keep it open. When no job shell has written its
 # pid after 10 seconds, the ssh that starts the job never reached the host: once that ssh is ended no
 # job can start, so the lock goes too. Leaves stop_on_host's answer in job_stop (unreachable when the
-# host did not answer) and returns 0 when the job is known not to run: signalled, freed, a lock stale from
-# before the host restarted, or gone, which means it had already ended and is left for the caller to
-# word. Returns 1 when it may still be running: the host did not answer, or the lock is stale otherwise.
+# host did not answer, unexpected when it answered what stop_on_host never says) and returns 0 when the
+# job is known not to run: signalled, freed, a lock stale from before the host restarted, or gone, which
+# means it had already ended and is left for the caller to word. Returns 1 when it may still be
+# running: the host did not answer as expected, or the lock is stale otherwise.
 job_stop=""
 stop_job() {
   local waited=0
@@ -879,6 +893,8 @@ stop_job() {
       kill -s TERM $(descendants $$) 2>/dev/null || true
       job_stop=$(remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 1 free) || job_stop=unreachable ;;
   esac
+  # What the host answered is data: an answer stop_on_host never gives is not printed.
+  [[ $job_stop =~ ^(signalled|gone|freed|no-pid|unreachable|stale\ $stale_why)$ ]] || job_stop=unexpected
   case "$job_stop" in
     signalled) say "mirror.sh run: stopped the job on $run_host" ;;
     gone) ;;
@@ -887,6 +903,9 @@ stop_job() {
       say "mirror.sh run: the job no longer runs on $run_host, which has restarted since the lock was taken; that lock is stale: remove it with: ssh $run_target 'rm -r ~/$run_work.lock'" ;;
     "stale "*)
       say "mirror.sh run: could not stop the job on $run_host: its lock there is stale (${job_stop#stale }), so the job may still be running in ~/$run_work; remove the lock with: ssh $run_target 'rm -r ~/$run_work.lock'"
+      return 1 ;;
+    unexpected)
+      say "mirror.sh run: could not stop the job on $run_host, whose answer wh does not know; it may still be running in ~/$run_work"
       return 1 ;;
     *)
       say "mirror.sh run: could not reach $run_host to stop the job; it may still be running in ~/$run_work"
@@ -939,10 +958,7 @@ host_report() {
   read -r _ state load cores _ <<<"$(probe_answer "$host" "$(cat "$answers/$host.status")" \
     "$(sed -n '1,2p' "$answers/$host" | tr '\n' ' ')0 none ")"
   jq -nc --arg host "$host" --arg state "$state" --arg load "$load" --arg cores "$cores" \
-    --rawfile answer "$answers/$host" --arg me "$me" --argjson mine "$mine" '
-    def plain: gsub("[\\t\\n\\r]"; " ")
-      | gsub("[\\x{0}-\\x{1f}\\x{7f}-\\x{9f}\\x{200b}-\\x{200f}\\x{202a}-\\x{202e}\\x{2066}-\\x{2069}\\x{feff}]"; "")
-      | sub("^ +"; "") | sub(" +$"; "");
+    --rawfile answer "$answers/$host" --arg me "$me" --argjson mine "$mine" "$plain_jq"'
     def owned: "^(?<machine>[A-Za-z0-9._-]+) pid (?<pid>[0-9]{1,10}) since (?<since>[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}): (?<command>.*)$";
     def run: (.owner | capture(owned)? // null) as $owner
       | if $owner == null then {work, machine: null, pid: null, since: null, command: .owner, dir: null, session: null, stoppable: false}

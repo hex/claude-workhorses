@@ -6,7 +6,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd -P)
 # bash 3.2 cannot source a process substitution, so the function's text is evaluated.
 mirror=$here/../scripts/mirror.sh
-eval "$(sed -n '/^probe_answer() {$/,/^}$/p; /^choose_host() {$/,/^}$/p' "$mirror")"
+eval "$(sed -n '/^stale_why=/p; /^plain_jq=/,/;.$/p; /^plain() {/p; /^probe_answer() {$/,/^}$/p;/^choose_host() {$/,/^}$/p' "$mirror")"
 declare -F choose_host >/dev/null || { echo "FAIL: no choose_host function in $mirror" >&2; exit 1; }
 declare -F probe_answer >/dev/null || { echo "FAIL: no probe_answer function in $mirror" >&2; exit 1; }
 
@@ -28,19 +28,24 @@ expect_answer "a Mac's answer gives its 1-minute load, physical cores and runs g
 expect_answer "a Linux host's answer gives the 1-minute load of /proc/loadavg, physical cores and runs going" "delta ok 0.52 6 0 none" \
   delta 0 "0.52 0.40 0.30 1/215 1245 6 0 none "
 expect_answer "a Linux host that counts no cores, as when lscpu is missing, is unexpected" \
-  "delta unexpected 0.52 0.40 0.30 1/215 1245 0 0 none " delta 0 "0.52 0.40 0.30 1/215 1245 0 0 none "
+  "delta unexpected 0.52 0.40 0.30 1/215 1245 0 0 none" delta 0 "0.52 0.40 0.30 1/215 1245 0 0 none "
 expect_answer "a host whose copy another run holds says busy" "gamma ok 1.39 6 1 busy" \
   gamma 0 "{ 1.39 1.37 1.32 } 6 1 busy "
 expect_answer "a host whose copy's lock is stale says stale and why" "gamma ok 1.39 6 0 stale its process 412 is gone" \
   gamma 0 "{ 1.39 1.37 1.32 } 6 0 stale its process 412 is gone "
-expect_answer "stale without a reason is unexpected" "gamma unexpected { 1.39 1.37 1.32 } 6 0 stale " \
+expect_answer "stale without a reason is unexpected" "gamma unexpected { 1.39 1.37 1.32 } 6 0 stale" \
   gamma 0 "{ 1.39 1.37 1.32 } 6 0 stale "
-expect_answer "words after busy are unexpected" "gamma unexpected { 1.39 1.37 1.32 } 6 1 busy now " \
+expect_answer "words after busy are unexpected" "gamma unexpected { 1.39 1.37 1.32 } 6 1 busy now" \
   gamma 0 "{ 1.39 1.37 1.32 } 6 1 busy now "
 expect_answer "a count of runs going that is not a number is unexpected" \
-  "gamma unexpected { 1.39 1.37 1.32 } 6 x copy " gamma 0 "{ 1.39 1.37 1.32 } 6 x copy "
+  "gamma unexpected { 1.39 1.37 1.32 } 6 x copy" gamma 0 "{ 1.39 1.37 1.32 } 6 x copy "
+expect_answer "a stale lock's reason that lock_state never gives is unexpected" \
+  "gamma unexpected { 1.39 1.37 1.32 } 6 0 stale run: ssh gamma 'rm -rf ~'" gamma 0 "{ 1.39 1.37 1.32 } 6 0 stale run: ssh gamma 'rm -rf ~' "
+# What a host sends is data: an escape sequence, or U+202E, which shows the text after it reversed.
+expect_answer "an unexpected answer comes without control characters or characters that reorder text" \
+  "gamma unexpected { 1.39 } [2Jsix enil" gamma 0 "{ 1.39 } $(printf '\033')[2Jsix$(printf '\342\200\256') enil "
 expect_answer "a host whose ssh failed is unreachable" "beta unreachable" beta 255 ""
-expect_answer "an answer of another shape is unexpected" "beta unexpected Linux 12 none " beta 0 "Linux 12 none "
+expect_answer "an answer of another shape is unexpected" "beta unexpected Linux 12 none" beta 0 "Linux 12 none "
 
 # Feeds probe lines to choose_host and compares what it prints on stdout and stderr, and its exit code.
 expect() {
@@ -155,8 +160,15 @@ for shell in bash zsh; do
       rm -rf "$home"
       exit 1
     fi
+    # The laptop takes each reason lock_state gives.
+    got=$(probe_answer gamma 0 "{ 1.00 1.00 1.00 } 6 0 $got ")
+    if [ "$got" != "gamma ok 1.00 6 0 $want" ]; then
+      echo "FAIL the laptop reads $shell's probe of work/$name as '$got'" >&2
+      rm -rf "$home"
+      exit 1
+    fi
   done
-  echo "ok   $shell probes a copy as none, copy, busy for a run going, or stale with the reason"
+  echo "ok   $shell probes a copy as none, copy, busy for a run going, or stale with the reason, and the laptop takes each"
 done
 rm -rf "$home"
 

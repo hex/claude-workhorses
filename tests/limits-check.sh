@@ -278,6 +278,13 @@ expect_run "a run refused by a run going says that run's job runs, with its pid"
 rm "$lock/pid"
 expect_run "a run refused by a run still copying says so" \
   "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it: $owner" 3 env
+# Any job on the host can write an owner file: an escape sequence, and U+202E, which shows the text after it reversed.
+printf '%s\033[2J\342\200\256 lave\n' "$owner" >"$lock/owner"
+expect_run "a lock's owner reaches the refusal without control characters or characters that reorder text" \
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it: $owner[2J lave" 3 env
+[ "$(jq -r 'select(.event == "end") | .reason' "$laptop/.local/state/workhorse/runs.jsonl" | tail -n 1)" = \
+  "alpha:~/work/$name is in use by another run still copying to it: $owner[2J lave" ] ||
+  fail "the run log's end line carries the owner file as the host wrote it"
 rm -rf "$lock"
 expect_run "a run whose connection drops after the host took its lock frees the lock" \
   "mirror.sh run: BLOCKED: could not lock and refresh alpha:~/work/$name" 3 env FAKE_SSH_DROP=1
