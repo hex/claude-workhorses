@@ -373,6 +373,19 @@ test('the band above the prompt names each run of this folder on its own line, a
   expect(await bandNow($, { hasSurvey: true })).toEqual([])
 })
 
+test("a band row's time rounds to the nearest second", async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_500 })
+  const state = world(on)
+  await $.session.start({ cwd: '/repo/demo', surface: 'terminal', isInteractive: true })
+
+  state.log = `${start('a', 4261, 990, '/repo/demo', 'gamma')}\n${synced('a', 995)}\n`
+  state.live.add(4261)
+  await clock.advance(1_000)
+
+  // 11.5 s reads 0:12.
+  expect(await bandNow($)).toEqual(['gamma · 0:12 · demo · sleep 300'])
+})
+
 test('the band row stays three runs tall, so the rows of other mods keep their room', async ($, on) => {
   const clock = mock.clock(on, { now: 1_000_000 })
   const state = world(on)

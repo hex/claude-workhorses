@@ -35,8 +35,8 @@ wh alpha,beta --timeout 20m -- make    # the least busy of these
 - Run it from anywhere inside the repo. The command runs in the same subfolder of the copy. A fresh
   clone or worktree works at once.
 - Every run shows up for the user in the sessions whose folder holds the repo, or sits inside it (the
-  workhorse-runs mod): a green `wh` badge in the prompt footer, which names the host and counts the copy
-  (`wh ⇄ alpha 0:42`, the arrows swapping), then spins (`wh ⠋ alpha 0:43`) while the job runs, a row per run above the
+  workhorse-runs mod): a green `wh` badge in the prompt footer, which names the host, its arrows
+  swapping while the copy runs (`wh ⇄ alpha`), then spins (`wh ⠋ alpha`) while the job runs, a row per run above the
   prompt (`↗ workhorses │ alpha · 0:43 · demo · pnpm test [ Stop ]`), at most three of them and a
   count of the rest, and a toast when one that took over 2 minutes ends, a run ends with `BLOCKED`, or
   a dropped connection or a stop the host did not confirm ends it.

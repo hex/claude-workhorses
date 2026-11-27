@@ -1,6 +1,6 @@
 // ABOUTME: The workhorse-runs mod's session state: the wh badge's text and the band's run lines while runs from this session's folder go,
 // ABOUTME: and the /workhorses pane's report of each workhorse; the footer badge, the band and the pane read it.
-// "wh ⇄ gamma 0:42" while the repository is still copying to the workhorse (⇄ and ⇆ in turn), a spinner
+// "wh ⇄ gamma" while the repository is still copying to the workhorse (⇄ and ⇆ in turn), a spinner
 // frame in the arrows' place once the job runs; null with no run.
 export type Badge = string | null
 // One line per run, oldest first: its log id, the laptop pid wh stop takes (null for a run logged
