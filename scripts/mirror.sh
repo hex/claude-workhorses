@@ -414,17 +414,25 @@ trap - EXIT
 SCRIPT
 )
 
-# Runs the job in the given subfolder of the work copy and releases the lock when it ends, even if the
-# laptop disconnects. Before the job starts, it stores the copy's listing and the Watchman clock the
-# patch went by (none when $3 is empty), which the next run compares against. The job runs in its own
-# process group. With a limit of $5 seconds (0: none), past the limit the whole group gets SIGTERM,
-# then SIGKILL 10 seconds later; the run then exits 124, as gtimeout does. If this shell dies by
-# signal first (wh stop sends SIGTERM), the group gets the same before the lock goes.
+# Runs the job of the run whose owner line is $2 in subfolder $3 of the work copy $1, and releases the
+# lock when it ends, even if the laptop disconnects. Before the job starts, it stores the copy's listing
+# and the Watchman clock the patch went by (none when $4 is empty), which the next run compares against.
+# The job runs in its own process group. With a limit of $6 seconds (0: none), past the limit the whole
+# group gets SIGTERM, then SIGKILL 10 seconds later; the run then exits 124, as gtimeout does. If this
+# shell dies by signal first (wh stop sends SIGTERM), the group gets the same before the lock goes.
+# The job starts only under this run's lock: with none, or one another run took after this run's was
+# removed, it writes this run's owner line and the lock's owner file it found (none without a lock) to
+# <work>.refused, touches nothing else and exits 3. take_refusal reads that file, as 3 can be the job's own.
 run_job="$list_copy"$'\n'$(cat <<'SCRIPT'
-lock=$HOME/$1.lock work=$HOME/$1 limited=$HOME/$1.limit
-job="" timer="" job_ended="" owner=""
-# The lock's owner as this run took it: the way out frees the lock only while it is still this run's.
-IFS= read -r -d '' owner 2>/dev/null <"$lock/owner"
+lock=$HOME/$1.lock work=$HOME/$1 limited=$HOME/$1.limit owner=$2
+job="" timer="" job_ended="" found=""
+IFS= read -r -d '' found 2>/dev/null <"$lock/owner"
+case "$found" in
+  ("$owner:"*) ;;
+  (*)
+    { printf '%s\n' "$owner"; [ ! -d "$lock" ] || printf '%s' "${found:-lock without owner}"; } >"$work.refused"
+    exit 3 ;;
+esac
 # Waits up to 10 s for the job's process group to empty, then sends what is left SIGKILL and waits,
 # up to 5 s more, until the last of it is gone.
 reap_job() {
@@ -448,7 +456,7 @@ cleanup() {
   local mine=""
   IFS= read -r -d '' mine 2>/dev/null <"$lock/owner"
   /bin/rm -f "$limited"
-  [ "$mine" != "$owner" ] || /bin/rm -rf "$lock"
+  case "$mine" in ("$owner:"*) /bin/rm -rf "$lock" ;; esac
 }
 trap cleanup EXIT
 # The probe counts this run as going while this shell lives.
@@ -464,14 +472,14 @@ trap 'exit 143' TERM
 /usr/bin/touch "$work.times"
 # Without a listing or a clock, the next run compares every file.
 /bin/rm -f "$work.listing" "$work.clock"
-if [ -n "$3" ] && (cd "$work" && list_copy "$4") >"$work.listing.new"; then
+if [ -n "$4" ] && (cd "$work" && list_copy "$5") >"$work.listing.new"; then
   /bin/mv "$work.listing.new" "$work.listing"
-  printf '%s\n' "$3" >"$work.clock"
+  printf '%s\n' "$4" >"$work.clock"
 fi
 /bin/rm -f "$work.listing.new"
-cd "$work/$2" || exit 1
-limit=$5
-shift 5
+cd "$work/$3" || exit 1
+limit=$6
+shift 6
 # The timer leaves this file when the limit passes; it lies outside the lock, which a signal can remove first.
 /bin/rm -f "$limited"
 # Job control gives the job, and the timer, a process group of its own, so a signal to this shell
@@ -775,7 +783,7 @@ $tracked"
   # stdin kept, so a signal to this shell interrupts the wait at once instead of after the job.
   log_synced
   phase=job
-  remote "$target" /bin/bash -c "$run_job" _ "$work" "${sub:-.}" "$clock" "$(printf '%s\n' "${names[@]}")" "$limit" "$@" <&0 &
+  remote "$target" /bin/bash -c "$run_job" _ "$work" "$run_owner" "${sub:-.}" "$clock" "$(printf '%s\n' "${names[@]}")" "$limit" "$@" <&0 &
   job_ssh=$!
   local status=0
   wait "$job_ssh" || status=$?
@@ -789,8 +797,25 @@ $tracked"
     fi
     [ "$job_stop" = gone ] || say "mirror.sh run: the connection to $host dropped while the job ran, so the run ends with ssh's exit 255"
   fi
+  # run_job refuses to start the job outside this run's lock with an exit 3, which can be the job's own.
+  if [ "$status" = 3 ]; then
+    local refusal
+    if ! refusal=$(remote "$target" /bin/sh -c "$take_refusal" _ "$work" "$run_owner"); then
+      echo "mirror.sh run: could not reach $host to ask whether exit 3 is the job's own or the host's refusal to start it outside this run's lock" >&2
+    elif [ "$(head -n 1 <<<"$refusal")" = refused ]; then
+      holder=$(plain "$(sed 1d <<<"$refusal")")
+      [ -z "$holder" ] || blocked "the job did not start: $host:~/$work.lock is another run's: $holder"
+      blocked "the job did not start: $host:~/$work.lock, which this run took, is gone"
+    fi
+  fi
   return "$status"
 }
+
+# Run by the host's /bin/sh with the work copy $1 and a run's owner line $2: prints "refused" and the lock's
+# owner file that run_job found when it refused to start that run's job, and removes the refusal; else "ran".
+take_refusal='f=$HOME/$1.refused first=""
+[ ! -f "$f" ] || IFS= read -r first <"$f" || :
+if [ "$first" = "$2" ]; then echo refused; sed 1d "$f"; rm -f "$f"; else echo ran; fi'
 
 # Writes a line to stderr from a way out, where stderr can be a closed pipe (wh ... | tee after Ctrl-C).
 # An external printf then fails alone; bash 3.2's own echo would keep the line buffered and write it

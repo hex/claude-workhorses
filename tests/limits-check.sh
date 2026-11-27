@@ -45,13 +45,22 @@ run_bounded 5 sh -c 'exit 7' || code=$?
 [ "$code" = 7 ] || fail "run_bounded changed the command's exit code 7 to $code"
 echo "ok   a command's own exit code comes back"
 
-# Runs run_job as mirror.sh does on a host: work copy ~/work/demo, lock ~/work/demo.lock, no Watchman
-# clock, limit $1 seconds (0: none), then the command. stderr goes to $scratch/err.
+# A run's line in its lock's owner file: the run, as the laptop passes it to run_job, then its command.
+run_owner="lap pid 1 since 2026-11-26 10:00:00"
+owner="$run_owner: make"
+# Takes the lock ~/work/demo.lock for the run above, as prepare does.
+take_lock() {
+  mkdir -p "$scratch/work/demo" "$scratch/work/demo.lock"
+  echo "$owner" >"$scratch/work/demo.lock/owner"
+}
+
+# Runs run_job as mirror.sh does on a host, under the lock take_lock takes: work copy ~/work/demo, no
+# Watchman clock, limit $1 seconds (0: none), then the command. stderr goes to $scratch/err.
 job() {
   local limit=$1
   shift
-  mkdir -p "$scratch/work/demo" "$scratch/work/demo.lock"
-  HOME=$scratch /bin/bash -c "$run_job" _ work/demo . "" "node_modules" "$limit" "$@" 2>"$scratch/err"
+  take_lock
+  HOME=$scratch /bin/bash -c "$run_job" _ work/demo "$run_owner" . "" "node_modules" "$limit" "$@" 2>"$scratch/err"
 }
 
 code=0
@@ -83,9 +92,9 @@ immune=$(cat "$scratch/work/demo/immune.pid")
 echo "ok   a child that ignores SIGTERM gets SIGKILL 10 s later, before the lock goes, even after the job itself has ended"
 
 # The connection to the laptop drops: the shell that runs the job gets SIGHUP.
-mkdir -p "$scratch/work/demo/" "$scratch/work/demo.lock"
+take_lock
 rm -f "$scratch/work/demo/leader.pid"
-HOME=$scratch /bin/bash -c "$run_job" _ work/demo . "" "node_modules" 30 sh -c 'echo $$ >leader.pid; sleep 60' 2>"$scratch/err" &
+HOME=$scratch /bin/bash -c "$run_job" _ work/demo "$run_owner" . "" "node_modules" 30 sh -c 'echo $$ >leader.pid; sleep 60' 2>"$scratch/err" &
 runner=$!
 for _ in 1 2 3 4 5 6 7 8 9 10; do [ ! -s "$scratch/work/demo/leader.pid" ] || break; sleep 0.5; done
 [ -s "$scratch/work/demo/leader.pid" ] || fail "the job never started"
@@ -98,9 +107,9 @@ wait "$runner" || code=$?
 echo "ok   when the shell that runs a job with a limit dies by signal, it stops the job before it frees the lock"
 
 # wh stop ends a run by sending SIGTERM to the shell that runs its job, which has no limit as often as not.
-mkdir -p "$scratch/work/demo/" "$scratch/work/demo.lock"
+take_lock
 rm -f "$scratch/work/demo/leader.pid" "$scratch/work/demo/child"
-HOME=$scratch /bin/bash -c "$run_job" _ work/demo . "" "node_modules" 0 sh -c 'echo $$ >leader.pid; sleep 60 & echo $! >child; wait' 2>"$scratch/err" &
+HOME=$scratch /bin/bash -c "$run_job" _ work/demo "$run_owner" . "" "node_modules" 0 sh -c 'echo $$ >leader.pid; sleep 60 & echo $! >child; wait' 2>"$scratch/err" &
 runner=$!
 for _ in 1 2 3 4 5 6 7 8 9 10; do [ ! -s "$scratch/work/demo/child" ] || break; sleep 0.5; done
 [ -s "$scratch/work/demo/child" ] || fail "the job with no limit never started"
@@ -133,18 +142,38 @@ echo "ok   a job with a limit still reads its stdin"
 
 # The lock's owner file names the run that took it. When the job ends, the lock goes only while it is
 # still that run's: a run that took it over since (after someone removed it) keeps it.
-owner="lap pid 1 since 2026-11-26 10:00:00: make"
-mkdir -p "$scratch/work/demo" "$scratch/work/demo.lock"
-echo "$owner" >"$scratch/work/demo.lock/owner"
-HOME=$scratch /bin/bash -c "$run_job" _ work/demo . "" "node_modules" 0 true 2>"$scratch/err"
+successor="lap pid 2 since 2026-11-26 10:05:00: make"
+job 0 true
 [ ! -e "$scratch/work/demo.lock" ] || fail "a job whose run still owns the lock left it"
-mkdir -p "$scratch/work/demo.lock"
-echo "$owner" >"$scratch/work/demo.lock/owner"
-HOME=$scratch /bin/bash -c "$run_job" _ work/demo . "" "node_modules" 0 sh -c 'echo "lap pid 2 since 2026-11-26 10:05:00: make" >../demo.lock/owner'
-[ "$(cat "$scratch/work/demo.lock/owner" 2>/dev/null)" = "lap pid 2 since 2026-11-26 10:05:00: make" ] ||
+job 0 sh -c "echo '$successor' >../demo.lock/owner"
+[ "$(cat "$scratch/work/demo.lock/owner" 2>/dev/null)" = "$successor" ] ||
   fail "a job's end removed the lock another run had taken over"
 rm -rf "$scratch/work/demo.lock"
 echo "ok   a job's end frees the lock while its run owns it, and leaves one another run has taken"
+
+# Nor does a job start under a lock another run took before it started, or with no lock at all. The
+# refusal touches no lock, says nothing, leaves the lock's owner file it found in ~/work/demo.refused
+# after this run's own line, and exits 3.
+mkdir -p "$scratch/work/demo.lock"
+echo "$successor" >"$scratch/work/demo.lock/owner"
+echo 4242 >"$scratch/work/demo.lock/pid"
+rm -f "$scratch/work/demo/ran"
+code=0
+HOME=$scratch /bin/bash -c "$run_job" _ work/demo "$run_owner" . "" "node_modules" 0 touch ran 2>"$scratch/err" || code=$?
+[ "$code" = 3 ] && [ ! -e "$scratch/work/demo/ran" ] || fail "a job under another run's lock ran, or exited $code, not 3"
+[ "$(cat "$scratch/work/demo.lock/owner")" = "$successor" ] && [ "$(cat "$scratch/work/demo.lock/pid")" = 4242 ] ||
+  fail "a job refused by another run's lock changed that lock"
+[ "$(cat "$scratch/work/demo.refused")" = "$run_owner
+$successor" ] || fail "a job refused by another run's lock left '$(cat "$scratch/work/demo.refused")'"
+[ ! -s "$scratch/err" ] || fail "a job refused by another run's lock said '$(cat "$scratch/err")'"
+rm -rf "$scratch/work/demo.lock" "$scratch/work/demo.refused"
+code=0
+HOME=$scratch /bin/bash -c "$run_job" _ work/demo "$run_owner" . "" "node_modules" 0 touch ran 2>"$scratch/err" || code=$?
+[ "$code" = 3 ] && [ ! -e "$scratch/work/demo/ran" ] || fail "a job with no lock ran, or exited $code, not 3"
+[ ! -e "$scratch/work/demo.lock" ] || fail "a job refused for want of a lock made one"
+[ "$(cat "$scratch/work/demo.refused")" = "$run_owner" ] || fail "a job with no lock left '$(cat "$scratch/work/demo.refused")'"
+rm -f "$scratch/work/demo.refused"
+echo "ok   a job does not start under another run's lock or with none: it exits 3 and leaves the refusal beside the copy"
 
 # prepare takes the lock, then its answer meets a connection the laptop has closed. It frees the lock on
 # the way out, under the Mac's bash 3.2 as under bash 5.
@@ -164,7 +193,7 @@ if [ "$(uname -s)" = Darwin ]; then boot=$(/usr/sbin/sysctl -n kern.bootsessionu
 for shell in /bin/sh dash; do
   command -v "$shell" >/dev/null || continue
   lock=$scratch/work/stop.lock
-  stop() { "$shell" -c "$stop_on_host" _ "$lock" "lap pid 1 since 2026-11-26 10:00:00" "$@"; }
+  stop() { "$shell" -c "$stop_on_host" _ "$lock" "$run_owner" "$@"; }
   rm -rf "$lock"
   mkdir "$lock"
   echo "$owner" >"$lock/owner"
@@ -210,6 +239,7 @@ name=$(printf 'repo-%s' "$(printf '%s' "$repo" | shasum | cut -c1-8)")
 #   FAKE_SSH_DOWN=1        the host never answers
 #   FAKE_SSH_STOP_DOWN=1   the host never answers wh's stop (the script that can answer no-pid)
 #   FAKE_SSH_JOB_DROPS=1   the job's connection drops a second after it starts, and the job runs on
+#   FAKE_LOCK_BEFORE_JOB=taken|gone  just before the job starts, another run takes the lock over, or it is removed
 #   FAKE_PROBES=<dir>      the probe that picks a host gets <dir>/<ssh target> as that host's answer,
 #                          or no answer when that file is missing; every host shares FAKE_HOST_HOME
 # Watchman stands in as one that cannot answer, so every run walks the copy.
@@ -237,6 +267,12 @@ if [ "${FAKE_SSH_DROP:-}" = 1 ] && [ ! -e "$FAKE_SSH_STATE" ]; then
 fi
 case "$command" in
   *reap_job*)
+    for lock in work/*.lock; do
+      case "${FAKE_LOCK_BEFORE_JOB:-}" in
+        taken) echo "other pid 9 since 2026-11-27 09:00:00: successor" >"$lock/owner" ;;
+        gone) rm -rf "$lock" ;;
+      esac
+    done
     if [ "${FAKE_SSH_JOB_DROPS:-}" = 1 ]; then
       bash -c "$command" </dev/null >/dev/null 2>&1 &
       sleep 1
@@ -387,6 +423,28 @@ wait "$run_pid" || code=$?
   fail "a job that exits 255 itself: exit $code, end '$(end_of "$run_pid")'"
 ! grep -q 'stopped the job\|connection to alpha' "$scratch/err" || fail "a job that exits 255 itself read as a lost connection: $(cat "$scratch/err")"
 echo "ok   a job's own exit 255 comes back as it is"
+
+lock=$host_home/work/$name.lock
+expect_run "a run whose lock another run took before its job started is BLOCKED, and leaves that lock" \
+  "mirror.sh run: BLOCKED: the job did not start: alpha:~/work/$name.lock is another run's: other pid 9 since 2026-11-27 09:00:00: successor" 3 \
+  env FAKE_LOCK_BEFORE_JOB=taken
+[ "$(cat "$lock/owner")" = "other pid 9 since 2026-11-27 09:00:00: successor" ] || fail "a run refused by another run's lock changed it"
+[ "$(jq -r 'select(.event == "end") | .reason' "$runs" | tail -n 1)" = \
+  "the job did not start: alpha:~/work/$name.lock is another run's: other pid 9 since 2026-11-27 09:00:00: successor" ] ||
+  fail "the run log's end line does not carry the refusal"
+[ ! -e "$host_home/work/$name.refused" ] || fail "the run left the refusal on the host"
+rm -rf "$lock"
+expect_run "a run whose lock is gone before its job started is BLOCKED" \
+  "mirror.sh run: BLOCKED: the job did not start: alpha:~/work/$name.lock, which this run took, is gone" 3 env FAKE_LOCK_BEFORE_JOB=gone
+[ ! -e "$lock" ] && [ ! -e "$host_home/work/$name.refused" ] || fail "a run whose lock was gone left a lock or the refusal on the host"
+# A job's own exit 3, BLOCKED in its output and all, is the job's.
+code=0
+(cd "$scratch/repo" && HOME=$laptop WORKHORSES_CONFIG_DIR=$scratch/config FAKE_HOST_HOME=$host_home PATH=$scratch/fake-bin:$PATH \
+  "$BASH" "$here/../bin/wh" alpha -- sh -c 'echo "mirror.sh run: BLOCKED: the job did not start" >&2; exit 3') >/dev/null 2>"$scratch/err" || code=$?
+[ "$code" = 3 ] && [ "$(tail -n 1 "$runs" | jq -c 'del(.id, .at, .event)')" = '{"exit":3}' ] &&
+  [ "$(tail -n 1 "$scratch/err")" = "mirror.sh run: BLOCKED: the job did not start" ] ||
+  fail "a job's own exit 3: exit $code, end '$(tail -n 1 "$runs")': $(cat "$scratch/err")"
+echo "ok   a job's own exit 3 comes back as it is"
 
 # With no host free, the run is BLOCKED before it starts: its start line and its end line reach the run
 # log together, and it is never a run going.

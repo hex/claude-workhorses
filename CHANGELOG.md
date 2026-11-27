@@ -41,7 +41,9 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   the host restarted.
 - A run no longer leaves its lock on the host when the connection drops after the host took the lock:
   the host's side frees it when its answer meets the closed connection, under a Mac's bash 3.2 too, and
-  the laptop frees it on the way out. A job's end frees the lock only while its run still owns it.
+  the laptop frees it on the way out. A job's end frees the lock only while its run still owns it, and the
+  job does not start under another run's lock or with none: when someone removed the run's lock before
+  its job started, the run ends `BLOCKED: the job did not start: ...` and leaves any other run's lock untouched.
 - `wh stop` says stopped and exits 0 only when the job stopped on the host, or the run had already
   ended. When the host did not answer the stop, or the run's lock there is stale for any reason but a
   restart of the host, it says the job may still be running and exits 1, and the run log's end line says `stop-unconfirmed`, not `stopped`.

@@ -487,6 +487,7 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | `wh` exits 124 | The job ran past `--timeout`. Give it a longer limit, or split it. |
 | `BLOCKED: no workhorse is free`, or `none of alpha, beta is free` after a list of hosts | The message lists each host's reason. Every host, or every host listed, is at its core count or unreachable; run the job locally. After a list, run it locally only when this machine can run the job too; otherwise wait and retry. |
 | `... is in use by another run ...` | Another run holds that copy's lock: its job runs, or that run still copies. The owner it names, `<machine> pid <number>`, gives the number `wh stop <number>` takes on that machine. |
+| `BLOCKED: the job did not start: ...` | Someone removed the lock this run took on the host's copy while the run still copied, and the job did not run. When the message names another run's lock, that run took the copy since; `wh` leaves that lock alone. Run the job again. |
 | `... .lock is stale (...)` | The run that took the lock has ended: its process died, the host restarted, or it never started a job and the lock is over an hour old. `wh` never removes a stale lock itself; run the `ssh ... 'rm -r ...'` command the message gives. |
 | A run must stop | `wh ps` lists the runs going; `wh stop <run>` ends one, its job on the host included. |
 | Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
