@@ -24,7 +24,7 @@ and say so. Lock ~/work/<repo>-<first 8 hex digits of SHA1 of the local absolute
 with mkdir before rsync -az --delete to the corresponding work directory. Record this
 machine, time and job in the lock's owner file, and the detached job's pid on the host in its pid
 file. An existing lock belongs to another run. Remove it with rm -r, and say so, only when its
-pid file holds no process id or the host restarted after the time in its owner file. Otherwise
+pid file holds no process id or the host booted after the lock folder's modification time. Otherwise
 wait; when its pid is dead, or it has no pid file and is over an hour old, its job may still run:
 show the user the lock and its rm -r command, and do not run that.
 Use wh's exclusions. Run detached with a time limit, write run.log and the exit code in
