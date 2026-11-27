@@ -610,7 +610,8 @@ expect_wh() {
 usage="usage: wh [host[,host...]] [--timeout <limit>] -- <command...>  (no host: a free workhorse, by load; several: the least busy of those; limit: 90s, 30m, 2h)
        wh ps          (the wh runs going from this machine)
        wh stop <run>  (ends a run, its job on the host included; <run> is the number wh ps shows)
-       wh hosts       (each workhorse's load and the runs going on it; --json for one JSON object a host)"
+       wh hosts       (each workhorse's load and the runs going on it; --json for one JSON object a host)
+       wh stats       (each workhorse's finished runs from this machine: outcomes, copy and job times; --since 7d, --json)"
 expect_wh "a limit that is not a whole number with s, m or h is refused" \
 "wh: --timeout takes a whole number of seconds, minutes or hours (90s, 30m, 2h), not \"5x\"" 2 --timeout 5x -- true
 expect_wh "a limit of zero is refused" \

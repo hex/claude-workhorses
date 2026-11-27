@@ -1142,8 +1142,75 @@ stop_run() {
   esac
 }
 
+# Reports the run log's finished runs, per host: how they ended (ok, failed, stopped by wh stop or a
+# signal, BLOCKED), and the median and 90th percentile, by nearest rank, of how long the copy took
+# (start to synced) and the job (synced to end), in whole seconds as the log keeps them; then how the
+# copies went and how hosts were chosen, among the runs that logged it. --since 7d or 12h keeps the
+# runs that started since then; --json prints one JSON object instead.
+stats_usage() {
+  echo "usage: wh stats [--since <n>d|<n>h] [--json]" >&2
+  exit 2
+}
+run_stats() {
+  local since="" json=0 cutoff=0 report
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --since)
+        [ -z "$since" ] && [ $# -ge 2 ] && [[ $2 =~ ^([1-9][0-9]{0,5})([dh])$ ]] || stats_usage
+        since=$2
+        if [ "${BASH_REMATCH[2]}" = d ]; then cutoff=$(($(date +%s) - BASH_REMATCH[1] * 86400))
+        else cutoff=$(($(date +%s) - BASH_REMATCH[1] * 3600)); fi
+        shift 2 ;;
+      --json) [ "$json" = 0 ] || stats_usage; json=1; shift ;;
+      *) stats_usage ;;
+    esac
+  done
+  [ -f "$run_log" ] || { echo "wh stats: no run log at $run_log"; return 0; }
+  report=$(jq -sc --argjson cutoff "$cutoff" --arg since "$since" '
+    def rank($q): .[(($q * length) | ceil) - 1];
+    def spread: if length == 0 then null else sort | {p50: rank(0.5), p90: rank(0.9)} end;
+    [group_by(.id)[]
+      | (map(select(.event == "start"))[0]) as $start
+      | (map(select(.event == "synced"))[0]) as $synced
+      | (map(select(.event == "end"))[0]) as $end
+      | select($start != null and $end != null and $start.at >= $cutoff)
+      | {host: (if $start.host == "auto" then null else $start.host end), pick: $start.pick, copy: $synced.copy,
+         outcome: (if $end.exit == 0 then "ok"
+           elif $end.exit == 3 and ($end.reason // "") != "" then "blocked"
+           elif ($end.reason // "") | startswith("stop") then "stopped"
+           else "failed" end),
+         copy_s: (if $synced then $synced.at - $start.at else null end),
+         job_s: (if $synced then $end.at - $synced.at else null end)}] as $runs
+    | {since: (if $since == "" then null else $since end), runs: ($runs | length),
+       hosts: ($runs | group_by(.host) | map({host: .[0].host, runs: length,
+         ok: (map(.outcome) | map(select(. == "ok")) | length),
+         failed: (map(.outcome) | map(select(. == "failed")) | length),
+         stopped: (map(.outcome) | map(select(. == "stopped")) | length),
+         blocked: (map(.outcome) | map(select(. == "blocked")) | length),
+         copy: ([.[].copy_s | select(. != null)] | spread),
+         job: ([.[].job_s | select(. != null)] | spread)})
+         | sort_by(-.runs, .host == null, .host)),
+       copies: ([$runs[].copy] | {patch: map(select(. == "patch")) | length, walk: map(select(. == "walk")) | length,
+         first: map(select(. == "first")) | length}),
+       picks: ([$runs[].pick] | {auto: map(select(. == "auto")) | length, list: map(select(. == "list")) | length,
+         named: map(select(. == "named")) | length})}' "$run_log")
+  if [ "$json" = 1 ]; then
+    echo "$report"
+    return 0
+  fi
+  jq -r '"wh stats: \(.runs) finished runs\(if .since then " in the last \(.since)" else "" end); times in whole seconds, median and 90th percentile"' <<<"$report"
+  {
+    printf 'host\truns\tok\tfailed\tstopped\tblocked\tcopy p50\tp90\tjob p50\tp90\n'
+    jq -r '.hosts[] | [.host // "none free", .runs, .ok, .failed, .stopped, .blocked,
+      .copy.p50 // "-", .copy.p90 // "-", .job.p50 // "-", .job.p90 // "-"] | @tsv' <<<"$report"
+  } | awk -F '\t' '{ printf "%-12s %5s %4s %6s %7s %7s %8s %5s %7s %5s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10 }'
+  jq -r '"copies: \(.copies.patch) patch, \(.copies.walk) walk, \(.copies.first) first (of the \(.copies | add) finished runs that logged how)",
+    "picks: \(.picks.auto) auto, \(.picks.list) list, \(.picks.named) named (of the \(.picks | add) finished runs that logged how)"' <<<"$report"
+}
+
 case "${1:-}" in
   run) shift; run "$@" ;;
+  stats) shift; run_stats "$@" ;;
   ps) [ $# = 1 ] || { echo "usage: wh ps" >&2; exit 2; }; list_runs ;;
   stop) shift; stop_run "$@" ;;
   hosts) shift; list_hosts "$@" ;;
