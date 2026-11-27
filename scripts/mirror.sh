@@ -1,6 +1,6 @@
 #!/bin/bash
 # ABOUTME: Runs a command on a workhorse in its own copy of a laptop repository, brought level with the laptop first,
-# ABOUTME: .git included. Usage: mirror.sh run [--timeout <seconds>] <host|auto> <dir> <command...>; wh is the short form.
+# ABOUTME: .git included. Usage: mirror.sh run [--timeout <seconds>] <host[,host...]|auto> <dir> <command...>; wh is the short form.
 set -euo pipefail
 
 # shellcheck source=lib/hosts.sh
@@ -136,6 +136,21 @@ blocked_unstarted() {
   mkdir -p "$(dirname "$run_log")"
   { start_line "$host" "$dir" "$sub" "$@"; end_line 3; } >>"$run_log"
   blocked "$message"
+}
+
+# Narrows all_hosts to the hosts in the comma-separated list $1, in the hosts file's order. An unknown
+# name or an empty one fails, naming the known hosts.
+narrow_hosts() {
+  local list=$1 rest=$1, name kept=()
+  while [ -n "$rest" ]; do
+    name=${rest%%,*}
+    rest=${rest#*,}
+    host_index "$name" >/dev/null || return 1
+  done
+  for name in "${host_names[@]}"; do
+    [[ ,$list, != *",$name,"* ]] || kept+=("$name")
+  done
+  all_hosts=("${kept[@]}")
 }
 
 # Turns host $1's answer to pick_host's probe, from an ssh that exited $2, into one probe line for
@@ -616,15 +631,22 @@ run() {
     shift 2 || true
   fi
   [ $# -ge 3 ] && [[ $limit =~ ^(0|[1-9][0-9]*)$ ]] ||
-    { echo "usage: $0 run [--timeout <seconds>] <host|auto> <dir> <command...>" >&2; exit 2; }
+    { echo "usage: $0 run [--timeout <seconds>] <host[,host...]|auto> <dir> <command...>" >&2; exit 2; }
   # Seven digits at most, so the size in KB stays far inside shell arithmetic.
   [[ $tailscale_first_copy_mb =~ ^[1-9][0-9]{0,6}$ ]] ||
     { echo "mirror.sh run: WORKHORSES_TAILSCALE_FIRST_COPY_MB takes a whole number of MB from 1 to 9999999, not \"$tailscale_first_copy_mb\"" >&2; exit 2; }
-  local host=$1 dir sub main seed="" target work ignore rsync_excludes=() names=() pattern tracked
+  local host=$1 dir sub main seed="" target work ignore rsync_excludes=() names=() pattern tracked none_free="no workhorse is free:"
   dir=$(cd "$2" && pwd -P)
   shift 2
   load_hosts || exit 2
   all_hosts=("${host_names[@]}")
+  # A list of hosts: wh picks among those as it picks among all of them.
+  if [[ $host == *,* ]]; then
+    narrow_hosts "$host" || exit 2
+    host=auto
+    none_free=$(printf '%s, ' "${all_hosts[@]}")
+    none_free="none of ${none_free%, } is free:"
+  fi
 
   # The copy is of the whole repository; the job runs in the subfolder it was started from.
   git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
@@ -636,7 +658,7 @@ run() {
   [ "$main" = "$dir" ] || seed=$(work_name "$main")
   work=$(work_name "$dir")
   if [ "$host" = auto ] && ! host=$(pick_host "$work"); then
-    blocked_unstarted auto "$dir" "${sub%/}" "no workhorse is free:
+    blocked_unstarted auto "$dir" "${sub%/}" "$none_free
 $host" "$@"
   fi
   target=$(ssh_target "$host")
@@ -1043,5 +1065,5 @@ case "${1:-}" in
   ps) [ $# = 1 ] || { echo "usage: wh ps" >&2; exit 2; }; list_runs ;;
   stop) shift; stop_run "$@" ;;
   hosts) shift; list_hosts "$@" ;;
-  *) echo "usage: $0 run [--timeout <seconds>] <host|auto> <dir> <command...>" >&2; exit 2 ;;
+  *) echo "usage: $0 run [--timeout <seconds>] <host[,host...]|auto> <dir> <command...>" >&2; exit 2 ;;
 esac

@@ -29,6 +29,7 @@ on that large repo). Copying `.git` adds about a second (0.6 to 1.3 s in dry run
 ```bash
 wh --timeout 30m -- pnpm test          # a free host, by load
 wh alpha --timeout 20m -- cargo test   # a named host
+wh alpha,beta --timeout 20m -- make    # the least busy of these
 ```
 
 - Run it from anywhere inside the repo. The command runs in the same subfolder of the copy. A fresh
@@ -41,9 +42,11 @@ wh alpha --timeout 20m -- cargo test   # a named host
   a dropped connection or a stop the host did not confirm ends it.
 - With no host, `wh` picks among the hosts whose 1-minute load is below their core count: the least
   busy by load plus runs going, per core, though a host with the repo's copy wins while under half
-  busy, and it skips a host whose copy another run holds or a stale lock bars. Name the host when the job needs
-  x86_64 or arm64, or macOS or Linux; the table's Arch column says which host has which
-  architecture, and each host's record in the policy names its system.
+  busy, and it skips a host whose copy another run holds or a stale lock bars. When the job needs
+  something only some hosts have (x86_64 or arm64, macOS or Linux, a tool), name every host that
+  qualifies, comma-separated, and `wh` picks the least busy of those; name one host only when exactly
+  one qualifies. The table's Arch column says which host has which architecture, and each host's
+  record in the policy names its system and tools.
 - Always put `--` before the command. Bound every job with `--timeout` (`90s`, `30m`, `2h`): past
   it, `wh` stops the job and everything it started and exits 124. The hosts need no `gtimeout`.
 - Use only the tools the session-start policy lists for the host. A runtime installed with the
@@ -148,7 +151,8 @@ holding the worktree's branch and index. Lock files (`*.lock`) stay on this mach
 | 2 | With a usage or hosts-file message from `wh` on stderr: missing `--`, not inside a git repo, an unknown host, or a missing or bad hosts file. Without one, the command ran and exited 2 itself (`make` does when a build fails). |
 
 On 3, read the message and fix the cause. If no host is free or reachable, run the job locally and
-tell the user.
+tell the user. After a list of hosts, run it locally only when this machine qualifies for the job
+too; otherwise wait and retry.
 
 ## First run in a repo
 

@@ -11,6 +11,10 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   machine's with their folder and the number `wh stop` takes, others' with the machine that started
   them. A host that does not answer within 5 seconds shows as unreachable. `wh hosts --json` prints one
   object per host.
+- `wh alpha,beta -- <command>` runs the job on the least busy of the hosts listed, by the same rules `wh`
+  uses with no host named; ties go to the hosts file's order, not the list's. With none of them
+  free, it ends `BLOCKED: none of alpha, beta is free:` with each host's reason. One host named still
+  runs there at any load.
 - A run's start line in the run log names the Claude Code session that started it, from
   `CLAUDE_CODE_SESSION_ID`; a run started elsewhere has no session.
 - `/workhorses` opens a pane of the same report. Each run this machine started shows its folder and a

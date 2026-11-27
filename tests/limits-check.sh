@@ -210,15 +210,25 @@ name=$(printf 'repo-%s' "$(printf '%s' "$repo" | shasum | cut -c1-8)")
 #   FAKE_SSH_DOWN=1        the host never answers
 #   FAKE_SSH_STOP_DOWN=1   the host never answers wh's stop (the script that can answer no-pid)
 #   FAKE_SSH_JOB_DROPS=1   the job's connection drops a second after it starts, and the job runs on
+#   FAKE_PROBES=<dir>      the probe that picks a host gets <dir>/<ssh target> as that host's answer,
+#                          or no answer when that file is missing; every host shares FAKE_HOST_HOME
 # Watchman stands in as one that cannot answer, so every run walks the copy.
 cat >"$scratch/fake-bin/ssh" <<'SSH'
 #!/bin/bash
 while [ $# -gt 0 ]; do case "$1" in -o | -l | -p) shift 2 ;; -*) shift ;; *) break ;; esac; done
+target=$1
 shift
 command=$*
 cd "$FAKE_HOST_HOME"
 export HOME=$FAKE_HOST_HOME SSH_CONNECTION="10.0.0.2 5000 10.0.0.9 22"
 [ "${FAKE_SSH_DOWN:-}" != 1 ] || exit 255
+case "$command" in
+  *hw.physicalcpu*)
+    if [ -n "${FAKE_PROBES:-}" ]; then
+      [ -f "$FAKE_PROBES/$target" ] || exit 255
+      exec cat "$FAKE_PROBES/$target"
+    fi ;;
+esac
 case "$command" in *no-pid*) [ "${FAKE_SSH_STOP_DOWN:-}" != 1 ] || exit 255 ;; esac
 if [ "${FAKE_SSH_DROP:-}" = 1 ] && [ ! -e "$FAKE_SSH_STATE" ]; then
   : >"$FAKE_SSH_STATE"
@@ -387,6 +397,59 @@ $got"
   fail "wh ps lists a run that never started"
 echo "ok   a run with no host free logs its start and its BLOCKED end, and wh ps never lists it"
 
+# A list of hosts, against a hosts file of three whose order (alpha, beta, gamma) breaks ties. The probe
+# answers are canned, so the pick does not depend on this machine's load. alpha, the least busy, is
+# never listed: a run there would show that the list did not narrow the choice.
+mkdir -p "$scratch/three" "$scratch/probes"
+printf '%s\n' "alpha alpha@alpha.local x86_64 6 16" "beta beta@beta.local x86_64 6 16" "gamma gamma@gamma.local x86_64 6 16" \
+  >"$scratch/three/hosts"
+# Writes host $1's canned Mac answer: 1-minute load $2 of 6 cores, no runs going, no copy.
+probe() { printf '{ %s 1.00 1.00 }\n6\n0\nnone\n' "$2" >"$scratch/probes/$1@$1.local"; }
+# Runs wh with the three hosts and the canned probes; leaves stderr in $scratch/err and the exit code in code.
+wh_three() {
+  code=0
+  (cd "$scratch/repo" && HOME=$laptop WORKHORSES_CONFIG_DIR=$scratch/three FAKE_HOST_HOME=$host_home \
+    FAKE_PROBES=$scratch/probes PATH=$scratch/fake-bin:$PATH "$BASH" "$here/../bin/wh" "$@") >/dev/null 2>"$scratch/err" || code=$?
+}
+last_start_host() { jq -r 'select(.event == "start") | .host' "$runs" | tail -n 1; }
+probe alpha 0.10
+probe beta 2.00
+probe gamma 1.00
+wh_three beta,gamma -- true
+[ "$code" = 0 ] && [ "$(last_start_host)" = gamma ] &&
+  grep -qxF "mirror.sh run: using gamma (load 1.00 of 6 cores, first copy there)" "$scratch/err" ||
+  fail "a list of hosts: exit $code, ran on '$(last_start_host)': $(cat "$scratch/err")"
+echo "ok   with a list of hosts, wh runs on the least busy of those, not on a less busy host outside the list"
+probe beta 1.00
+wh_three gamma,beta -- true
+[ "$code" = 0 ] && [ "$(last_start_host)" = beta ] ||
+  fail "a list of hosts in a tie: exit $code, ran on '$(last_start_host)': $(cat "$scratch/err")"
+echo "ok   a tie among the listed hosts goes to the hosts file's order, not the list's"
+probe alpha 9.00
+wh_three alpha -- true
+[ "$code" = 0 ] && [ "$(last_start_host)" = alpha ] || fail "one host over its core count: exit $code: $(cat "$scratch/err")"
+echo "ok   one host named runs there at any load"
+probe alpha 0.10
+probe beta 7.00
+rm "$scratch/probes/gamma@gamma.local"
+wh_three gamma,beta -- make test
+[ "$code" = 3 ] && [ "$(cat "$scratch/err")" = "mirror.sh run: BLOCKED: none of beta, gamma is free:
+beta: load 7.00 of 6 cores
+gamma: unreachable" ] || fail "a list of hosts none of which is free: exit $code: $(cat "$scratch/err")"
+got=$(tail -n 2 "$runs" | jq -c --arg repo "$repo" 'del(.id, .at, .pid, .session) | if .dir == $repo then .dir = "REPO" else . end')
+[ "$got" = '{"event":"start","host":"auto","dir":"REPO","sub":"","command":"make test"}
+{"event":"end","exit":3,"reason":"none of beta, gamma is free:"}' ] || fail "a list of hosts none of which is free logged:
+$got"
+echo "ok   with none of the listed hosts free, the run is BLOCKED with each one's reason, and logs its start and end"
+for list in alpha,delta alpha, ,alpha alpha,,gamma; do
+  wh_three "$list" -- true
+  name=delta
+  [ "$list" = alpha,delta ] || name=""
+  [ "$code" = 2 ] && [ "$(cat "$scratch/err")" = "unknown workhorse \"$name\"; known: alpha beta gamma" ] ||
+    fail "the list '$list': exit $code: $(cat "$scratch/err")"
+done
+echo "ok   a list with an unknown or empty name is refused with the known hosts"
+
 # Runs bin/wh from a folder inside this repository with an empty config folder, so it stops at the
 # missing hosts file at the latest and never reaches a host. Compares stderr and the exit code.
 expect_wh() {
@@ -397,7 +460,7 @@ expect_wh() {
   echo "ok   $label"
 }
 
-usage="usage: wh [host] [--timeout <limit>] -- <command...>  (no host: a free workhorse, by load; limit: 90s, 30m, 2h)
+usage="usage: wh [host[,host...]] [--timeout <limit>] -- <command...>  (no host: a free workhorse, by load; several: the least busy of those; limit: 90s, 30m, 2h)
        wh ps          (the wh runs going from this machine)
        wh stop <run>  (ends a run, its job on the host included; <run> is the number wh ps shows)
        wh hosts       (each workhorse's load and the runs going on it; --json for one JSON object a host)"

@@ -1,10 +1,10 @@
 #!/bin/bash
 # ABOUTME: Runs a command on a workhorse against a verified copy of the current git repo, in the caller's subdirectory.
-# ABOUTME: Usage: wh [host] [--timeout <limit>] -- <command...>; no host picks by load; wh ps, wh stop <run>, wh hosts [--json]. Exit: the command's, 124 past the limit, 3 BLOCKED, 2 usage (with a message; else the command's own 2).
+# ABOUTME: Usage: wh [host[,host...]] [--timeout <limit>] -- <command...>; no host picks by load, several pick the least busy of those; wh ps, wh stop <run>, wh hosts [--json]. Exit: the command's, 124 past the limit, 3 BLOCKED, 2 usage (with a message; else the command's own 2).
 set -euo pipefail
 
 usage() {
-  echo "usage: wh [host] [--timeout <limit>] -- <command...>  (no host: a free workhorse, by load; limit: 90s, 30m, 2h)" >&2
+  echo "usage: wh [host[,host...]] [--timeout <limit>] -- <command...>  (no host: a free workhorse, by load; several: the least busy of those; limit: 90s, 30m, 2h)" >&2
   echo "       wh ps          (the wh runs going from this machine)" >&2
   echo "       wh stop <run>  (ends a run, its job on the host included; <run> is the number wh ps shows)" >&2
   echo "       wh hosts       (each workhorse's load and the runs going on it; --json for one JSON object a host)" >&2

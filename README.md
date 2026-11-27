@@ -115,7 +115,7 @@ All supported agents read the same workhorses hosts file and tool records, so yo
 | Capability | Guide |
 | --- | --- |
 | Run a command on a workhorse, in a copy of the repository you are in, and get its exit code back | [Running a job](#running-a-job) |
-| Let `wh` pick the host with room, or name one | [Choosing a host](#choosing-a-host) |
+| Let `wh` pick the host with room, or name one or more | [Choosing a host](#choosing-a-host) |
 | Send only what changed since the last run | [What gets copied](#what-gets-copied) |
 | See each run above the prompt and in the footer while it goes | [The badge and band](#the-badge-and-band) |
 | See every workhorse's load and the runs going on it, from any session | [Seeing every host](#seeing-every-host) |
@@ -128,13 +128,14 @@ one.
 
 ### Running a job
 
-`wh [host] [--timeout <limit>] -- <command...>` runs from anywhere inside a git repository. The
+`wh [host[,host...]] [--timeout <limit>] -- <command...>` runs from anywhere inside a git repository. The
 command runs in the same subfolder of the copy. Bound every job with `--timeout`, in seconds,
 minutes or hours, up to a week (`168h`):
 
 ```bash
 wh --timeout 30m -- pnpm test          # a free host, by load
 wh alpha --timeout 20m -- cargo test   # a named host
+wh alpha,beta --timeout 20m -- make    # the least busy of these
 ```
 
 The exit code is the command's. Past its limit, `wh` stops the job and everything it started
@@ -201,6 +202,11 @@ busy host wins, so work spreads instead of piling onto one host. It skips a host
 run holds, so two runs of one repository go to two hosts. It also skips a host whose lock on the copy
 is stale, and names it with the reason and the command that removes it. Ties go to the first in the hosts file. A host that has not
 answered within 2 seconds counts as unreachable.
+
+Name more than one host, comma-separated, when only some can run the job: `wh alpha,beta -- make` picks
+among those by the same rules, ties still going to the first in the hosts file, never the first
+named. When none of them is free, it ends `BLOCKED: none of alpha, beta is free:` with each host's
+reason. One named host runs the job there whatever its load.
 
 ### What gets copied
 
@@ -479,7 +485,7 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | `wh` exits 2 with "no hosts file" | Run `/workhorses:setup` or write `~/.config/workhorses/hosts`, as in [First run](#first-run). For a bad line, the error names the file and the line number. |
 | `wh: command not found` in your own terminal | Claude Code puts the plugin's `bin/` on the path of the commands Claude runs, not on your shell's. Call `bin/wh` in the installed plugin by its full path, or link it into a folder on your `PATH`. |
 | `wh` exits 124 | The job ran past `--timeout`. Give it a longer limit, or split it. |
-| `BLOCKED: no workhorse is free` | The message lists each host's reason. Every host is at its core count or unreachable; run the job locally. |
+| `BLOCKED: no workhorse is free`, or `none of alpha, beta is free` after a list of hosts | The message lists each host's reason. Every host, or every host listed, is at its core count or unreachable; run the job locally. After a list, run it locally only when this machine can run the job too; otherwise wait and retry. |
 | `... is in use by another run ...` | Another run holds that copy's lock: its job runs, or that run still copies. The owner it names, `<machine> pid <number>`, gives the number `wh stop <number>` takes on that machine. |
 | `... .lock is stale (...)` | The run that took the lock has ended: its process died, the host restarted, or it never started a job and the lock is over an hour old. `wh` never removes a stale lock itself; run the `ssh ... 'rm -r ...'` command the message gives. |
 | A run must stop | `wh ps` lists the runs going; `wh stop <run>` ends one, its job on the host included. |

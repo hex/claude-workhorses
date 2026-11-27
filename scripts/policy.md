@@ -3,9 +3,10 @@ the 1-minute load exceeds the local core count, or the job writes over 5 GB. Sta
 for jobs under 2 minutes or those needing more RAM than the hosts have, a GPU or code signing.
 Match the required OS, architecture and tools. Respect the user's notes below.
 
-For git repos, run `wh [host] --timeout <limit> -- <command...>` in a background shell
+For git repos, run `wh [host[,host...]] --timeout <limit> -- <command...>` in a background shell
 from inside the repo. Use `@WH@` if wh is off PATH. Without a host, wh picks an available
-one by load and cached copy. `@MIRROR@ run` locks and patches the shared work copy, including
+one by load and cached copy. With more than one host, wh picks the least busy of those.
+`@MIRROR@ run` locks and patches the shared work copy, including
 .git. Install dependencies there; never copy builds across architectures. Exit 124 means
 timeout and 3 with BLOCKED means the job did not run. Exit 2 is bad usage or hosts file only
 when wh says so on stderr; else the command itself exited 2, as make does on a failed build.
