@@ -111,7 +111,9 @@ eta ok 0.10 6 0 stale the host has restarted since the lock was taken"
 # Mac) runs the probe. A lock is a run going while its pid file names a live process and its boot file,
 # when it has one, names this boot; or, with no pid file, while it is under an hour old. Every other lock
 # is stale. This boot's id comes from the system here, not from mirror.sh.
-eval "$(sed -n "/^lock_state=\$(cat <<'SCRIPT'\$/,/^)\$/p; /^count_runs=/p; /^copy_probe() {\$/,/^}\$/p" "$mirror")"
+# The sed script sits in its own single-quoted variable: bash 3.2 misreads the quotes in it inside "$(...)".
+extract='/^lock_state=$(cat <<'"'"'SCRIPT'"'"'$/,/^)$/p; /^count_runs=/p; /^copy_probe() {$/,/^}$/p'
+eval "$(sed -n "$extract" "$mirror")"
 [ -n "${count_runs:-}" ] || { echo "FAIL: no count_runs in $mirror" >&2; exit 1; }
 declare -F copy_probe >/dev/null || { echo "FAIL: no copy_probe function in $mirror" >&2; exit 1; }
 if [ "$(uname -s)" = Darwin ]; then boot=$(/usr/sbin/sysctl -n kern.bootsessionuuid); else boot=$(cat /proc/sys/kernel/random/boot_id); fi
