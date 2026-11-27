@@ -38,7 +38,8 @@ host_table() {
 manifest_probe_lines() { awk '/^#/ {on = ($0 ~ /^#line /); recipe = $2; next} on {print recipe "\t" $0}' "$1"; }
 
 # The tools of manifest $1, "<recipe><tab><tool and version>", one per probe line that has a probe
-# line's shape in a block whose recipe has a recipe name's shape, 40 characters at most. The recipe's
+# line's shape in a block whose recipe has a recipe name's shape, 40 characters at most. A probe that
+# failed leaves "<recipe> probe-failed <exit code>", which names no tool, so it is left out. The recipe's
 # name and the space or dash after it are cut from the front of the line: "mise-node 24.22.3" under
 # mise is "node 24.22.3".
 manifest_shaped_tools() {
@@ -46,6 +47,7 @@ manifest_shaped_tools() {
   manifest_probe_lines "$1" | while IFS= read -r line || [ -n "$line" ]; do
     recipe=${line%%$'\t'*}
     [[ ${#recipe} -le 40 && $recipe =~ ^[a-z0-9][a-z0-9-]*$ ]] && probe_line_shaped "${line#*$'\t'}" || continue
+    [[ ! $probe_line =~ ^$recipe\ probe-failed\ [0-9]+$ ]] || continue
     case $probe_line in "$recipe "* | "$recipe-"*) probe_line=${probe_line:${#recipe}+1} ;; esac
     printf '%s\t%s\n' "$recipe" "$probe_line"
   done

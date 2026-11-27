@@ -71,6 +71,9 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   `dotnet` removes the SDK folders such an install left without `dotnet`, which Microsoft's installer
   would otherwise skip. Global tools in `~/.dotnet/tools` stay.
 - `tests/wh-check.sh` finds its own run to stop when another session's `wh` run starts at the same moment.
+- The session-start policy no longer lists a host's failed tool check, `<recipe> probe-failed <code>`, as a
+  tool and its version (`- rustup: probe-failed 127`, or `- port: probe-failed` with the version cut). It
+  leaves the line out and counts it with the host's other lines left out.
 
 ## 2026.11.14
 
