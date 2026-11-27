@@ -149,19 +149,17 @@ function clock(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
 
-// The badge's text: none without a run; else wh, the mark of what the runs do now, the workhorses
-// they went to, each once, and a time. While any run still copies, the swapping arrows and the time the
-// oldest copy has taken; once every job runs, a spinner frame and the time since the oldest run started.
+// The badge's text: none without a run; else wh, the mark of what the runs do now and the workhorses
+// they went to, each once. While any run still copies, the swapping arrows; once every job runs, a
+// spinner frame. The band's rows carry each run's time.
 export function badgeText(active: Iterable<Start>, copying: ReadonlySet<string>, nowMs: number): Badge {
   const runs = [...active]
   if (runs.length === 0) return null
   const hosts = [...new Set(runs.map(start => start.host))].sort().join(', ')
-  const starts = runs.filter(start => copying.has(start.id)).map(start => start.at)
-  if (starts.length > 0) {
-    return `wh ${SYNC_ARROWS[Math.floor(nowMs / SYNC_MS) % SYNC_ARROWS.length]} ${hosts} ${clock(nowMs / 1000 - Math.min(...starts))}`
+  if (runs.some(start => copying.has(start.id))) {
+    return `wh ${SYNC_ARROWS[Math.floor(nowMs / SYNC_MS) % SYNC_ARROWS.length]} ${hosts}`
   }
-  const oldest = Math.min(...runs.map(start => start.at))
-  return `wh ${SPINNER[Math.floor(nowMs / SPIN_MS) % SPINNER.length]} ${hosts} ${clock(nowMs / 1000 - oldest)}`
+  return `wh ${SPINNER[Math.floor(nowMs / SPIN_MS) % SPINNER.length]} ${hosts}`
 }
 
 // The band's lines: each run on its own, in the order the runs started, its time counting the copy

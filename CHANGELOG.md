@@ -4,6 +4,12 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
+## Unreleased
+
+### Changed
+- The footer badge shows only the hosts and the copy arrows or the spinner (`wh ⠋ alpha`), no time; the
+  band's rows still show each run's time.
+
 ## 2026.11.15
 
 ### Added

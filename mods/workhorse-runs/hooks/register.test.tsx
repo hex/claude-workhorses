@@ -7,13 +7,13 @@ import { BADGE_GREEN, describe } from './register'
 
 const HOME = '/home/alice'
 const LOG = `${HOME}/.local/state/workhorse/runs.jsonl`
-// The badge's text in any state: copying (wh ⇄ gamma 0:02) or the job running (wh ⠋ gamma 0:09).
-const BADGE = /^wh \S [a-z, ]+ \d+:\d\d$/
+// The badge's text in any state: copying (wh ⇄ gamma) or the job running (wh ⠋ gamma).
+const BADGE = /^wh \S [a-z, ]+$/
 // The braille spinner's frames, in order, while the job runs.
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 // The spinner frame between wh and the hosts, with the space after it.
 const SPINNING_MARK = /(?<=^wh )[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /
-const SPINNING = /^wh [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] gamma \d+:\d\d$/
+const SPINNING = /^wh [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] gamma$/
 const FOOTER = { plugin: 'workhorses', surface: 'terminal', component: 'SessionMode', props: { modes: ['focus'] } } as const
 
 const BAND_PROPS = {
@@ -145,7 +145,7 @@ test('a run seen going whose mirror.sh then dies gets one toast and leaves the b
   state.live.add(4243)
 
   await $.session.start({ cwd: '/repo/demo', surface: 'terminal', isInteractive: true })
-  expect(await badgeNow($)).toBe('wh ⇄ gamma 0:10')
+  expect(await badgeNow($)).toBe('wh ⇄ gamma')
   expect(await bandNow($)).toEqual(['gamma · copying 0:10 · demo · sleep 300'])
   // The engine draws every mod's status line as a warning, so a run never pins one.
   expect(state.status).toBe(undefined)
@@ -184,7 +184,7 @@ test('a run started in a worktree inside the session folder shows, and its BLOCK
   await $.session.start({ cwd: '/repo/demo', surface: 'terminal', isInteractive: true })
   state.log = `${start('mine', 4245, 998, '/repo/demo/.worktrees/fix')}\n`
   await clock.advance(2_000)
-  expect(await badgeNow($)).toBe('wh ⇄ gamma 0:04')
+  expect(await badgeNow($)).toBe('wh ⇄ gamma')
 
   state.log += `${end('mine', 1003, 3, 'no workhorse is free:')}\n`
   await clock.advance(2_000)
@@ -261,7 +261,7 @@ test('while a run from this folder is going, a green wh badge sits before the fo
   await ui.unmount()
 })
 
-test('while a run copies the repository to the workhorse, the badge counts the copy; when the job starts a spinner takes its place', async ($, on) => {
+test('while a run copies the repository to the workhorse, the badge shows swapping arrows; when the job starts a spinner takes its place', async ($, on) => {
   const clock = mock.clock(on, { now: 1_000_000 })
   const state = world(on)
   await $.session.start({ cwd: '/repo/demo', surface: 'terminal', isInteractive: true })
@@ -270,12 +270,12 @@ test('while a run copies the repository to the workhorse, the badge counts the c
   state.live.add(4247)
   await clock.advance(1_000)
   let ui = await $.ui.mount(FOOTER)
-  expect((await ui.find({ type: 'Text', text: /^wh [⇄⇆]/ }))?.text).toBe('wh ⇄ gamma 0:02')
+  expect((await ui.find({ type: 'Text', text: /^wh [⇄⇆]/ }))?.text).toBe('wh ⇄ gamma')
   await ui.unmount()
 
   await clock.advance(63_000)
   ui = await $.ui.mount(FOOTER)
-  expect((await ui.find({ type: 'Text', text: /^wh [⇄⇆]/ }))?.text).toBe('wh ⇄ gamma 1:05')
+  expect((await ui.find({ type: 'Text', text: /^wh [⇄⇆]/ }))?.text).toBe('wh ⇄ gamma')
   await ui.unmount()
 
   state.log += `${synced('live', 1064)}\n`
@@ -283,8 +283,7 @@ test('while a run copies the repository to the workhorse, the badge counts the c
   ui = await $.ui.mount(FOOTER)
   const running = (await ui.find({ type: 'Text', text: BADGE }))?.text
   expect(running).toMatch(SPINNING)
-  // The time goes on counting the whole run, copy included.
-  expect(running?.replace(SPINNING_MARK, '')).toBe('wh gamma 1:07')
+  expect(running?.replace(SPINNING_MARK, '')).toBe('wh gamma')
   await ui.unmount()
 
   // A run that ends before its copy is ready (BLOCKED) takes the badge with it.
@@ -292,7 +291,7 @@ test('while a run copies the repository to the workhorse, the badge counts the c
   state.live.add(4248)
   await clock.advance(2_000)
   ui = await $.ui.mount(FOOTER)
-  expect((await ui.find({ type: 'Text', text: /^wh [⇄⇆]/ }))?.text).toBe('wh ⇄ gamma 0:02')
+  expect((await ui.find({ type: 'Text', text: /^wh [⇄⇆]/ }))?.text).toBe('wh ⇄ gamma')
   await ui.unmount()
   state.log += `${end('blocked', 1068, 3, 'no workhorse is free')}\n`
   await clock.advance(2_000)
@@ -314,8 +313,7 @@ test('while the copy runs, the arrows between wh and the host swap every 500 ms'
     seen.push(await badgeNow($))
     await clock.advance(500)
   }
-  // The time rounds to the nearest second: 2.5 s reads 0:03.
-  expect(seen).toEqual(['wh ⇄ gamma 0:02', 'wh ⇆ gamma 0:03', 'wh ⇄ gamma 0:03', 'wh ⇆ gamma 0:04'])
+  expect(seen).toEqual(['wh ⇄ gamma', 'wh ⇆ gamma', 'wh ⇄ gamma', 'wh ⇆ gamma'])
 })
 
 test('while the job runs, the spinner steps to its next frame every 100 ms and wraps around', async ($, on) => {
@@ -358,7 +356,7 @@ test('the badge names the workhorse each run went to, every host once', async ($
   for (const pid of [4251, 4252, 4253]) state.live.add(pid)
   await clock.advance(1_000)
   const ui = await $.ui.mount(FOOTER)
-  expect((await ui.find({ type: 'Text', text: BADGE }))?.text).toMatch(/^wh [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] beta, gamma \d+:\d\d$/)
+  expect((await ui.find({ type: 'Text', text: BADGE }))?.text).toMatch(/^wh [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] beta, gamma$/)
   await ui.unmount()
 })
 
@@ -423,7 +421,7 @@ test('a run whose pid now belongs to another wh command, such as wh hosts, is dr
   state.live.add(4270)
 
   await $.session.start({ cwd: '/repo/demo', surface: 'terminal', isInteractive: true })
-  expect(await badgeNow($)).toBe('wh ⇄ gamma 0:10')
+  expect(await badgeNow($)).toBe('wh ⇄ gamma')
 
   state.commands.set(4270, '/bin/bash /plugin/scripts/mirror.sh hosts --json')
   await clock.advance(20_000)
