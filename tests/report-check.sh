@@ -44,7 +44,7 @@ done
 
 # A run's start line names the Claude Code session that started it when CLAUDE_CODE_SESSION_ID holds an
 # id, and leaves the key out when it is unset or holds anything else.
-eval "$(sed -n '/^start_line() {$/,/^}$/p; /^log_start() {$/,/^}$/p' "$mirror")"
+eval "$(sed -n '/^run_id=/p; /^start_line() {$/,/^}$/p; /^log_start() {$/,/^}$/p' "$mirror")"
 for case in "sess-1A-b2|sess-1A-b2" "|" "bad id;rm|" "$(printf 'x%.0s' $(seq 65))|"; do
   value=${case%|*} want=${case#*|}
   run_log=$scratch/runs-$RANDOM.jsonl
