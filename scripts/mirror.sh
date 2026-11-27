@@ -1165,7 +1165,11 @@ run_stats() {
       *) stats_usage ;;
     esac
   done
-  [ -f "$run_log" ] || { echo "wh stats: no run log at $run_log"; return 0; }
+  local entries=$run_log
+  if [ ! -f "$run_log" ]; then
+    [ "$json" = 1 ] || { echo "wh stats: no run log at $run_log"; return 0; }
+    entries=/dev/null
+  fi
   report=$(jq -sc --argjson cutoff "$cutoff" --arg since "$since" '
     def rank($q): .[(($q * length) | ceil) - 1];
     def spread: if length == 0 then null else sort | {p50: rank(0.5), p90: rank(0.9)} end;
@@ -1193,7 +1197,7 @@ run_stats() {
        copies: ([$runs[].copy] | {patch: map(select(. == "patch")) | length, walk: map(select(. == "walk")) | length,
          first: map(select(. == "first")) | length}),
        picks: ([$runs[].pick] | {auto: map(select(. == "auto")) | length, list: map(select(. == "list")) | length,
-         named: map(select(. == "named")) | length})}' "$run_log")
+         named: map(select(. == "named")) | length})}' "$entries")
   if [ "$json" = 1 ]; then
     echo "$report"
     return 0

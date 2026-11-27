@@ -18,7 +18,10 @@ stats() {
 stats
 [ "$code" = 0 ] && [ "$out" = "wh stats: no run log at $scratch/.local/state/workhorse/runs.jsonl" ] ||
   fail "with no run log: exit $code: $out"
-echo "ok   with no run log, wh stats says so"
+stats --json
+[ "$code" = 0 ] && [ "$out" = '{"since":null,"runs":0,"hosts":[],"copies":{"patch":0,"walk":0,"first":0},"picks":{"auto":0,"list":0,"named":0}}' ] ||
+  fail "with no run log, --json: exit $code: $out"
+echo "ok   with no run log, wh stats says so, and --json prints a report of no runs"
 
 # Times count back from now, so --since 7d keeps every run but the one ten days old.
 now=$(date +%s)
@@ -53,6 +56,22 @@ line --argjson at $((t + 600)) '{event: "end", id: "r6", at: $at, exit: 3, reaso
 line --argjson at $((t + 700)) '{event: "start", id: "r7", at: $at, host: "beta", pick: "named"}'
 line --argjson at $((t + 701)) '{event: "synced", id: "r7", at: $at, copy: "patch", files: 1}'
 line --argjson at $((t + 761)) '{event: "end", id: "r7", at: $at, exit: 143, reason: "stopped"}'
+# delta, picked by load six hours ago, ten times: the copies took 1 to 10 s and the jobs 10 to 100 s, so the
+# nearest-rank median is the 5th of each and the 90th percentile the 9th. The last one's stop went unconfirmed.
+for i in 0 1 2 3 4 5 6 7 8 9; do
+  s=$((now - 21600 + i * 60)) y=$((now - 21600 + i * 60 + i + 1))
+  line --arg id "d$i" --argjson at $s '{event: "start", id: $id, at: $at, host: "delta", pick: "auto", probe: {load: 0.5, cores: 4, runs: 0}}'
+  line --arg id "d$i" --argjson at $y '{event: "synced", id: $id, at: $at, copy: "patch", files: 1}'
+  if [ $i = 9 ]; then
+    line --arg id "d$i" --argjson at $((y + 100)) '{event: "end", id: $id, at: $at, exit: 143, reason: "stop-unconfirmed"}'
+  else
+    line --arg id "d$i" --argjson at $((y + 10 * (i + 1))) '{event: "end", id: $id, at: $at, exit: 0}'
+  fi
+done
+# epsilon, named, started 13 hours ago and ended 11 hours ago: --since 12h leaves it out by its start.
+line --argjson at $((now - 46800)) '{event: "start", id: "e1", at: $at, host: "epsilon", pick: "named"}'
+line --argjson at $((now - 46799)) '{event: "synced", id: "e1", at: $at, copy: "walk", why: "Watchman could not answer", files: 0}'
+line --argjson at $((now - 39600)) '{event: "end", id: "e1", at: $at, exit: 0}'
 # gamma, ten days ago: passed after a 5 s copy and a 5 s job.
 line --argjson at $old '{event: "start", id: "r8", at: $at, host: "gamma", pick: "named"}'
 line --argjson at $((old + 5)) '{event: "synced", id: "r8", at: $at, copy: "patch", files: 2}'
@@ -60,14 +79,16 @@ line --argjson at $((old + 10)) '{event: "end", id: "r8", at: $at, exit: 0}'
 
 # Medians and 90th percentiles by nearest rank: alpha's copies took 2, 4 and 10 s, its jobs 1, 10 and 98 s.
 row() { printf '%-12s %5s %4s %6s %7s %7s %8s %5s %7s %5s\n' "$@"; }
-want="wh stats: 7 finished runs; times in whole seconds, median and 90th percentile
+want="wh stats: 18 finished runs; times in whole seconds, median and 90th percentile
 $(row host runs ok failed stopped blocked "copy p50" p90 "job p50" p90)
+$(row delta 10 9 0 1 0 5 9 50 90)
 $(row alpha 4 1 2 0 1 4 10 10 98)
 $(row beta 1 0 0 1 0 1 1 60 60)
+$(row epsilon 1 1 0 0 0 1 1 7199 7199)
 $(row gamma 1 1 0 0 0 5 5 5 5)
 $(row "none free" 1 0 0 0 1 - - - -)
-copies: 3 patch, 1 walk, 0 first (of the 4 finished runs that logged how)
-picks: 2 auto, 0 list, 4 named (of the 6 finished runs that logged how)"
+copies: 13 patch, 2 walk, 0 first (of the 15 finished runs that logged how)
+picks: 12 auto, 0 list, 5 named (of the 17 finished runs that logged how)"
 stats
 [ "$code" = 0 ] && [ "$out" = "$want" ] || fail "wh stats: exit $code, wanted
 $want
@@ -76,21 +97,33 @@ $out"
 echo "ok   wh stats reports each host's finished runs, outcomes and copy and job times, and how copies went and hosts were picked"
 
 stats --since 7d
-want="wh stats: 6 finished runs in the last 7d; times in whole seconds, median and 90th percentile
+want="wh stats: 17 finished runs in the last 7d; times in whole seconds, median and 90th percentile
 $(row host runs ok failed stopped blocked "copy p50" p90 "job p50" p90)
+$(row delta 10 9 0 1 0 5 9 50 90)
 $(row alpha 4 1 2 0 1 4 10 10 98)
 $(row beta 1 0 0 1 0 1 1 60 60)
+$(row epsilon 1 1 0 0 0 1 1 7199 7199)
 $(row "none free" 1 0 0 0 1 - - - -)
-copies: 2 patch, 1 walk, 0 first (of the 3 finished runs that logged how)
-picks: 2 auto, 0 list, 3 named (of the 5 finished runs that logged how)"
+copies: 12 patch, 2 walk, 0 first (of the 14 finished runs that logged how)
+picks: 12 auto, 0 list, 4 named (of the 16 finished runs that logged how)"
 [ "$code" = 0 ] && [ "$out" = "$want" ] || fail "wh stats --since 7d: exit $code, wanted
 $want
 got
 $out"
-echo "ok   wh stats --since leaves out runs that started before then"
+stats --since 12h
+want="wh stats: 10 finished runs in the last 12h; times in whole seconds, median and 90th percentile
+$(row host runs ok failed stopped blocked "copy p50" p90 "job p50" p90)
+$(row delta 10 9 0 1 0 5 9 50 90)
+copies: 10 patch, 0 walk, 0 first (of the 10 finished runs that logged how)
+picks: 10 auto, 0 list, 0 named (of the 10 finished runs that logged how)"
+[ "$code" = 0 ] && [ "$out" = "$want" ] || fail "wh stats --since 12h: exit $code, wanted
+$want
+got
+$out"
+echo "ok   wh stats --since, in days or hours, leaves out runs that started before then, though they ended after"
 
 stats --since 7d --json
-want='{"since":"7d","runs":6,"hosts":[{"host":"alpha","runs":4,"ok":1,"failed":2,"stopped":0,"blocked":1,"copy":{"p50":4,"p90":10},"job":{"p50":10,"p90":98}},{"host":"beta","runs":1,"ok":0,"failed":0,"stopped":1,"blocked":0,"copy":{"p50":1,"p90":1},"job":{"p50":60,"p90":60}},{"host":null,"runs":1,"ok":0,"failed":0,"stopped":0,"blocked":1,"copy":null,"job":null}],"copies":{"patch":2,"walk":1,"first":0},"picks":{"auto":2,"list":0,"named":3}}'
+want='{"since":"7d","runs":17,"hosts":[{"host":"delta","runs":10,"ok":9,"failed":0,"stopped":1,"blocked":0,"copy":{"p50":5,"p90":9},"job":{"p50":50,"p90":90}},{"host":"alpha","runs":4,"ok":1,"failed":2,"stopped":0,"blocked":1,"copy":{"p50":4,"p90":10},"job":{"p50":10,"p90":98}},{"host":"beta","runs":1,"ok":0,"failed":0,"stopped":1,"blocked":0,"copy":{"p50":1,"p90":1},"job":{"p50":60,"p90":60}},{"host":"epsilon","runs":1,"ok":1,"failed":0,"stopped":0,"blocked":0,"copy":{"p50":1,"p90":1},"job":{"p50":7199,"p90":7199}},{"host":null,"runs":1,"ok":0,"failed":0,"stopped":0,"blocked":1,"copy":null,"job":null}],"copies":{"patch":12,"walk":2,"first":0},"picks":{"auto":12,"list":0,"named":4}}'
 [ "$code" = 0 ] && [ "$out" = "$want" ] || fail "wh stats --since 7d --json: exit $code, wanted
 $want
 got
