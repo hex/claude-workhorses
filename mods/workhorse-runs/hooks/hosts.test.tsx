@@ -63,7 +63,7 @@ function world(on: On) {
     hosts: { stdout: jsonLines(REPORT), stderr: '', exitCode: 0 },
     stop: { stdout: '', stderr: '', exitCode: 0 },
     whCalls: [] as string[][],
-    registered: [] as string[],
+    registered: [] as { name: string; immediate?: true }[],
     opened: [] as string[],
     placed: { isPlaced: true } as { isPlaced: true } | { isPlaced: false; reason: string },
     panes: [] as { id: string; title: string; isShown: boolean; isFocused: boolean; isPlaced: boolean }[],
@@ -81,7 +81,7 @@ function world(on: On) {
     return answer(e.argv[1] === 'hosts' ? state.hosts : state.stop)
   })
   on('command.register', (_, e) => {
-    state.registered.push(e.name)
+    state.registered.push({ name: e.name, immediate: e.immediate })
     return { value: { command: e.name } }
   })
   on('ui.open', (_, e) => {
@@ -128,7 +128,8 @@ test('/workhorses opens the pane and draws each host with its runs, busy hosts a
   mock.clock(on, { now: NOW })
   const state = world(on)
   await start($)
-  expect(state.registered).toEqual(['workhorses'])
+  // Typed while a turn runs, /workhorses opens the pane at once instead of waiting for the turn to end.
+  expect(state.registered).toEqual([{ name: 'workhorses', immediate: true }])
   expect(state.opened).toEqual([])
   expect(state.whCalls).toEqual([])
 

@@ -575,7 +575,7 @@ export const register: Register = on => {
 
     // Without /workhorses nothing opens the pane, so the timer starts only once the command is registered.
     try {
-      await $.command.register({ name: 'workhorses', description: 'Open the workhorses pane: each workhorse, its load and the wh runs going on it' })
+      await $.command.register({ name: 'workhorses', description: 'Open the workhorses pane: each workhorse, its load and the wh runs going on it', immediate: true })
       $.clock.every(PANE_TICK_MS, async () => {
         try {
           if (!(await $.ui.panes()).some(pane => pane.id === PANE_ID && pane.isPlaced && pane.isShown)) return

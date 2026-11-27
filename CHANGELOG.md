@@ -9,6 +9,7 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 ### Changed
 - The footer badge shows only the hosts and the copy arrows or the spinner (`wh ⠋ alpha`), no time; the
   band's rows still show each run's time.
+- `/workhorses` opens its pane at once while Claude is working, instead of waiting for the turn to end.
 
 ## 2026.11.15
 

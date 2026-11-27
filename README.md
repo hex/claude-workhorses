@@ -247,6 +247,7 @@ mod reads that log and shows the runs started from the session's folder:
   in doubt or stopped after a dropped connection (`stop-unconfirmed`, `lost`, `lost-stopped`) ends with
   a toast.
 - `/workhorses` opens a pane with every host's load and the runs going on it, from `wh hosts --json`.
+  It opens at once, even while Claude is working.
   A run this machine started shows the folder it started from and has a Stop button that runs
   `wh stop`. A run this Claude Code session started comes first, marked `this session`; the mark
   goes by session id, so another session's run from the same folder never gets it. The pane asks again when it opens, when you press Refresh, and about once a minute while
