@@ -150,11 +150,11 @@ holding the worktree's branch and index. Lock files (`*.lock`) stay on this mach
 | 3, with `BLOCKED` on stderr | The command did not run. The message says why: no host free or reachable, another run holds the lock, someone removed the lock this run took before its job started, the lock is stale (the message says why and gives the command that removes it, which `wh` never runs itself), copying `.git` or the patch from this machine failed, git tracks files `wh` skips, or the repo's first copy on that host would send over 1 GB (`.git` and files together) through Tailscale (make it from a network that reaches the host without Tailscale, or name a host on this network). |
 | 2 | With a usage or hosts-file message from `wh` on stderr: missing `--`, not inside a git repo, an unknown host, or a missing or bad hosts file. Without one, the command ran and exited 2 itself (`make` does when a build fails). |
 
-On 3, read the message and fix the cause. You may run a stale lock's `rm -r` command when the
-message says its process has ended, its pid file holds no process id, or the host restarted. When it
-says the lock holds no pid and is over an hour old, its run may still be copying: run the command
-only once `wh ps` on the machine its owner names no longer lists that run, and ask the user when
-that machine is not this one. If no host is free or reachable, run the job locally and
+On 3, read the message and fix the cause. You may run a stale lock's `rm -r` command yourself only
+when the message says the host restarted or the lock's pid file holds no process id. When it says the
+lock's process is gone, only the shell that ran the job has ended, and the job may still run. When it
+says the lock holds no pid and is over an hour old, its run may still be copying. In those two cases,
+show the user the message and the command, and do not run it. If no host is free or reachable, run the job locally and
 tell the user. After a list of hosts, run it locally only when this machine qualifies for the job
 too; otherwise wait and retry.
 

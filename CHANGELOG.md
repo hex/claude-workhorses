@@ -33,7 +33,10 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   yet. Any other lock is stale. A run refused by a stale lock ends `BLOCKED`, says why the lock is stale
   and gives the `ssh ... 'rm -r ...'` command that removes it; `wh` never removes one itself. A lock that holds no pid
   and is over an hour old can belong to a run still copying, so its message says so and asks for `wh ps` on
-  that run's machine before the `rm -r`. Host choice
+  that run's machine before the `rm -r`. The skill and the session-start policy let an agent run that
+  command only when the host restarted or the lock's pid file holds no process id. When the lock's
+  process is gone, the job it ran may still run, so the agent shows you the message and the command,
+  as it does for a lock with no pid over an hour old. Host choice
   passes over a host whose lock on the copy is stale and names it the same way, and the refusal by a run
   going says whether that run's job runs or that run still copies.
 - A lock's owner file and a host's answers about its locks reach this machine as plain text. A refusal,
