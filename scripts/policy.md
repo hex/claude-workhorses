@@ -7,7 +7,8 @@ For git repos, run `wh [host] --timeout <limit> -- <command...>` in a background
 from inside the repo. Use `@WH@` if wh is off PATH. Without a host, wh picks an available
 one by load and cached copy. `@MIRROR@ run` locks and patches the shared work copy, including
 .git. Install dependencies there; never copy builds across architectures. Exit 124 means
-timeout, 3 with BLOCKED means the job did not run, and 2 means bad usage or hosts file.
+timeout and 3 with BLOCKED means the job did not run. Exit 2 is bad usage or hosts file only
+when wh says so on stderr; else the command itself exited 2, as make does on a failed build.
 Make a first copy over 1 GB on a network that reaches the host without Tailscale.
 See the workhorse skill for cache exclusions, host selection and first-run details.
 

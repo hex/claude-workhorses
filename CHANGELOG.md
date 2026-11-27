@@ -45,6 +45,9 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   never see it as a run going.
 - The mod keeps a run going only while its pid belongs to a `mirror.sh run`, as `wh ps` does, and toasts
   a run whose stop the host did not confirm or whose connection dropped.
+- The session-start policy, the README and the skill no longer say that exit 2 always means bad usage:
+  it does only with `wh`'s usage or hosts-file message on stderr, and is otherwise the command's own 2,
+  as `make` returns when a build fails.
 - A sync no longer ends with exit 0 while a tool it installs does not run. A recipe's step fails when its
   probe still reports the tool `missing` after the install, and `sync.sh status` names that step.
 - `rustup` installs stable again when an earlier install cut short left a `rustc` that does not run, and

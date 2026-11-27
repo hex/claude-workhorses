@@ -1,6 +1,6 @@
 #!/bin/bash
 # ABOUTME: Runs a command on a workhorse against a verified copy of the current git repo, in the caller's subdirectory.
-# ABOUTME: Usage: wh [host] [--timeout <limit>] -- <command...>; no host picks by load; wh ps, wh stop <run>, wh hosts [--json]. Exit: the command's, 124 past the limit, 3 BLOCKED, 2 usage.
+# ABOUTME: Usage: wh [host] [--timeout <limit>] -- <command...>; no host picks by load; wh ps, wh stop <run>, wh hosts [--json]. Exit: the command's, 124 past the limit, 3 BLOCKED, 2 usage (with a message; else the command's own 2).
 set -euo pipefail
 
 usage() {

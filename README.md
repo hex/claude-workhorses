@@ -142,7 +142,9 @@ The exit code is the command's. Past its limit, `wh` stops the job and everythin
 host's copy goes only after that, and a job with a limit stops the same way if a signal ends the
 shell running it on the host first. The host needs no
 `gtimeout`. Exit 3 with `BLOCKED` on stderr means the command did not run, and the message says
-why. Exit 2 is a usage error, an unknown host, or a missing or bad hosts file.
+why. Exit 2 with a usage or hosts-file message from `wh` on stderr is a usage error, an unknown host, or a
+missing or bad hosts file; without one, the command itself exited 2 (`make` exits 2 when a build
+fails).
 
 ### Stopping a run
 
