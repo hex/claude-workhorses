@@ -49,8 +49,37 @@ release_lock() {
   if ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" 'rmdir ~/workhorse.lock' 2>/dev/null; then
     echo "$host: $reason; nothing ran, and the lock is removed" >&2
   else
-    echo "$host: $reason, and ~/workhorse.lock stays: a run may have started; \`$0 status $host\` shows it, and if none runs, \`ssh $target rm -r ~/workhorse.lock\` removes it" >&2
+    echo "$host: $reason, and ~/workhorse.lock stays: a run may have started; \`$0 status $host\` shows it, and if none runs, \`ssh $target 'rm -r ~/workhorse.lock'\` removes it" >&2
   fi
+}
+
+# Runs provision/host/sync-state.sh with argument $2 (status or take) on host $1's /bin/bash, sent on stdin,
+# so a host synced by an older sync.sh answers the same.
+sync_state() {
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "$1" "/bin/bash -s -- $2" <"$provision/host/sync-state.sh"
+}
+
+# Prints why the state line $1, "crashed <reason> [<pid>]" from sync-state.sh, reads as crashed.
+crashed_why() {
+  local _ reason pid
+  read -r _ reason pid <<<"$1"
+  [[ $pid =~ ^[0-9]+$ ]] || pid="unknown"
+  case $reason in
+    rebooted) echo "the host rebooted since its run started" ;;
+    gone) echo "its process $pid is gone" ;;
+    old) echo "no run started under it, and it is over an hour old" ;;
+    *) echo "for a reason it gives unreadably" ;;
+  esac
+}
+
+# Ends sync.sh with exit $1, 128 + the signal that stopped it while start_sync held a host's lock and
+# no run had started: removes the staging folder and the lock. It runs inside start_sync, so it reads
+# that function's host, target and stage.
+stop_holding_lock() {
+  trap - INT TERM HUP
+  [ -z "${stage:-}" ] || rm -rf "$stage"
+  release_lock "$host" "$target" "sync.sh was stopped by a signal"
+  exit "$1"
 }
 
 # Asks host $1 which OS it runs and records it in host_os, macos or linux. Fails, saying why, when
@@ -71,7 +100,7 @@ learn_host_os() {
 # Starts a run on host $1. Its caller tests its result, which turns set -e off in here, so every step
 # checks its own.
 start_sync() {
-  local host=$1 target sudo_pw="" stage code=0 index i
+  local host=$1 target sudo_pw="" stage="" code=0 index i answer pid failed=""
   target=$(ssh_target "$host") || return 1
   index=$(host_index "$host") || return 1
   # The host's OS decides which tools lines it gets, and so whether it needs the password.
@@ -93,31 +122,47 @@ start_sync() {
     sudo_pw=$(sudo_password "$host") || { echo "$host: no sudo password; nothing was run" >&2; return 1; }
   fi
   # One run per host: the lock directory exists until the remote run ends. ssh exits 255 when it
-  # cannot reach the host; mkdir fails with 1 when the lock is there.
-  ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" 'mkdir ~/workhorse.lock' || code=$?
+  # cannot reach the host. A lock already there says what holds it.
+  answer=$(sync_state "$target" take) || code=$?
   case $code in
     0) ;;
     255) echo "$host: unreachable (ssh exit 255); nothing was run" >&2; return 1 ;;
-    *) echo "$host: a sync is already running (~/workhorse.lock exists)" >&2; return 1 ;;
+    *) echo "$host: could not take ~/workhorse.lock (ssh exit $code); nothing was run" >&2; return 1 ;;
   esac
+  case $answer in
+    taken) ;;
+    running) echo "$host: a sync is already running (~/workhorse.lock exists)" >&2; return 1 ;;
+    "running "*)
+      pid=${answer#running }
+      [[ $pid =~ ^[0-9]+$ ]] || pid="an unreadable pid"
+      echo "$host: a sync is already running as pid $pid (~/workhorse.lock exists)" >&2
+      return 1 ;;
+    "crashed "*)
+      echo "$host: the last sync crashed: $(crashed_why "$answer"); nothing was run. Remove its lock with: ssh $target 'rm -r ~/workhorse.lock', then sync again" >&2
+      return 1 ;;
+    *) echo "$host: could not create ~/workhorse.lock; nothing was run" >&2; return 1 ;;
+  esac
+  # From here until the run starts, a signal frees the lock: nothing else would.
+  trap 'stop_holding_lock 130' INT
+  trap 'stop_holding_lock 143' TERM
+  trap 'stop_holding_lock 129' HUP
   if ! stage=$(mktemp -d "${TMPDIR:-/tmp}/workhorse-stage.XXXX"); then
-    release_lock "$host" "$target" "making a staging folder failed"
-    return 1
-  fi
-  if ! { stage_host "$host" "$stage" &&
+    failed="making a staging folder failed"
+  elif ! { stage_host "$host" "$stage" &&
     rsync -a --delete --exclude /run.log --exclude /run.status --exclude /manifest "$stage/" "$target:workhorse/"; }; then
-    rm -rf "$stage"
-    release_lock "$host" "$target" "copying the workhorse files failed"
-    return 1
-  fi
-  rm -rf "$stage"
+    failed="copying the workhorse files failed"
   # The password crosses on the ssh session's stdin, from the printf builtin: never in an environment
   # variable the host's login shell would hold while it reads its startup file, never in a command line.
   # apply.sh hands it only to the steps that need it.
-  printf '%s\n' "$sudo_pw" | ssh -o BatchMode=yes "$target" '/bin/bash ~/workhorse/apply.sh start' || {
-    release_lock "$host" "$target" "starting the run failed"
+  elif ! printf '%s\n' "$sudo_pw" | ssh -o BatchMode=yes "$target" '/bin/bash ~/workhorse/apply.sh start'; then
+    failed="starting the run failed"
+  fi
+  trap - INT TERM HUP
+  [ -z "$stage" ] || rm -rf "$stage"
+  if [ -n "$failed" ]; then
+    release_lock "$host" "$target" "$failed"
     return 1
-  }
+  fi
   echo "$host: sync started; check with: $0 status $host"
 }
 
@@ -126,14 +171,10 @@ start_sync() {
 # answer or its last run failed; a run still going or a host never synced is no failure. Its caller
 # tests its result, which turns set -e off in here, so every step checks its own.
 show_status() {
-  local host=$1 target answer manifests code=0 result=0
+  local host=$1 target answer manifests code=0 result=0 pid
   target=$(ssh_target "$host") || return 1
   echo "=== $host"
-  answer=$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" '
-    if [ -d ~/workhorse.lock ]; then echo "running"
-    elif [ -f ~/workhorse/run.status ]; then echo "ended $(cat ~/workhorse/run.status)"
-    else echo "never synced"; fi
-    [ ! -f ~/workhorse/run.log ] || tail -3 ~/workhorse/run.log') || code=$?
+  answer=$(sync_state "$target" status) || code=$?
   if [ $code -ne 0 ]; then
     echo "unreachable (ssh exit $code)"
     return 1
@@ -147,6 +188,15 @@ show_status() {
       echo "exit=$code, stopped at $step"
       result=1 ;;
     "running" | "never synced") head -n 1 <<<"$answer" ;;
+    "running "*)
+      read -r _ pid <<<"$answer"
+      [[ $pid =~ ^[0-9]+$ ]] || pid="with an unreadable pid"
+      echo "running $pid" ;;
+    "crashed "*)
+      echo "crashed: $(crashed_why "$(head -n 1 <<<"$answer")")"
+      echo "remove its lock with: ssh $target 'rm -r ~/workhorse.lock'"
+      result=1 ;;
+    *) echo "in a state it gives unreadably"; result=1 ;;
   esac
   # The end of run.log is whatever the run's steps printed on the host: it is marked as the host's
   # text, and loses its control characters.
@@ -154,7 +204,7 @@ show_status() {
     echo "the end of its run.log, text the host wrote:"
     tail -n +2 <<<"$answer" | LC_ALL=C tr -d '\000-\010\013-\037\177' | cut -c1-200 | sed 's/^/| /'
   fi
-  [[ $answer == ended* ]] || return 0
+  [[ $answer == ended* ]] || return $result
   manifests="$(workhorses_state_dir)/manifests"
   mkdir -p "$manifests" || return 1
   if ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" 'cat ~/workhorse/manifest' >"$manifests/$host.new" &&
@@ -210,9 +260,13 @@ diff_hosts() {
   manifests=$(mktemp -d "${TMPDIR:-/tmp}/workhorse-manifest.XXXX")
   for host in "${host_names[@]}"; do
     code=0
-    ssh -o BatchMode=yes -o ConnectTimeout=10 "$(ssh_target "$host")" '/bin/bash ~/workhorse/manifest.sh' >"$manifests/$host" || code=$?
+    # A first line "#sync-lock" marks a host whose sync holds its lock, which may be mid-install.
+    ssh -o BatchMode=yes -o ConnectTimeout=10 "$(ssh_target "$host")" '[ ! -d ~/workhorse.lock ] || echo "#sync-lock"; /bin/bash ~/workhorse/manifest.sh' >"$manifests/$host" || code=$?
     case $code in
-      0) continue ;;
+      0)
+        [ "$(head -n 1 "$manifests/$host")" != "#sync-lock" ] ||
+          echo "$host: a sync holds ~/workhorse.lock, so a tool it is installing may read as missing or different" >&2
+        continue ;;
       255) echo "$host: unreachable (ssh exit 255), not compared" >&2 ;;
       *) echo "$host: has no manifest.sh to run (ssh exit $code): sync it first; not compared" >&2 ;;
     esac

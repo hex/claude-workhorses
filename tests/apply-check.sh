@@ -11,7 +11,7 @@ scratch=$(mktemp -d "${TMPDIR:-/tmp}/apply-check.XXXX")
 trap 'rm -rf "$scratch"' EXIT
 config=$scratch/config
 export WORKHORSES_CONFIG_DIR=$config WORKHORSES_STATE_DIR=$scratch/state
-mkdir -p "$config/recipes" "$scratch/home" "$scratch/bin"
+mkdir -p "$config/recipes" "$scratch/home" "$scratch/bin" "$scratch/hosts/a" "$scratch/hosts/b" "$scratch/hosts/g"
 chmod 700 "$config" "$config/recipes"
 
 fail() { echo "FAIL $*" >&2; exit 1; }
@@ -21,11 +21,14 @@ cat >"$scratch/bin/sudo" <<'SH'
 #!/bin/sh
 echo "sudo $*" >>"$HOME/calls"
 SH
-printf '#!/bin/sh\necho "rsync $*" >>"%s/calls"\n[ -f "%s/answers/copy-works" ]\n' "$scratch" "$scratch" >"$scratch/bin/rsync"
+# rsync waits while answers/copy-blocks exists, so a check can signal sync.sh mid-copy.
+printf '#!/bin/sh\necho "rsync $*" >>"%s/calls"\nwhile [ -f "%s/answers/copy-blocks" ]; do sleep 0.1; done\n[ -f "%s/answers/copy-works" ]\n' "$scratch" "$scratch" "$scratch" >"$scratch/bin/rsync"
 # apply.sh and manifest.sh ask uname which OS they run on; this one says Darwin unless
 # APPLY_CHECK_UNAME names another, so the checks below run the same on a Mac and on Linux.
 printf '#!/bin/sh\n[ "$1" = -s ] || exec /usr/bin/uname "$@"\necho "${APPLY_CHECK_UNAME:-Darwin}"\n' >"$scratch/bin/uname"
-# The ssh stand-in answers from $scratch/answers/<target>.<status|manifest> when that file exists.
+# The ssh stand-in answers from $scratch/answers/<target>.manifest when that file exists, and runs the
+# host script sync.sh sends on stdin, and an rmdir, against $scratch/hosts/<target>, that host's HOME, with
+# APPLY_CHECK_HOST_BASH (default macOS's /bin/bash) as its bash.
 export APPLY_CHECK_SCRATCH=$scratch
 cat >"$scratch/bin/ssh" <<'SH'
 #!/bin/bash
@@ -42,14 +45,15 @@ done
 answers=$APPLY_CHECK_SCRATCH/answers
 # A target with an answers/<target>.unreachable file is down: ssh itself exits 255.
 [ ! -f "$answers/$target.unreachable" ] || exit 255
-# The command that starts apply.sh also names run.status, so it is matched first.
 case "$*" in
   (*apply.sh*) IFS= read -r line; echo "stdin $line" >>"$APPLY_CHECK_SCRATCH/calls"; [ -f "$answers/start-works" ]; exit ;;
+  (*"bash -s"*) command=${*: -1}; HOME=$APPLY_CHECK_SCRATCH/hosts/$target exec "${APPLY_CHECK_HOST_BASH:-/bin/bash}" -s -- "${command##* }" ;;
   (*"uname -s"*) if [ -f "$answers/$target.os" ]; then cat "$answers/$target.os"; else echo Darwin; fi; exit ;;
-  (*rmdir*) exit 0 ;;
-  (*run.status*) answer=$answers/$target.status ;;
-  (*manifest*) answer=$answers/$target.manifest ;;
-  (*mkdir*) [ -f "$answers/lock-free" ]; exit ;;
+  (*rmdir*) HOME=$APPLY_CHECK_SCRATCH/hosts/$target exec /bin/bash -c "${*: -1}" ;;
+  (*manifest*)
+    # Only diff's command names the lock: it marks a host whose lock is there.
+    case "$*" in (*workhorse.lock*) [ ! -d "$APPLY_CHECK_SCRATCH/hosts/$target/workhorse.lock" ] || echo "#sync-lock" ;; esac
+    answer=$answers/$target.manifest ;;
   (*) exit 1 ;;
 esac
 [ -f "$answer" ] && cat "$answer"
@@ -83,7 +87,7 @@ load_tools
 stage=$scratch/stage-alpha
 mkdir "$stage"
 stage_host alpha "$stage"
-[ "$(cd "$stage" && find . -type f | LC_ALL=C sort | tr '\n' ' ')" = "./apply.sh ./askpass-env ./clt-direct.sh ./env.sh ./manifest.sh ./options ./options.sh ./recipe-lib.sh ./recipes/after ./recipes/broken ./recipes/plain ./recipes/rooted ./tools " ] ||
+[ "$(cd "$stage" && find . -type f | LC_ALL=C sort | tr '\n' ' ')" = "./apply.sh ./askpass-env ./clt-direct.sh ./env.sh ./manifest.sh ./options ./options.sh ./recipe-lib.sh ./recipes/after ./recipes/broken ./recipes/plain ./recipes/rooted ./sync-state.sh ./tools " ] ||
   fail "alpha's stage holds: $(cd "$stage" && find . -type f | LC_ALL=C sort | tr '\n' ' ')"
 echo "ok   a stage holds the host scripts and only the recipes the host's lines name; never the hosts file or the sudo helper"
 [ "$(cat "$stage/tools")" = "plain @scope/pkg a.b+c
@@ -315,9 +319,11 @@ expect_sync "a host that needs sudo without a helper" "workhorses: no executable
 beta: no sudo password; nothing was run" 1 beta
 [ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 b uname -s" ] ||
   fail "sync.sh did more than ask beta's OS before it found no password: $(cat "$scratch/calls")"
+# alpha and gamma hold the lock of a run an older apply.sh started: its started file names no pid.
+for host in a g; do mkdir "$scratch/hosts/$host/workhorse.lock"; : >"$scratch/hosts/$host/workhorse.lock/started"; done
 expect_sync "a host that needs no sudo" "alpha: a sync is already running (~/workhorse.lock exists)" 1 alpha
 [ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 a uname -s
-ssh -o BatchMode=yes -o ConnectTimeout=10 a mkdir ~/workhorse.lock" ] ||
+ssh -o BatchMode=yes -o ConnectTimeout=10 a /bin/bash -s -- take" ] ||
   fail "sync.sh's calls for alpha: $(cat "$scratch/calls")"
 echo "ok   a host whose lines and options need no sudo syncs without a sudo-password helper"
 
@@ -344,7 +350,7 @@ done
 printf '%s\n' "port git @os=macos" >"$config/tools"
 expect_sync "a macOS-only line with @os=macos and a Linux host" "gamma: a sync is already running (~/workhorse.lock exists)" 1 gamma
 [ "$(cat "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 g uname -s
-ssh -o BatchMode=yes -o ConnectTimeout=10 g mkdir ~/workhorse.lock" ] ||
+ssh -o BatchMode=yes -o ConnectTimeout=10 g /bin/bash -s -- take" ] ||
   fail "sync.sh's calls for gamma with an @os=macos line: $(cat "$scratch/calls")"
 rm "$scratch/answers/g.os"
 printf '%s\n' "macos-harness" >"$config/tools"
@@ -353,7 +359,7 @@ printf '%s\n' "plain ok" >"$config/tools"
 echo "ok   a macOS-only recipe's line on a Linux host stops sync.sh with the @os=macos it lacks, before any password or lock"
 
 mkdir -p "$scratch/answers"
-touch "$scratch/answers/lock-free" "$scratch/answers/copy-works" "$scratch/answers/start-works"
+touch "$scratch/answers/copy-works" "$scratch/answers/start-works"
 printf '#!/bin/sh\necho secret-pw-123\n' >"$config/sudo-password"
 chmod 700 "$config/sudo-password"
 expect_sync "a sync that starts" "beta: sync started; check with: $root/provision/sync.sh status beta" 0 beta
@@ -364,17 +370,22 @@ stdin secret-pw-123" ] || fail "the password does not reach the ssh that starts 
 [ "$(grep -c 'secret-pw-123' "$scratch/calls")" = 1 ] || fail "the password reaches more than the one ssh that starts the run: $(cat "$scratch/calls")"
 echo "ok   a started sync sends the password only on the stdin of the ssh that starts apply.sh, never in its environment or a command line"
 
+rmdir "$scratch/hosts/b/workhorse.lock"
 rm "$scratch/answers/start-works"
 expect_sync "a sync whose start fails" "beta: starting the run failed; nothing ran, and the lock is removed" 1 beta
 [ "$(tail -n 1 "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 b rmdir ~/workhorse.lock" ] ||
   fail "a failed start did not remove the lock: $(cat "$scratch/calls")"
-rm "$scratch/answers/lock-free" "$scratch/answers/copy-works"
+[ ! -e "$scratch/hosts/b/workhorse.lock" ] || fail "a failed start left beta's lock"
+rm "$scratch/answers/copy-works"
 touch "$scratch/answers/b.unreachable"
 expect_sync "a sync of a host that does not answer" "beta: unreachable (ssh exit 255); nothing was run" 1 beta
 rm "$scratch/answers/b.unreachable"
 echo "ok   a start that fails, or a host that does not answer, fails the sync and leaves no lock behind"
 # The end of run.log is the host's text: it comes back marked as such, without control characters.
-printf '%s\n' "ended 5 broken" "=== broken" $'\033[2Jgone' >"$scratch/answers/a.status"
+rm -r "$scratch/hosts/a/workhorse.lock" "$scratch/hosts/g/workhorse.lock"
+mkdir "$scratch/hosts/a/workhorse" "$scratch/hosts/b/workhorse" "$scratch/hosts/b/workhorse.lock"
+echo "5 broken" >"$scratch/hosts/a/workhorse/run.status"
+printf '%s\n' "=== broken" $'\033[2Jgone' >"$scratch/hosts/a/workhorse/run.log"
 printf '%s\n' "#synced 2026-01-02 03:04 UTC" "#exit 5 broken" "#line plain ok" "plain v1" >"$scratch/answers/a.manifest"
 expect_sync "status of a host whose run ended" "=== alpha
 exit=5, stopped at broken
@@ -383,7 +394,8 @@ the end of its run.log, text the host wrote:
 | [2Jgone
 manifest stored: $scratch/state/manifests/alpha" 1 status alpha
 cmp -s "$scratch/answers/a.manifest" "$scratch/state/manifests/alpha" || fail "the stored manifest differs from the host's"
-printf '%s\n' "running" "=== plain" >"$scratch/answers/b.status"
+: >"$scratch/hosts/b/workhorse.lock/started"
+echo "=== plain" >"$scratch/hosts/b/workhorse/run.log"
 expect_sync "status of a host still running" "=== beta
 running
 the end of its run.log, text the host wrote:
@@ -399,11 +411,89 @@ the end of its run.log, text the host wrote:
 rm "$scratch/answers/a.unreachable"
 echo "ok   status names where a run stopped, reports every host, fails when a run failed or a host does not answer, and stores the manifest of a run that ended, and only then"
 
+# A run writes its pid and the boot's id into the lock. A lock whose run is gone, or whose host rebooted
+# since, or that no run ever started under within an hour, reads as crashed: status says why and how to
+# remove it, and a sync refuses it the same way. Nothing removes it on its own.
+rm -r "$scratch/hosts/a/workhorse" "$scratch/hosts/b/workhorse.lock"
+boot=$(/bin/bash "$root/provision/host/sync-state.sh" boot-id)
+[ -n "$boot" ] || fail "sync-state.sh reads no boot id on this machine"
+lock=$scratch/hosts/a/workhorse.lock
+for host_bash in /bin/bash "$BASH"; do
+  export APPLY_CHECK_HOST_BASH=$host_bash
+  for case in "gone:$$ $boot:its process $$ is gone" "rebooted:$$ not-this-boot:the host rebooted since its run started" "old::no run started under it, and it is over an hour old"; do
+    IFS=: read -r label started why <<<"$case"
+    rm -rf "$lock"
+    mkdir "$lock"
+    if [ "$label" = old ]; then touch -t 202001010000 "$lock"; else echo "$started" >"$lock/started"; fi
+    expect_sync "status of a $label lock under $host_bash" "=== alpha
+crashed: $why
+remove its lock with: ssh a 'rm -r ~/workhorse.lock'" 1 status alpha
+    expect_sync "a sync over a $label lock under $host_bash" "alpha: the last sync crashed: $why; nothing was run. Remove its lock with: ssh a 'rm -r ~/workhorse.lock', then sync again" 1 alpha
+    [ -d "$lock" ] || fail "a $label lock was removed"
+  done
+  rm -rf "$lock"
+  mkdir "$lock"
+  expect_sync "a sync while another sync is starting, under $host_bash" "alpha: a sync is already running (~/workhorse.lock exists)" 1 alpha
+done
+unset APPLY_CHECK_HOST_BASH
+echo "ok   a lock whose run is gone, whose host rebooted, or that no run started under within an hour reads as crashed, with why and the rm command, and a sync refuses it the same way"
+
+# A real run: status names its pid while it goes, and once it is killed, the crash.
+rm -rf "$lock"
+cp -R "$stage" "$scratch/hosts/a/workhorse"
+printf '#!/bin/bash\n[ "$1" = install ] || { echo "nap 1.0"; exit 0; }\nwhile [ -f "$HOME/nap" ]; do sleep 0.1; done\n' >"$scratch/hosts/a/workhorse/recipes/nap"
+chmod 700 "$scratch/hosts/a/workhorse/recipes/nap"
+echo nap >"$scratch/hosts/a/workhorse/tools"
+: >"$scratch/hosts/a/workhorse/options"
+touch "$scratch/hosts/a/nap"
+mkdir "$lock"
+printf '\n' | HOME=$scratch/hosts/a PATH="$scratch/bin:$PATH" /bin/bash "$scratch/hosts/a/workhorse/apply.sh" start
+pid=""
+for _ in $(seq 100); do read -r pid _ <"$lock/started" || true; [ -z "$pid" ] || break; sleep 0.1; done
+[ "$(ps -p "$pid" -o command= 2>/dev/null)" = "/bin/bash ./apply.sh run" ] || fail "the lock names pid '$pid', which is no apply.sh run"
+out=$(PATH="$scratch/bin:$PATH" "$BASH" "$root/provision/sync.sh" status alpha 2>&1) || fail "status of a run going exited $?: $out"
+[ "$(head -n 2 <<<"$out")" = "=== alpha
+running $pid" ] || fail "status of a run going: '$out'"
+expect_sync "a sync while a run goes" "alpha: a sync is already running as pid $pid (~/workhorse.lock exists)" 1 alpha
+kill -9 "$pid"
+for _ in $(seq 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+rm "$scratch/hosts/a/nap"
+code=0
+out=$(PATH="$scratch/bin:$PATH" "$BASH" "$root/provision/sync.sh" status alpha 2>&1) || code=$?
+[ "$code" = 1 ] && [ "$(head -n 3 <<<"$out")" = "=== alpha
+crashed: its process $pid is gone
+remove its lock with: ssh a 'rm -r ~/workhorse.lock'" ] || fail "status of a killed run, exit $code: '$out'"
+rm -r "$lock" "$scratch/hosts/a/workhorse"
+echo "ok   status names a run's pid while it goes, and a sync refuses to start beside it; once the run is killed, status says it crashed"
+
+# A signal while sync.sh holds a lock and no run has started frees the lock and ends sync.sh with 128 + the signal.
+touch "$scratch/answers/copy-works" "$scratch/answers/copy-blocks"
+: >"$scratch/calls"
+PATH="$scratch/bin:$PATH" "$BASH" "$root/provision/sync.sh" alpha >"$scratch/sync.out" 2>&1 &
+sync_pid=$!
+for _ in $(seq 100); do ! grep -q '^rsync' "$scratch/calls" || break; sleep 0.1; done
+grep -q '^rsync' "$scratch/calls" || fail "sync.sh never reached rsync: $(cat "$scratch/calls")"
+kill -TERM "$sync_pid"
+rm "$scratch/answers/copy-blocks"
+code=0
+wait "$sync_pid" || code=$?
+[ "$code" = 143 ] && [ "$(cat "$scratch/sync.out")" = "alpha: sync.sh was stopped by a signal; nothing ran, and the lock is removed" ] ||
+  fail "sync.sh stopped mid-copy exited $code: '$(cat "$scratch/sync.out")'"
+[ "$(tail -n 1 "$scratch/calls")" = "ssh -o BatchMode=yes -o ConnectTimeout=10 a rmdir ~/workhorse.lock" ] && [ ! -e "$lock" ] ||
+  fail "sync.sh stopped mid-copy left the lock: $(cat "$scratch/calls")"
+rm "$scratch/answers/copy-works"
+echo "ok   sync.sh stopped by a signal while it holds a lock and no run has started frees the lock and exits 143"
+
 printf '%s\n' "plain ok" "plain only-arm @arch=arm64" >"$config/tools"
 printf '%s\n' "#base" "arch x86_64" "#line plain ok" "plain v1" >"$scratch/answers/a.manifest"
 printf '%s\n' "#base" "arch x86_64" "#line plain ok" "plain v1" "#line plain only-arm" "plain stale" >"$scratch/answers/b.manifest"
 printf '%s\n' "#base" "arch arm64" "#line plain ok" "plain v1" "#line plain only-arm" "plain arm1" >"$scratch/answers/g.manifest"
 expect_sync "hosts that match on every line they get" "all workhorses match (2 tools lines)" 0 diff
+# A sync going on a host may be installing a tool as diff probes it; diff says so beside the comparison.
+mkdir "$scratch/hosts/b/workhorse.lock"
+expect_sync "hosts that match while a sync holds beta's lock" "beta: a sync holds ~/workhorse.lock, so a tool it is installing may read as missing or different
+all workhorses match (2 tools lines)" 0 diff
+rmdir "$scratch/hosts/b/workhorse.lock"
 printf '%s\n' "#base" "arch x86_64" "#line plain ok" "plain v2" >"$scratch/answers/b.manifest"
 touch "$scratch/answers/g.unreachable"
 expect_sync "a host that differs, and one that does not answer" "gamma: unreachable (ssh exit 255), not compared

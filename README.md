@@ -297,6 +297,14 @@ names. A run stops at the first step that fails, and `status` names that step an
 A recipe's step fails when its install exits non-zero, or when its probe, run after the install,
 exits non-zero or still prints a `missing` line, as it does when an earlier run cut short left a tool
 that does not run.
+`status` says whether a host's sync is `running` (with its pid), has ended (how, and where it
+stopped), was never synced, or has `crashed`. A lock reads as crashed when its run's process no
+longer runs, the host rebooted since the run started, or no run started under a lock over an hour old.
+`status` then says why and prints the command that removes the lock, and a sync of that host refuses
+to start until you remove it; nothing removes it on its own. A lock left by an older version records
+no pid and reads as `running`. Stopping `sync.sh` while it holds a lock and has not started the run
+frees the lock. `sync.sh diff` names a host whose sync holds its lock, since a tool it installs
+can read as missing or different.
 `status` reports every host and exits non-zero when one does not answer or its last run failed.
 On the host, the run adds one line, marked `# workhorses`, which loads the `PATH` the recipes
 set, to the file the login shell reads for an ssh command: the end of `~/.zshenv` on a Mac or for
@@ -480,4 +488,5 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | `sync.sh` says a host "runs Linux, where host options do not apply" | Remove the options it names from that host's line in the hosts file. |
 | `sync.sh` or a run stops with `<recipe> runs only on macOS` | That recipe's line reached a Linux host. Give it `@os=macos`. |
 | `sync.sh status` says `stopped at <step>` | That recipe or option failed; the lines under it are the end of the host's `~/workhorse/run.log`. A recipe that needs another names it there. |
+| `sync.sh status` says `crashed`, or a sync says "the last sync crashed" | A kill or a reboot ended its run mid-sync. Check nothing installs there, run the `ssh <host> 'rm -r ~/workhorse.lock'` it prints, then sync again. |
 | `sync.sh` says "no sudo password" | The line above it says why: the helper is missing, not executable, writable by others, failed, or printed nothing. |

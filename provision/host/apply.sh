@@ -46,6 +46,8 @@ finish() {
   rmdir "$HOME/workhorse.lock"
 }
 trap finish EXIT
+# The run's pid and this boot's id let sync-state.sh tell a run going from one a kill or a reboot ended.
+echo "$$ $(/bin/bash ./sync-state.sh boot-id)" >"$HOME/workhorse.lock/started"
 
 # Whether file $1 declares, in its first lines, that it runs sudo.
 declares_sudo() { head -n 10 "$1" | grep -qx '# needs: sudo'; }

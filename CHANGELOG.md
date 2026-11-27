@@ -49,6 +49,13 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 - The session-start policy, the README and the skill no longer say that exit 2 always means bad usage:
   it does only with `wh`'s usage or hosts-file message on stderr, and is otherwise the command's own 2,
   as `make` returns when a build fails.
+- A sync killed mid-run, or cut short by a reboot, no longer reads as `running` forever and blocks every
+  later sync. `apply.sh` records its run's pid and the boot's id in the lock, and `sync.sh status` says
+  `running <pid>`, how the run ended, `never synced`, or `crashed` with why and the `ssh <host> 'rm -r
+  ~/workhorse.lock'` that removes it. A sync over a crashed lock refuses with the same command; nothing
+  removes a lock on its own. A lock from an older version reads as `running`, as before.
+- Stopping `sync.sh` with a signal after it takes a host's lock and before the run starts frees the lock
+  and exits 128 plus the signal. `sync.sh diff` names a host whose sync holds its lock.
 - A sync no longer ends with exit 0 while a tool it installs does not run. A recipe's step fails when its
   probe still reports the tool `missing` after the install, or exits non-zero, and `sync.sh status` names that step.
 - `dotnet`'s probe reports the SDK of its line's channel, not the newest SDK in `~/.dotnet`.

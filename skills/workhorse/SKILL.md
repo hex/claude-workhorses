@@ -95,7 +95,8 @@ arguments per line, then optional filters, `@arch=x86_64` or `arm64`, `@os=macos
    line `# needs: sudo`, and the question must say it runs as root on every host it targets.
 3. On yes, append the line, then run `bash <sync.sh> <host>...` for the hosts it targets (the policy
    names sync.sh's path). The sync runs detached on each host; `bash <sync.sh> status <host>` says
-   `running`, or how it ended and which step stopped it, and stores the record the policy reads.
+   `running`, how it ended and which step stopped it, or `crashed`, with why and the command that
+   removes the lock (run it, then sync again), and stores the record the policy reads.
    Wait with `sleep` in a background shell between checks.
 4. Confirm with `bash <sync.sh> diff`, then run the job with `wh`.
 
