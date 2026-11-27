@@ -119,7 +119,7 @@ log_end() {
 # Turns host $1's answer to pick_host's probe, from an ssh that exited $2, into one probe line for
 # choose_host. The answer's lines come joined by spaces: the load line, the physical core count, the
 # number of runs going there (locks in ~/work), and whether it holds the copy: copy, busy when another
-# run holds the copy's lock, or none. A Mac's load line is vm.loadavg's "{ 1.39 1.37 1.32 }"; a Linux host's is /proc/loadavg's
+# run holds the copy's lock, "stale <why>" when its lock is stale, or none. A Mac's load line is vm.loadavg's "{ 1.39 1.37 1.32 }"; a Linux host's is /proc/loadavg's
 # "0.52 0.40 0.30 1/215 1245". Either way the first number is the 1-minute load.
 probe_answer() {
   local host=$1 status=$2 answer=$3 load cores runs copy
@@ -131,7 +131,7 @@ probe_answer() {
     "{ "*) read -r _ load _ _ _ cores runs copy <<<"$answer" ;;
     *) read -r load _ _ _ _ cores runs copy <<<"$answer" ;;
   esac
-  if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[1-9][0-9]*$ && $runs =~ ^[0-9]+$ && $copy =~ ^(copy|busy|none)$ ]]; then
+  if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[1-9][0-9]*$ && $runs =~ ^[0-9]+$ && $copy =~ ^(copy|busy|none|stale .+)$ ]]; then
     echo "$host ok $load $cores $runs $copy"
   else
     echo "$host unexpected $answer"
@@ -139,8 +139,8 @@ probe_answer() {
 }
 
 # Picks the workhorse for a job from one probe line per host, in all_hosts order: "<host> ok <load>
-# <cores> <runs> copy|busy|none", "<host> unreachable" or "<host> unexpected <answer>". It passes over a
-# host whose copy another run holds, since this run would find it locked. Among the hosts whose
+# <cores> <runs> copy|busy|none|stale <why>", "<host> unreachable" or "<host> unexpected <answer>". It
+# passes over a host whose copy another run holds, or a stale lock holds, since this run would find it locked. Among the hosts whose
 # 1-minute load is below their physical core count, it ranks each by its load plus its runs going, per
 # core: the 1-minute average lags, so a run that started seconds ago counts as one busy core. A host
 # that holds the repository's copy (and so its installed dependencies) comes first while that figure
@@ -152,6 +152,7 @@ choose_host() {
     $2 != "ok" { reasons[NR] = $1 ": " substr($0, length($1) + 2); next }
     !($3 < $4) { reasons[NR] = $1 ": load " $3 " of " $4 " cores"; next }
     $6 == "busy" { reasons[NR] = $1 ": another run holds its copy"; next }
+    $6 == "stale" { why = $0; sub(/^[^ ]+ [^ ]+ [^ ]+ [^ ]+ [^ ]+ [^ ]+ /, "", why); reasons[NR] = $1 ": its copy\047s lock is stale: " why; next }
     {
       ratio = ($3 + $5) / $4
       rank = ($6 == "copy" && ratio < 0.5) ? 0 : 1
@@ -166,12 +167,56 @@ choose_host() {
     }'
 }
 
-# The probe's count of runs going on a host, run by the host's login shell: the locks in ~/work whose
-# pid file names a live process, and those without one, a run still copying, under an hour old. A lock
-# left by a run that died without its cleanup does not count. With wh_list=1 set before it, it first
-# prints each counted lock as a line of three tab-separated fields: "lock", the lock's name without
-# .lock, and its owner file with newlines and tabs made spaces (empty without an owner file).
-count_runs='n=0; for l in $(find ~/work -maxdepth 1 -name "*.lock" -type d 2>/dev/null); do if [ -f "$l/pid" ]; then kill -0 "$(cat "$l/pid")" 2>/dev/null || continue; elif [ -z "$(find "$l" -maxdepth 0 -mmin -60)" ]; then continue; fi; n=$((n + 1)); if [ "${wh_list:-}" = 1 ]; then w=${l##*/}; printf "lock\t%s\t%s\n" "${w%.lock}" "$(if [ -f "$l/owner" ]; then tr "\n\t" "  " <"$l/owner"; fi)"; fi; done; echo $n'
+# The one definition of a work copy's lock, for every script that reads one on a host: prepare, the
+# probe, wh hosts and wh stop. Plain sh, since a host runs it under dash, zsh, and bash 3.2 or 5.
+# lock_state <lock> prints one line:
+#   free              no lock
+#   preparing         no pid file yet, under an hour old: a run takes the lock and copies
+#   running <pid>     its pid file names a live process, and its boot file, if any, this boot
+#   stale <why>       any other lock: the host restarted since, its process is gone, its pid file holds
+#                     no pid, or it has no pid file and is over an hour old
+# A lock written before boot files existed has none and reads as this boot, as it did then. A stale lock
+# is never removed here: whoever reads one says so and names the command that removes it.
+lock_state=$(cat <<'SCRIPT'
+wh_boot_id() {
+  if [ "$(/usr/bin/uname -s)" = Darwin ]; then /usr/sbin/sysctl -n kern.bootsessionuuid; else cat /proc/sys/kernel/random/boot_id; fi 2>/dev/null || :
+}
+lock_state() {
+  if [ ! -d "$1" ]; then
+    echo free
+    return 0
+  fi
+  wh_boot=$(wh_boot_id)
+  if [ -s "$1/boot" ] && [ -n "$wh_boot" ] && [ "$(cat "$1/boot")" != "$wh_boot" ]; then
+    echo "stale the host has restarted since the lock was taken"
+  elif [ -s "$1/pid" ]; then
+    wh_pid=$(cat "$1/pid")
+    case "$wh_pid" in
+      ("" | 0* | *[!0-9]*) echo "stale its pid file holds no process id" ;;
+      (*) if kill -0 "$wh_pid" 2>/dev/null; then echo "running $wh_pid"; else echo "stale its process $wh_pid is gone"; fi ;;
+    esac
+  elif [ -n "$(find "$1" -maxdepth 0 -mmin -60)" ]; then
+    echo preparing
+  else
+    echo "stale it holds no pid and is over an hour old"
+  fi
+}
+SCRIPT
+)
+
+# The probe's count of runs going on a host, run by the host's login shell: the locks in ~/work that
+# lock_state calls preparing or running. With wh_list=1 set before it, it first prints each counted lock
+# as a line of three tab-separated fields: "lock", the lock's name without .lock, and its owner file with
+# newlines and tabs made spaces (empty without an owner file).
+count_runs="$lock_state"$'\n''n=0; for l in $(find ~/work -maxdepth 1 -name "*.lock" -type d 2>/dev/null); do case "$(lock_state "$l")" in preparing | "running "*) ;; *) continue ;; esac; n=$((n + 1)); if [ "${wh_list:-}" = 1 ]; then w=${l##*/}; printf "lock\t%s\t%s\n" "${w%.lock}" "$(if [ -f "$l/owner" ]; then tr "\n\t" "  " <"$l/owner"; fi)"; fi; done; echo $n'
+
+# The probe's last line for the copy at $1, a path under ~, after count_runs has defined lock_state:
+# busy while a run holds its lock, "stale <why>" for a stale lock, else copy when the copy exists or none.
+copy_probe() {
+  local lock work
+  lock=$(printf '%q' "$1.lock") work=$(printf '%q' "$1")
+  echo "wh_copy=\$(lock_state ~/$lock); case \"\$wh_copy\" in preparing | \"running \"*) echo busy ;; \"stale \"*) echo \"\$wh_copy\" ;; *) if test -d ~/$work; then echo copy; else echo none; fi ;; esac"
+}
 
 # A host's load line, then its physical core count, run by the host's login shell. Linux counts
 # physical cores as the distinct core and socket pairs lscpu lists, since nproc counts each core's
@@ -202,12 +247,17 @@ probe_hosts() {
 pick_host() {
   local work=$1 answers host answer load cores runs copy probes="" chosen reasons
   answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-pick.XXXX")
-  probe_hosts 2 "$load_and_cores; $count_runs; if test -d ~/$(printf '%q' "$work.lock"); then echo busy; elif test -d ~/$(printf '%q' "$work"); then echo copy; else echo none; fi" "$answers"
+  probe_hosts 2 "$load_and_cores; $count_runs; $(copy_probe "$work")" "$answers"
   for host in "${all_hosts[@]}"; do
     answer=$(tr '\n' ' ' <"$answers/$host")
     probes+="$(probe_answer "$host" "$(cat "$answers/$host.status")" "$answer")"$'\n'
   done
   rm -rf "$answers"
+  # A stale lock bars the copy until someone removes it, so it is named whichever host runs the job.
+  while read -r host state _ _ _ copy why; do
+    [ "$state $copy" = "ok stale" ] || continue
+    echo "mirror.sh run: passing over $host, whose lock on this copy is stale ($why); remove it with: ssh $(ssh_target "$host") 'rm -r ~/$work.lock'" >&2
+  done <<<"$probes"
   if ! chosen=$(choose_host <<<"${probes%$'\n'}" 2>/dev/null); then
     reasons=$(choose_host <<<"${probes%$'\n'}" 2>&1 >/dev/null || true)
     blocked "no workhorse is free:
@@ -256,19 +306,36 @@ SCRIPT
 # The second line is the Watchman clock the last run stored, or empty. When there is one, the lines
 # after it are where the copy's listing differs from the one taken after the last patch: what the
 # last job changed, added or deleted.
-prepare_work_copy="$list_copy"$'\n'$(cat <<'SCRIPT'
+# When another run's lock is in the way, it prints "locked <lock_state>" and the lock's owner file instead,
+# and fails.
+prepare_work_copy="$list_copy"$'\n'"$lock_state"$'\n'$(cat <<'SCRIPT'
 set -euo pipefail
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
 work=$HOME/$1 lock=$HOME/$1.lock owner=$2 seed=$3 names=$4
 shift 4
 mkdir -p "$(dirname "$work")"
 if ! mkdir "$lock" 2>/dev/null; then
-  echo "$work is in use: $(cat "$lock/owner" 2>/dev/null || echo "lock without owner") (remove $lock if that run is gone)" >&2
+  printf 'locked %s\n%s\n' "$(lock_state "$lock")" "$(cat "$lock/owner" 2>/dev/null || echo "lock without owner")"
   exit 1
 fi
 echo "$owner" >"$lock/owner"
-# A run stopped from the laptop frees this lock itself and may already have a successor's in its place.
-trap 'case "$(cat "$lock/owner" 2>/dev/null)" in "$owner") rm -rf "$lock" ;; esac' EXIT
+boot=$(wh_boot_id)
+[ -z "$boot" ] || echo "$boot" >"$lock/boot"
+# The way out of a prepare that did not finish frees the lock, unless a run stopped from the laptop has
+# freed it already and a successor's is in its place. The owner is read with read, not a command
+# substitution: after a write to the closed connection, bash 3.2 would put the failed text in front of it.
+free_own_lock() {
+  trap '' PIPE HUP INT TERM
+  local mine=""
+  IFS= read -r -d '' mine 2>/dev/null <"$lock/owner" || :
+  [ "$mine" != "$owner"$'\n' ] || rm -rf "$lock"
+}
+trap free_own_lock EXIT
+# A dropped connection ends this shell by signal, which skips the EXIT trap; exit through it instead.
+trap 'exit 141' PIPE
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 if [ ! -d "$work" ]; then
   rm -f "$work.times" "$work.listing" "$work.clock"
   mkdir "$work"
@@ -307,7 +374,9 @@ SCRIPT
 # signal first (wh stop sends SIGTERM), the group gets the same before the lock goes.
 run_job="$list_copy"$'\n'$(cat <<'SCRIPT'
 lock=$HOME/$1.lock work=$HOME/$1 limited=$HOME/$1.limit
-job="" timer="" job_ended=""
+job="" timer="" job_ended="" owner=""
+# The lock's owner as this run took it: the way out frees the lock only while it is still this run's.
+IFS= read -r -d '' owner 2>/dev/null <"$lock/owner"
 # Waits up to 10 s for the job's process group to empty, then sends what is left SIGKILL and waits,
 # up to 5 s more, until the last of it is gone.
 reap_job() {
@@ -326,7 +395,12 @@ cleanup() {
     kill -s TERM -- "-$job" 2>/dev/null || true
     reap_job
   fi
-  /bin/rm -rf "$lock" "$limited"
+  # read, not a command substitution: after a write to the closed connection, bash 3.2 would put the
+  # failed text in front of the owner.
+  local mine=""
+  IFS= read -r -d '' mine 2>/dev/null <"$lock/owner"
+  /bin/rm -f "$limited"
+  [ "$mine" != "$owner" ] || /bin/rm -rf "$lock"
 }
 trap cleanup EXIT
 # The probe counts this run as going while this shell lives.
@@ -562,11 +636,19 @@ run() {
   [ -z "$tracked" ] || blocked "git tracks files under names wh leaves out; they would be missing on $host:
 $tracked"
 
-  local prepared state server route_description has_git first_copy_kb empty tree_bytes stored_clock copy_changes
+  local prepared state server route_description has_git first_copy_kb empty tree_bytes stored_clock copy_changes held holder
   phase=prepare
-  prepared=$(remote "$target" /bin/bash -c "$prepare_work_copy" _ "$work" \
-    "$run_owner: $*" "$seed" "$(printf '%s\n' "${names[@]}")" "${rsync_excludes[@]}") ||
-    blocked "could not lock and refresh $host:~/$work"
+  if ! prepared=$(remote "$target" /bin/bash -c "$prepare_work_copy" _ "$work" \
+    "$run_owner: $*" "$seed" "$(printf '%s\n' "${names[@]}")" "${rsync_excludes[@]}"); then
+    held=$(sed -n 1p <<<"$prepared")
+    holder=$(sed -n '2,$p' <<<"$prepared" | tr '\n\t' '  ' | sed 's/ *$//')
+    case "$held" in
+      "locked running "*) blocked "$host:~/$work is in use by another run, its job running as pid ${held#locked running } there: $holder" ;;
+      "locked preparing") blocked "$host:~/$work is in use by another run still copying to it: $holder" ;;
+      "locked stale "*) blocked "$host:~/$work.lock is stale (${held#locked stale }), left by $holder; remove it with: ssh $target 'rm -r ~/$work.lock'" ;;
+      *) blocked "could not lock and refresh $host:~/$work" ;;
+    esac
+  fi
   phase=copy
   read -r state server has_git <<<"$(sed -n 1p <<<"$prepared")"
   if [ "$has_git" = nogit ] && route_description=$(tailscale_route "$server"); then
@@ -652,13 +734,15 @@ free_lock() {
 }
 
 # The way out of a run, however it ends: while the copy is made, the lock this run took goes (once the
-# job runs, the host frees it), then the end line. A prepare that failed took no lock, or freed its own;
-# one a signal cut short may have taken it. Signals are ignored from here, by this shell and the ssh it
-# starts, so a second Ctrl-C or wh stop cannot cut the cleanup short, nor a closed pipe end it.
+# job runs, the host frees it), then the end line. A prepare that failed may still have taken the lock:
+# the host can finish it after the connection that would carry its answer is gone. free_lock removes
+# only this run's, so a prepare refused by another run's lock leaves that one. Signals are ignored from
+# here, by this shell and the ssh it starts, so a second Ctrl-C or wh stop cannot cut the cleanup short,
+# nor a closed pipe end it.
 finish() {
   local status=$1
   trap '' TERM INT HUP PIPE
-  if { [ "$phase" = copy ] || { [ "$phase" = prepare ] && [ "$end_reason" = stopped ]; }; } && ! free_lock; then
+  if { [ "$phase" = prepare ] || [ "$phase" = copy ]; } && ! free_lock; then
     say "mirror.sh run: could not free $run_host:~/$run_work.lock; remove it if no run holds it"
   fi
   log_end "$status"
@@ -677,48 +761,77 @@ on_signal() {
   exit "$1"
 }
 
-# On a host: ends the job of the run whose lock is $1 and whose owner line starts with $2. SIGTERM goes
-# to the shell that runs the job, whose pid run_job writes into the lock as it starts; that shell stops
-# the job's process group and frees the lock. It waits up to $3 seconds for that pid; with none by then,
-# $4 = free removes the lock, which no job holds, and anything else fails. A lock that is gone, or
-# another run's, means the job has already ended.
-stop_on_host='n=0
+# On a host: ends the job of the run whose lock is $1 and whose owner line starts with $2, and says what
+# it found. SIGTERM goes to the shell that runs the job, whose pid run_job writes into the lock as it
+# starts; that shell stops the job's process group and frees the lock. It signals only a pid that
+# lock_state calls running, never a stale lock's. It waits up to $3 seconds for that pid; with none by
+# then, $4 = free removes the lock, which no job holds. Prints one word or line: signalled; gone, when the
+# lock is gone or another run's, so the job has already ended; freed; no-pid, when it waited in vain and
+# $4 is not free; or the lock's "stale <why>".
+stop_on_host="$lock_state"$'\n'$(cat <<'SCRIPT'
+n=0
 while :; do
-  case "$(cat "$1/owner" 2>/dev/null)" in "$2:"*) ;; *) exit 0 ;; esac
-  [ -s "$1/pid" ] && exec kill -s TERM "$(cat "$1/pid")"
+  case "$(cat "$1/owner" 2>/dev/null)" in ("$2:"*) ;; (*) echo gone; exit 0 ;; esac
+  held=$(lock_state "$1")
+  case "$held" in
+    ("running "*) if kill -s TERM "${held#running }" 2>/dev/null; then echo signalled; exit 0; fi ;;
+    ("stale "*) echo "$held"; exit 0 ;;
+  esac
   n=$((n + 1))
   [ "$n" -lt "$3" ] || break
   sleep 1
 done
-[ "$4" = free ] && rm -rf "$1"'
+if [ "$4" = free ]; then
+  rm -rf "$1"
+  echo freed
+else
+  echo no-pid
+fi
+SCRIPT
+)
 
 # Ends this run's job on the host. Without this the job would run on, as nothing reaches a host's
 # process once its laptop side is gone. The job's ssh then gets 10 seconds to end, as a child the job
 # left holding its output, or a dead connection, can keep it open. When no job shell has written its
 # pid after 10 seconds, the ssh that starts the job never reached the host: once that ssh is ended no
-# job can start, so the lock goes too.
+# job can start, so the lock goes too. Returns 0 when the job is known to have stopped or ended, and 1
+# when it may still be running: the host did not answer, or this run's lock there is stale.
 stop_job() {
-  local waited=0
-  if remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 10 wait; then
-    while [ -n "$job_ssh" ] && kill -0 "$job_ssh" 2>/dev/null; do
-      if [ $waited -ge 100 ]; then
-        # shellcheck disable=SC2046 # one pid a word
-        kill -s TERM $(descendants $$) 2>/dev/null || true
-        break
-      fi
-      sleep 0.1
-      waited=$((waited + 1))
-    done
-    say "mirror.sh run: stopped the job on $run_host"
-    return
-  fi
+  local waited=0 said
+  said=$(remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 10 wait) || said=""
+  case "$said" in
+    signalled | gone)
+      while [ -n "$job_ssh" ] && kill -0 "$job_ssh" 2>/dev/null; do
+        if [ $waited -ge 100 ]; then
+          # shellcheck disable=SC2046 # one pid a word
+          kill -s TERM $(descendants $$) 2>/dev/null || true
+          break
+        fi
+        sleep 0.1
+        waited=$((waited + 1))
+      done
+      say "mirror.sh run: stopped the job on $run_host"
+      return 0 ;;
+    "stale "*)
+      say "mirror.sh run: could not stop the job on $run_host: its lock there is stale (${said#stale }), so the job may still be running in ~/$run_work; remove the lock with: ssh $run_target 'rm -r ~/$run_work.lock'"
+      return 1 ;;
+  esac
   # shellcheck disable=SC2046 # one pid a word
   kill -s TERM $(descendants $$) 2>/dev/null || true
-  if remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 1 free; then
-    say "mirror.sh run: the job never started on $run_host; its lock is freed"
-  else
-    say "mirror.sh run: could not reach $run_host to stop the job; it may still be running in ~/$run_work"
-  fi
+  said=$(remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 1 free) || said=""
+  case "$said" in
+    freed | gone)
+      say "mirror.sh run: the job never started on $run_host; its lock is freed"
+      return 0 ;;
+    signalled)
+      say "mirror.sh run: stopped the job on $run_host"
+      return 0 ;;
+    "stale "*)
+      say "mirror.sh run: could not stop the job on $run_host: its lock there is stale (${said#stale }), so the job may still be running in ~/$run_work; remove the lock with: ssh $run_target 'rm -r ~/$run_work.lock'"
+      return 1 ;;
+  esac
+  say "mirror.sh run: could not reach $run_host to stop the job; it may still be running in ~/$run_work"
+  return 1
 }
 
 # The run log's runs still going: a start line with no end line whose mirror.sh still lives. Prints one

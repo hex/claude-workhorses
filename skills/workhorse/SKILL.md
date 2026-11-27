@@ -40,7 +40,7 @@ wh alpha --timeout 20m -- cargo test   # a named host
   count of the rest, and a toast when one that took over 2 minutes ends or a run ends with `BLOCKED`.
 - With no host, `wh` picks among the hosts whose 1-minute load is below their core count: the least
   busy by load plus runs going, per core, though a host with the repo's copy wins while under half
-  busy, and it skips a host whose copy another run holds. Name the host when the job needs
+  busy, and it skips a host whose copy another run holds or a stale lock bars. Name the host when the job needs
   x86_64 or arm64, or macOS or Linux; the table's Arch column says which host has which
   architecture, and each host's record in the policy names its system.
 - Always put `--` before the command. Bound every job with `--timeout` (`90s`, `30m`, `2h`): past
@@ -140,7 +140,7 @@ holding the worktree's branch and index. Lock files (`*.lock`) stay on this mach
 | the command's own | The command ran; this is its result. |
 | 124 | The command ran past `--timeout`; `wh` stopped it and everything it started. |
 | 143, 130, 129 | `wh stop`, `Ctrl-C` or a closed terminal stopped the run, and the job with it. |
-| 3, with `BLOCKED` on stderr | The command did not run. The message says why: no host free or reachable, another run holds the lock, copying `.git` or the patch from this machine failed, git tracks files `wh` skips, or the repo's first copy on that host would send over 1 GB (`.git` and files together) through Tailscale (make it from a network that reaches the host without Tailscale, or name a host on this network). |
+| 3, with `BLOCKED` on stderr | The command did not run. The message says why: no host free or reachable, another run holds the lock, the lock is stale (its run has ended; the message gives the command that removes it, which `wh` never runs itself), copying `.git` or the patch from this machine failed, git tracks files `wh` skips, or the repo's first copy on that host would send over 1 GB (`.git` and files together) through Tailscale (make it from a network that reaches the host without Tailscale, or name a host on this network). |
 | 2 | Usage error: missing `--`, not inside a git repo, an unknown host, or a missing or bad hosts file. |
 
 On 3, read the message and fix the cause. If no host is free or reachable, run the job locally and

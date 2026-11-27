@@ -20,11 +20,14 @@ Outside git, use a suitable host with load below its core count that answers
 `ssh -o BatchMode=yes -o ConnectTimeout=5 <ssh> uptime`. If none qualifies, run locally
 and say so. Lock ~/work/<repo>-<first 8 hex digits of SHA1 of the local absolute path>.lock
 with mkdir before rsync -az --delete to the corresponding work directory. Record this
-machine, time and job in the lock's owner file. An existing lock belongs to another run.
+machine, time and job in the lock's owner file, and the detached job's pid on the host in its pid
+file. An existing lock belongs to another run unless stale: its pid file names a dead
+process, or it has none and is over an hour old. Report a stale lock with its rm -r command;
+never remove it yourself.
 Use wh's exclusions. Run detached with a time limit, write run.log and the exit code in
 run.status, and wait in the background. Release your lock at the end.
 
 Bring back only logs and reports. Edit locally. Keep shared git copies and dependencies.
 Remove only this session's non-git copy. Before deleting files a job could use, check
-~/work/*.lock and their owner files; wait for other sessions' locks to clear. Ask before
+~/work/*.lock and their owner files; wait for other sessions' locks that are not stale to clear. Ask before
 sudo or installing outside the remote directory.

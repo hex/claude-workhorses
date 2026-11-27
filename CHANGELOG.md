@@ -23,6 +23,17 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 - `hosts` is a `wh` command, so the hosts file refuses it as a host name, as it refuses `ps` and `stop`.
 
 ### Fixed
+- `wh hosts`, the pane, host choice, a run and `wh stop` agree on a copy's lock. A lock is a run going
+  while its process lives in the host's current boot, or for its first hour with no process
+  yet. Any other lock is stale. A run refused by a stale lock ends `BLOCKED`, says why the lock is stale
+  and gives the `ssh ... 'rm -r ...'` command that removes it; `wh` never removes one itself. Host choice
+  passes over a host whose lock on the copy is stale and names it the same way, and the refusal by a run
+  going says whether that run's job runs or that run still copies.
+- `wh stop` no longer signals a process whose pid a stale lock names, such as a pid used again after
+  the host restarted.
+- A run no longer leaves its lock on the host when the connection drops after the host took the lock:
+  the host's side frees it when its answer meets the closed connection, under a Mac's bash 3.2 too, and
+  the laptop frees it on the way out. A job's end frees the lock only while its run still owns it.
 - A sync no longer ends with exit 0 while a tool it installs does not run. A recipe's step fails when its
   probe still reports the tool `missing` after the install, and `sync.sh status` names that step.
 - `rustup` installs stable again when an earlier install cut short left a `rustc` that does not run, and

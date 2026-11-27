@@ -1,6 +1,6 @@
 #!/bin/bash
-# ABOUTME: Checks wh's time limits without a workhorse: the probe bound in scripts/lib/bounded.sh and the job
-# ABOUTME: limit in mirror.sh's run_job, run here under bash with HOME in a throwaway folder. Exits 1 on the first miss.
+# ABOUTME: Checks wh's time limits and the copy's lock without a workhorse: the probe bound in scripts/lib/bounded.sh, the job
+# ABOUTME: limit in run_job, and how prepare, run_job, stop_on_host and a run treat the lock, with every HOME a throwaway folder. Exits 1 on the first miss.
 # The job commands below are sh scripts held as text: their $ signs are theirs, not this script's.
 # shellcheck disable=SC2016
 set -euo pipefail
@@ -130,6 +130,129 @@ echo "ok   a job inside its limit returns at once with its own exit code and not
 out=$(echo from-the-laptop | job 20 cat)
 [ "$out" = from-the-laptop ] || fail "a job with a limit did not read its stdin: '$out'"
 echo "ok   a job with a limit still reads its stdin"
+
+# The lock's owner file names the run that took it. When the job ends, the lock goes only while it is
+# still that run's: a run that took it over since (after someone removed it) keeps it.
+owner="lap pid 1 since 2026-11-26 10:00:00: make"
+mkdir -p "$scratch/work/demo" "$scratch/work/demo.lock"
+echo "$owner" >"$scratch/work/demo.lock/owner"
+HOME=$scratch /bin/bash -c "$run_job" _ work/demo . "" "node_modules" 0 true 2>"$scratch/err"
+[ ! -e "$scratch/work/demo.lock" ] || fail "a job whose run still owns the lock left it"
+mkdir -p "$scratch/work/demo.lock"
+echo "$owner" >"$scratch/work/demo.lock/owner"
+HOME=$scratch /bin/bash -c "$run_job" _ work/demo . "" "node_modules" 0 sh -c 'echo "lap pid 2 since 2026-11-26 10:05:00: make" >../demo.lock/owner'
+[ "$(cat "$scratch/work/demo.lock/owner" 2>/dev/null)" = "lap pid 2 since 2026-11-26 10:05:00: make" ] ||
+  fail "a job's end removed the lock another run had taken over"
+rm -rf "$scratch/work/demo.lock"
+echo "ok   a job's end frees the lock while its run owns it, and leaves one another run has taken"
+
+# prepare takes the lock, then its answer meets a connection the laptop has closed. It frees the lock on
+# the way out, under the Mac's bash 3.2 as under bash 5.
+eval "$(sed -n "/^lock_state=\$(cat <<'SCRIPT'\$/,/^)\$/p; /^prepare_work_copy=/,/^)\$/p; /^stop_on_host=/,/^)\$/p" "$mirror")"
+[ -n "${prepare_work_copy:-}" ] && [ -n "${stop_on_host:-}" ] || fail "no prepare_work_copy or stop_on_host script in $mirror"
+for shell in /bin/bash "$BASH"; do
+  rm -rf "$scratch/work/fresh" "$scratch/work/fresh.lock"
+  ( HOME=$scratch SSH_CONNECTION="10.0.0.2 5000 10.0.0.9 22" "$shell" -c "$prepare_work_copy" _ work/fresh "$owner" "" "" 2>/dev/null ) | true || :
+  sleep 0.2
+  [ ! -e "$scratch/work/fresh.lock" ] || fail "$shell: prepare left its lock when its answer met a closed connection"
+done
+echo "ok   prepare frees its lock when the laptop's connection is gone"
+
+# stop_on_host, run by /bin/sh (dash on a Debian host), signals only a run's live process from this boot.
+# A pid from before a restart, or a dead one, is a stale lock: it says so and why, and signals nothing.
+if [ "$(uname -s)" = Darwin ]; then boot=$(/usr/sbin/sysctl -n kern.bootsessionuuid); else boot=$(cat /proc/sys/kernel/random/boot_id); fi
+for shell in /bin/sh dash; do
+  command -v "$shell" >/dev/null || continue
+  lock=$scratch/work/stop.lock
+  stop() { "$shell" -c "$stop_on_host" _ "$lock" "lap pid 1 since 2026-11-26 10:00:00" "$@"; }
+  rm -rf "$lock"
+  mkdir "$lock"
+  echo "$owner" >"$lock/owner"
+  /bin/sleep 30 &
+  bystander=$!
+  echo "$bystander" >"$lock/pid"
+  echo "a-boot-before-this-one" >"$lock/boot"
+  got=$(stop 2 wait)
+  kill -0 "$bystander" 2>/dev/null || fail "$shell: stop_on_host killed a process whose pid a lock from before a restart names"
+  [ "$got" = "stale the host has restarted since the lock was taken" ] || fail "$shell: stop_on_host on a lock from before a restart said '$got'"
+  [ -d "$lock" ] || fail "$shell: stop_on_host removed a stale lock"
+  echo "$boot" >"$lock/boot"
+  got=$(stop 2 wait)
+  [ "$got" = signalled ] || fail "$shell: stop_on_host on a run going in this boot said '$got'"
+  wait "$bystander" 2>/dev/null || true
+  ! kill -0 "$bystander" 2>/dev/null || fail "$shell: stop_on_host left the run's process going"
+  got=$(stop 2 wait)
+  [ "$got" = "stale its process $bystander is gone" ] || fail "$shell: stop_on_host on a lock whose process is gone said '$got'"
+  rm "$lock/pid" "$lock/boot"
+  got=$(stop 1 wait)
+  [ "$got" = no-pid ] && [ -d "$lock" ] || fail "$shell: stop_on_host waiting on a lock with no pid said '$got'"
+  got=$(stop 1 free)
+  [ "$got" = freed ] && [ ! -e "$lock" ] || fail "$shell: stop_on_host freeing a lock with no pid said '$got'"
+  got=$(stop 1 wait)
+  [ "$got" = gone ] || fail "$shell: stop_on_host with no lock said '$got'"
+  echo "ok   $shell: stop_on_host signals a run going in this boot, and names a lock from before a restart or with its process gone stale"
+done
+
+# A run against a host whose copy is locked, with a stand-in ssh that runs the host's side in a scratch
+# home under bash. The laptop's home, the run log in it, and the repository are scratch folders too.
+laptop=$scratch/laptop host_home=$scratch/alpha
+mkdir -p "$laptop" "$host_home/work" "$scratch/config" "$scratch/fake-bin" "$scratch/repo"
+echo "alpha alpha@alpha.local x86_64 6 16" >"$scratch/config/hosts"
+git -C "$scratch/repo" init -q
+echo demo >"$scratch/repo/README"
+git -C "$scratch/repo" add README
+git -C "$scratch/repo" -c user.name=check -c user.email=check@example.com commit -qm demo
+repo=$(cd "$scratch/repo" && pwd -P)
+name=$(printf 'repo-%s' "$(printf '%s' "$repo" | shasum | cut -c1-8)")
+# FAKE_SSH_DROP=1 runs the first command on the host, then fails as a dropped connection does.
+cat >"$scratch/fake-bin/ssh" <<'SSH'
+#!/bin/bash
+for command; do :; done
+# ssh starts the command in the home folder.
+cd "$FAKE_HOST_HOME"
+if [ "${FAKE_SSH_DROP:-}" = 1 ] && [ ! -e "$FAKE_SSH_STATE" ]; then
+  : >"$FAKE_SSH_STATE"
+  HOME=$FAKE_HOST_HOME SSH_CONNECTION="10.0.0.2 5000 10.0.0.9 22" bash -c "$command" >/dev/null 2>&1
+  exit 255
+fi
+HOME=$FAKE_HOST_HOME SSH_CONNECTION="10.0.0.2 5000 10.0.0.9 22" exec bash -c "$command"
+SSH
+chmod +x "$scratch/fake-bin/ssh"
+# Runs wh alpha -- true from the repository and compares the last line of its stderr and its exit code.
+expect_run() {
+  local label=$1 want=$2 want_exit=$3 code=0
+  shift 3
+  rm -f "$scratch/ssh-state"
+  (cd "$scratch/repo" && HOME=$laptop WORKHORSES_CONFIG_DIR=$scratch/config FAKE_HOST_HOME=$host_home \
+    FAKE_SSH_STATE=$scratch/ssh-state PATH=$scratch/fake-bin:$PATH "$@" "$BASH" "$here/../bin/wh" alpha -- true) \
+    >/dev/null 2>"$scratch/err" || code=$?
+  [ "$(tail -n 1 "$scratch/err")" = "$want" ] && [ "$code" = "$want_exit" ] ||
+    fail "$label: wanted '$want' exit $want_exit, got exit $code:
+$(cat "$scratch/err")"
+  echo "ok   $label"
+}
+lock=$host_home/work/$name.lock
+mkdir "$lock"
+echo "$owner" >"$lock/owner"
+/bin/sh -c 'echo $$' >"$lock/pid"
+dead=$(cat "$lock/pid")
+expect_run "a run refused by a stale lock says so, says why and gives the command that removes it" \
+  "mirror.sh run: BLOCKED: alpha:~/work/$name.lock is stale (its process $dead is gone), left by $owner; remove it with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'" 3 env
+[ "$(cat "$lock/owner")" = "$owner" ] || fail "a run refused by a stale lock removed it"
+[ "$(jq -r 'select(.event == "end") | .reason' "$laptop/.local/state/workhorse/runs.jsonl" | tail -n 1)" = \
+  "alpha:~/work/$name.lock is stale (its process $dead is gone), left by $owner; remove it with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'" ] ||
+  fail "the run log's end line does not carry the stale lock's message"
+echo $$ >"$lock/pid"
+echo "$boot" >"$lock/boot"
+expect_run "a run refused by a run going says that run's job runs, with its pid" \
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run, its job running as pid $$ there: $owner" 3 env
+rm "$lock/pid"
+expect_run "a run refused by a run still copying says so" \
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it: $owner" 3 env
+rm -rf "$lock"
+expect_run "a run whose connection drops after the host took its lock frees the lock" \
+  "mirror.sh run: BLOCKED: could not lock and refresh alpha:~/work/$name" 3 env FAKE_SSH_DROP=1
+[ ! -e "$lock" ] || fail "a run whose connection dropped after the host took its lock left it: $(cat "$lock/owner")"
 
 # Runs bin/wh from a folder inside this repository with an empty config folder, so it stops at the
 # missing hosts file at the latest and never reaches a host. Compares stderr and the exit code.

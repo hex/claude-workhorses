@@ -168,8 +168,9 @@ xur    load 2.58 of 6 cores, 2 runs
 eris   unreachable
 ```
 
-A run is a lock in the host's `~/work` that a live process holds, or one under an hour old that is
-still copying. A run this machine started leads with the number `wh stop` takes and the folder it
+A run is a lock in the host's `~/work` whose job runs in a live process, or one under an hour old
+that is still copying. A stale lock is not a run: its process has ended, the host has restarted since
+the run took it, or it has no process and is over an hour old. A run this machine started leads with the number `wh stop` takes and the folder it
 started from. A run from another machine names that machine and its pid there. A host that does not
 answer within 5 seconds is unreachable, and a host whose answer is not a probe's shows that answer.
 `wh hosts --json` prints one JSON object per host instead, which the [workhorses pane](#the-badge-and-band)
@@ -184,10 +185,11 @@ With no host named, `wh` asks every host at once for its 1-minute load and physi
 Linux, the cores `lscpu` lists, not their hyperthreads), the runs going there and whether it holds
 the repository's copy. Among the hosts whose load is below their core count, it ranks each by its load
 plus its runs going, per core, since the 1-minute load lags a run that just started. A run counts
-while its process lives on the host, so a lock left by a run that died does not. A host that holds
+while its process lives on the host, so a stale lock does not. A host that holds
 the copy, and so its installed dependencies, wins while that figure is under half; past it the least
 busy host wins, so work spreads instead of piling onto one host. It skips a host whose copy another
-run holds, so two runs of one repository go to two hosts. Ties go to the first in the hosts file. A host that has not
+run holds, so two runs of one repository go to two hosts. It also skips a host whose lock on the copy
+is stale, and names it with the reason and the command that removes it. Ties go to the first in the hosts file. A host that has not
 answered within 2 seconds counts as unreachable.
 
 ### What gets copied
@@ -455,7 +457,8 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | `wh: command not found` in your own terminal | Claude Code puts the plugin's `bin/` on the path of the commands Claude runs, not on your shell's. Call `bin/wh` in the installed plugin by its full path, or link it into a folder on your `PATH`. |
 | `wh` exits 124 | The job ran past `--timeout`. Give it a longer limit, or split it. |
 | `BLOCKED: no workhorse is free` | The message lists each host's reason. Every host is at its core count or unreachable; run the job locally. |
-| `... is in use: ...` | Another run holds that copy's lock. The message gives its number; `wh stop <number>` ends it from the machine that started it. If that run has ended, remove the `.lock` folder the message names. |
+| `... is in use by another run ...` | Another run holds that copy's lock: its job runs, or that run still copies. The owner it names, `<machine> pid <number>`, gives the number `wh stop <number>` takes on that machine. |
+| `... .lock is stale (...)` | The run that took the lock has ended: its process died, the host restarted, or it never started a job and the lock is over an hour old. `wh` never removes a stale lock itself; run the `ssh ... 'rm -r ...'` command the message gives. |
 | A run must stop | `wh ps` lists the runs going; `wh stop <run>` ends one, its job on the host included. |
 | Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
 | `git` fails on a new host | macOS's `git` stays a stub until the Command Line Tools arrive. Add the `command-line-tools` line. On Linux, install `git` (`apt git @os=linux`). |

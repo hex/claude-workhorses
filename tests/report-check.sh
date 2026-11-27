@@ -15,10 +15,15 @@ fail() {
 
 # The host side: count_runs with wh_list=1 prints a line for each lock of a run going, then the count.
 # It runs under bash and zsh, the login shells hosts have.
-eval "$(sed -n "/^count_runs='/p" "$mirror")"
+eval "$(sed -n "/^lock_state=\$(cat <<'SCRIPT'\$/,/^)\$/p; /^count_runs=/p" "$mirror")"
 home=$scratch/home
-mkdir -p "$home/work/live-1a2b3c4d.lock" "$home/work/dead.lock" "$home/work/copying.lock" "$home/work/abandoned.lock"
+mkdir -p "$home/work/live-1a2b3c4d.lock" "$home/work/dead.lock" "$home/work/copying.lock" "$home/work/abandoned.lock" \
+  "$home/work/rebooted.lock"
 echo $$ >"$home/work/live-1a2b3c4d.lock/pid"
+# Its pid lives, but the host has restarted since: the pid is another process's now.
+echo $$ >"$home/work/rebooted.lock/pid"
+echo "a-boot-before-this-one" >"$home/work/rebooted.lock/boot"
+echo "other-mac pid 2 since 2026-11-26 09:00:00: before the restart" >"$home/work/rebooted.lock/owner"
 printf 'erp-mac pid 3875 since 2026-11-26 15:53:42: sh -c make\n\ttest\n' >"$home/work/live-1a2b3c4d.lock/owner"
 /bin/sh -c 'echo $$' >"$home/work/dead.lock/pid"
 echo "other-mac pid 1 since 2026-11-26 10:00:00: gone" >"$home/work/dead.lock/owner"
@@ -34,7 +39,7 @@ $want
 got
 $got"
   [ ! -s "$scratch/err" ] || fail "$shell listing wrote to stderr: $(cat "$scratch/err")"
-  echo "ok   $shell lists a live lock with its owner on one line and a young lock without one, not a dead or abandoned lock"
+  echo "ok   $shell lists a live lock with its owner on one line and a young lock without one, not a dead, abandoned or rebooted lock"
 done
 
 # A run's start line names the Claude Code session that started it when CLAUDE_CODE_SESSION_ID holds an
