@@ -348,6 +348,21 @@ kill -s TERM "$(cat "$host_home/work/$name.lock/pid")"
 for _ in $(seq 50); do [ -e "$host_home/work/$name.lock" ] || break; sleep 0.2; done
 echo "ok   a run whose connection drops and whose host does not answer the stop ends as lost: the job may still be running"
 
+# The host restarted while the job ran: the lock it left is stale, and no job of that run can still run.
+start_run "" sh -c 'echo $$ >job.pid; exec sleep 30'
+echo "a-boot-before-this-one" >"$host_home/work/$name.lock/boot"
+code=0
+out=$(wh_stop "$run_pid" 2>&1) || code=$?
+[ "$code" = 0 ] && [ "$out" = "wh stop: stopped run $run_pid on alpha: sh -c echo \$\$ >job.pid; exec sleep 30" ] ||
+  fail "wh stop of a run whose host restarted: exit $code: $out"
+wait "$run_pid" 2>/dev/null || true
+[ "$(end_of "$run_pid")" = '{"exit":143,"reason":"stopped"}' ] || fail "a run whose host restarted logged its end as '$(end_of "$run_pid")'"
+grep -qxF "mirror.sh run: the job no longer runs on alpha, which has restarted since the lock was taken; that lock is stale: remove it with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'" "$scratch/err" ||
+  fail "a run whose host restarted said: $(cat "$scratch/err")"
+for _ in $(seq 50); do kill -0 "$(cat "$job_pid")" 2>/dev/null || break; sleep 0.2; done
+rm -rf "$host_home/work/$name.lock"
+echo "ok   a stop that finds the host restarted since the job started counts as stopped, and names the stale lock and its rm"
+
 start_run "" sh -c 'echo $$ >job.pid; exit 255'
 code=0
 wait "$run_pid" || code=$?

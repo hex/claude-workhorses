@@ -831,8 +831,9 @@ SCRIPT
 # left holding its output, or a dead connection, can keep it open. When no job shell has written its
 # pid after 10 seconds, the ssh that starts the job never reached the host: once that ssh is ended no
 # job can start, so the lock goes too. Leaves stop_on_host's answer in job_stop (unreachable when the
-# host did not answer) and returns 0 when the job is known not to run: signalled, freed, or gone, which
-# means it had already ended and is left for the caller to word. Returns 1 when it may still be running.
+# host did not answer) and returns 0 when the job is known not to run: signalled, freed, a lock stale from
+# before the host restarted, or gone, which means it had already ended and is left for the caller to
+# word. Returns 1 when it may still be running: the host did not answer, or the lock is stale otherwise.
 job_stop=""
 stop_job() {
   local waited=0
@@ -848,7 +849,9 @@ stop_job() {
         sleep 0.1
         waited=$((waited + 1))
       done ;;
-    "stale "*) ;;
+    "stale "*)
+      # shellcheck disable=SC2046 # one pid a word
+      kill -s TERM $(descendants $$) 2>/dev/null || true ;;
     *)
       # shellcheck disable=SC2046 # one pid a word
       kill -s TERM $(descendants $$) 2>/dev/null || true
@@ -858,6 +861,8 @@ stop_job() {
     signalled) say "mirror.sh run: stopped the job on $run_host" ;;
     gone) ;;
     freed) say "mirror.sh run: the job never started on $run_host; its lock is freed" ;;
+    "stale the host has restarted since the lock was taken")
+      say "mirror.sh run: the job no longer runs on $run_host, which has restarted since the lock was taken; that lock is stale: remove it with: ssh $run_target 'rm -r ~/$run_work.lock'" ;;
     "stale "*)
       say "mirror.sh run: could not stop the job on $run_host: its lock there is stale (${job_stop#stale }), so the job may still be running in ~/$run_work; remove the lock with: ssh $run_target 'rm -r ~/$run_work.lock'"
       return 1 ;;

@@ -155,7 +155,8 @@ it still copies leaves a partial copy, which the next run completes.
 
 `Ctrl-C` on a run's `wh`, or closing its terminal, stops the job on the host the same way, and `wh`
 exits 130 or 129. The run log records each of these as `stopped` once the host confirms the job
-stopped, or as `stop-unconfirmed` when the host did not answer or this run's lock there is stale.
+stopped, or as `stop-unconfirmed` when the host did not answer or this run's lock there is stale (a
+lock left from before the host restarted counts as stopped, since no job of it can run).
 `wh stop` reads that end: it exits 0 when the job stopped, or the run had already ended, and exits 1
 when the job may still be running on the host. The band's Stop button runs `wh stop`.
 

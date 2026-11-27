@@ -23,7 +23,8 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 - `hosts` is a `wh` command, so the hosts file refuses it as a host name, as it refuses `ps` and `stop`.
 
 ### Fixed
-- `wh hosts`, the pane, host choice, a run and `wh stop` agree on a copy's lock. A lock is a run going
+- Host choice, a run, `wh stop`, `wh hosts` and the pane read a copy's lock by one definition; `wh hosts`
+  and the pane list only the locks of runs going, so they leave a stale lock out. A lock is a run going
   while its process lives in the host's current boot, or for its first hour with no process
   yet. Any other lock is stale. A run refused by a stale lock ends `BLOCKED`, says why the lock is stale
   and gives the `ssh ... 'rm -r ...'` command that removes it; `wh` never removes one itself. Host choice
@@ -35,8 +36,8 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   the host's side frees it when its answer meets the closed connection, under a Mac's bash 3.2 too, and
   the laptop frees it on the way out. A job's end frees the lock only while its run still owns it.
 - `wh stop` says stopped and exits 0 only when the job stopped on the host, or the run had already
-  ended. When the host did not answer the stop, or the run's lock there is stale, it says the job may
-  still be running and exits 1, and the run log's end line says `stop-unconfirmed`, not `stopped`.
+  ended. When the host did not answer the stop, or the run's lock there is stale for any reason but a
+  restart of the host, it says the job may still be running and exits 1, and the run log's end line says `stop-unconfirmed`, not `stopped`.
 - A run whose connection drops while its job runs (ssh's exit 255) stops the job on the host before it
   ends; its end line says `lost-stopped`, or `lost` when the host did not answer and the job may still
   be running. A command's own exit 255 comes back as before.
