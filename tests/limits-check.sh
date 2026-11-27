@@ -493,7 +493,7 @@ code=0
 [ "$code" = 3 ] && [ "$(cat "$scratch/err")" = "mirror.sh run: BLOCKED: no workhorse is free:
 alpha: unreachable" ] || fail "a run with no host free: exit $code: $(cat "$scratch/err")"
 got=$(tail -n 2 "$runs" | jq -c --arg repo "$repo" 'del(.id, .at, .pid, .session) | if .dir == $repo then .dir = "REPO" else . end')
-[ "$got" = '{"event":"start","host":"auto","dir":"REPO","sub":"","command":"make test"}
+[ "$got" = '{"event":"start","host":"auto","dir":"REPO","sub":"","command":"make test","pick":"auto"}
 {"event":"end","exit":3,"reason":"no workhorse is free:"}' ] || fail "a run with no host free logged:
 $got"
 [ "$(tail -n 2 "$runs" | jq -r .id | sort -u | wc -l | tr -d ' ')" = 1 ] || fail "a run with no host free logged two ids"
@@ -516,6 +516,8 @@ wh_three() {
     FAKE_PROBES=$scratch/probes PATH=$scratch/fake-bin:$PATH "$BASH" "$here/../bin/wh" "$@") >/dev/null 2>"$scratch/err" || code=$?
 }
 last_start_host() { jq -r 'select(.event == "start") | .host' "$runs" | tail -n 1; }
+# How the last run's host was chosen, and the chosen host's probe answer when wh picked it.
+last_start_pick() { jq -c 'select(.event == "start") | {pick, probe}' "$runs" | tail -n 1; }
 probe alpha 0.10
 probe beta 2.00
 probe gamma 1.00
@@ -523,7 +525,9 @@ wh_three beta,gamma -- true
 [ "$code" = 0 ] && [ "$(last_start_host)" = gamma ] &&
   grep -qxF "mirror.sh run: using gamma (load 1.00 of 6 cores, first copy there)" "$scratch/err" ||
   fail "a list of hosts: exit $code, ran on '$(last_start_host)': $(cat "$scratch/err")"
-echo "ok   with a list of hosts, wh runs on the least busy of those, not on a less busy host outside the list"
+[ "$(last_start_pick)" = '{"pick":"list","probe":{"load":1.00,"cores":6,"runs":0}}' ] ||
+  fail "a run on the least busy of a list logged its pick as $(last_start_pick)"
+echo "ok   with a list of hosts, wh runs on the least busy of those, not on a less busy host outside the list, and logs the pick with the host's load, cores and runs"
 probe beta 1.00
 wh_three gamma,beta -- true
 [ "$code" = 0 ] && [ "$(last_start_host)" = beta ] ||
@@ -532,7 +536,8 @@ echo "ok   a tie among the listed hosts goes to the hosts file's order, not the 
 probe alpha 9.00
 wh_three alpha -- true
 [ "$code" = 0 ] && [ "$(last_start_host)" = alpha ] || fail "one host over its core count: exit $code: $(cat "$scratch/err")"
-echo "ok   one host named runs there at any load"
+[ "$(last_start_pick)" = '{"pick":"named","probe":null}' ] || fail "a run on a named host logged its pick as $(last_start_pick)"
+echo "ok   one host named runs there at any load, and logs it as named, with no probe"
 probe alpha 0.10
 probe beta 7.00
 rm "$scratch/probes/gamma@gamma.local"
@@ -541,7 +546,7 @@ wh_three gamma,beta -- make test
 beta: load 7.00 of 6 cores
 gamma: unreachable" ] || fail "a list of hosts none of which is free: exit $code: $(cat "$scratch/err")"
 got=$(tail -n 2 "$runs" | jq -c --arg repo "$repo" 'del(.id, .at, .pid, .session) | if .dir == $repo then .dir = "REPO" else . end')
-[ "$got" = '{"event":"start","host":"auto","dir":"REPO","sub":"","command":"make test"}
+[ "$got" = '{"event":"start","host":"auto","dir":"REPO","sub":"","command":"make test","pick":"list"}
 {"event":"end","exit":3,"reason":"none of beta, gamma is free:"}' ] || fail "a list of hosts none of which is free logged:
 $got"
 echo "ok   with none of the listed hosts free, the run is BLOCKED with each one's reason, and logs its start and end"
@@ -553,6 +558,8 @@ wh_three -- true
 [ "$code" = 0 ] && [ "$(last_start_host)" = gamma ] && [ "$(head -n 2 "$scratch/err")" = "mirror.sh run: passing over alpha, whose lock on this copy is stale (it holds no pid and is over an hour old); its run may still be copying, so check that wh ps on the machine its owner file names (ssh alpha@alpha.local 'cat -v ~/work/$name.lock/owner') no longer lists it before you remove the lock with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'
 mirror.sh run: passing over beta, whose lock on this copy is stale (its process 412 is gone); remove it with: ssh beta@beta.local 'rm -r ~/work/$name.lock'" ] ||
   fail "hosts whose lock is stale: exit $code, ran on '$(last_start_host)': $(cat "$scratch/err")"
+[ "$(last_start_pick)" = '{"pick":"auto","probe":{"load":1.00,"cores":6,"runs":0}}' ] ||
+  fail "a run on a host wh picked from all of them logged its pick as $(last_start_pick)"
 echo "ok   a host whose lock on the copy is stale is passed over with the command that removes it, after a check when its run may still be copying"
 for list in alpha,delta alpha, ,alpha alpha,,gamma; do
   wh_three "$list" -- true

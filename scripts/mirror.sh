@@ -85,9 +85,11 @@ blocked() {
 # run ended. The start line carries this script's pid, so a run killed before it could write its end
 # line (SIGKILL, power loss) can be told apart from one still going, and the Claude Code session that
 # started the run when CLAUDE_CODE_SESSION_ID holds one (Claude Code sets it for the commands it runs;
-# other agents and terminals do not).
+# other agents and terminals do not). It also says how the host was chosen (pick: named, auto among
+# every host, or list among the hosts given) and, when wh picked it, that host's probe answer then: its
+# 1-minute load, physical cores and runs going.
 run_log=$HOME/.local/state/workhorse/runs.jsonl
-run_id="" run_ended=0 end_reason=""
+run_id="" run_ended=0 end_reason="" pick="" pick_load="" pick_cores="" pick_runs=""
 # What a signal or the way out acts on: the phase (prepare while the host takes the lock, copy while the
 # copy is made, then job; refused when another run's lock turned this run away, so it holds none), the
 # host, the copy and this run's line in its lock's owner file, and the ssh that runs the job.
@@ -100,9 +102,11 @@ start_line() {
   run_id="$(hostname -s)-$$-$(date +%s)"
   [[ ${CLAUDE_CODE_SESSION_ID:-} =~ ^[A-Za-z0-9-]{1,64}$ ]] && session=$CLAUDE_CODE_SESSION_ID
   jq -nc --arg id "$run_id" --argjson at "$(date +%s)" --arg host "$host" --arg dir "$dir" --arg sub "$sub" \
-    --arg command "$*" --argjson pid "$$" --arg session "$session" \
+    --arg command "$*" --argjson pid "$$" --arg session "$session" --arg pick "$pick" \
+    --arg load "$pick_load" --arg cores "$pick_cores" --arg runs "$pick_runs" \
     '{event: "start", id: $id, at: $at, host: $host, dir: $dir, sub: $sub, command: $command, pid: $pid}
-      + (if $session == "" then {} else {session: $session} end)'
+      + (if $session == "" then {} else {session: $session} end) + {pick: $pick}
+      + (if $load == "" then {} else {probe: {load: ($load | fromjson), cores: ($cores | fromjson), runs: ($runs | fromjson)}} end)'
 }
 
 log_start() {
@@ -307,7 +311,8 @@ probe_hosts() {
 
 # Asks every workhorse at once, for at most 2 seconds, for its load, its physical core count, its runs
 # going and whether it holds the copy $1 (a path under ~), lets choose_host pick, and names the choice
-# on stderr. When none is free, prints each host's reason instead and fails.
+# on stderr. Prints the chosen host with its load, cores and runs going, on one line. When none is free,
+# prints each host's reason instead and fails.
 pick_host() {
   local work=$1 answers host answer load cores runs copy probes="" chosen state why target
   answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-pick.XXXX")
@@ -335,7 +340,7 @@ pick_host() {
   if [ "$copy" = copy ]; then copy="it holds the copy"; else copy="first copy there"; fi
   [ "$runs" = 0 ] || copy="$runs runs going, $copy"
   echo "mirror.sh run: using $chosen (load $load of $cores cores, $copy)" >&2
-  echo "$chosen"
+  echo "$chosen $load $cores $runs"
 }
 
 # Prints one line per entry of the copy in the current folder (mode, size, modification time to the
@@ -675,15 +680,17 @@ run() {
   # Seven digits at most, so the size in KB stays far inside shell arithmetic.
   [[ $tailscale_first_copy_mb =~ ^[1-9][0-9]{0,6}$ ]] ||
     { echo "mirror.sh run: WORKHORSES_TAILSCALE_FIRST_COPY_MB takes a whole number of MB from 1 to 9999999, not \"$tailscale_first_copy_mb\"" >&2; exit 2; }
-  local host=$1 dir sub main seed="" target work ignore rsync_excludes=() names=() pattern tracked none_free="no workhorse is free:"
+  local host=$1 dir sub main seed="" target work ignore rsync_excludes=() names=() pattern tracked none_free="no workhorse is free:" picked
   dir=$(cd "$2" && pwd -P)
   shift 2
   load_hosts || exit 2
   all_hosts=("${host_names[@]}")
+  pick=named
+  [ "$host" != auto ] || pick=auto
   # A list of hosts: wh picks among those as it picks among all of them.
   if [[ $host == *,* ]]; then
     narrow_hosts "$host" || exit 2
-    host=auto
+    pick=list host=auto
     none_free=$(printf '%s, ' "${all_hosts[@]}")
     none_free="none of ${none_free%, } is free:"
   fi
@@ -697,9 +704,10 @@ run() {
   main=$(dirname "$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)")
   [ "$main" = "$dir" ] || seed=$(work_name "$main")
   work=$(work_name "$dir")
-  if [ "$host" = auto ] && ! host=$(pick_host "$work"); then
-    blocked_unstarted auto "$dir" "${sub%/}" "$none_free
-$host" "$@"
+  if [ "$host" = auto ]; then
+    picked=$(pick_host "$work") || blocked_unstarted auto "$dir" "${sub%/}" "$none_free
+$picked" "$@"
+    read -r host pick_load pick_cores pick_runs <<<"$picked"
   fi
   target=$(ssh_target "$host")
   run_host=$host run_target=$target run_work=$work run_owner="$(hostname -s) pid $$ since $(date '+%F %T')"
