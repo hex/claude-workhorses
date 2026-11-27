@@ -38,7 +38,7 @@ DESCRIPTIONS = {
               "file and runs the tests. After a one-line edit, the second run sends only the edited file. "
               "Each state lasts 2.5 seconds.",
     "claude-band": "Claude Code runs wh in bash mode. The band above the prompt names the run and its time; the "
-                   "footer badge counts the copy, then spins while the job runs, and both go when it ends. "
+                   "footer badge's arrows swap during the copy, then it spins while the job runs, and both go when it ends. "
                    "Each state lasts 2.5 seconds.",
 }
 
@@ -157,8 +157,10 @@ class Capture:
             return
         self.tmux("kill-server", check=False)
         self.started = False
-        # A Claude Code process can outlive its terminal; this run's debug file names it.
-        for line in run("/bin/ps", "-axo", "pid=,command=").stdout.splitlines():
+        # A Claude Code process can outlive its terminal; this run's debug file names it. Other processes'
+        # arguments can hold any bytes, so they are read as text with undecodable bytes replaced.
+        listing = subprocess.run(["/bin/ps", "-axwwo", "pid=,command="], check=True, capture_output=True)
+        for line in listing.stdout.decode(errors="replace").splitlines():
             if str(self.work / "debug-") in line:
                 try:
                     os.kill(int(line.split()[0]), signal.SIGTERM)
@@ -293,7 +295,7 @@ class Capture:
         time.sleep(.5)
         self.type(BENCH)
         self.wait(lambda text: re.search(f"wh [⇄⇆] {HOST}", text) is not None)
-        self.save("The badge counts the copy to the workhorse", "! wh --", self.band(True))
+        self.save("The badge's arrows swap while the copy runs", "! wh --", self.band(True))
         self.wait(lambda text: re.search(f"wh [{SPINNER}] {HOST}", text) is not None)
         self.save("The badge spins while the job runs", "! wh --", self.band(True))
         self.wait("ns/op")

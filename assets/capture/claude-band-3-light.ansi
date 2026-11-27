@@ -1,18 +1,18 @@
 [38;5;199m[48;5;231m! [38;5;16mwh --timeout 5m -- go test -bench=. ./...[39m
-[38;5;241m[49m  ⎿  [39mmirror.sh run: using alpha (load 1.45 of 6 cores, first copy there)
+[38;5;241m[49m  ⎿  [39mmirror.sh run: using alpha (load 2.62 of 10 cores, 1 runs going, first copy there)
      mirror.sh run: first copy here; the laptop sends every file
-     mirror.sh run: full walk: first run in alpha:~/work/demo-1eabdc5d; comparing every file's contents once
+     mirror.sh run: full walk: first run in alpha:~/work/demo-90e1d0ad; comparing every file's contents once
      mirror.sh run: patched 3 files from the laptop
      goos: darwin
-     goarch: amd64
+     goarch: arm64
      pkg: demo
-     cpu: Intel(R) Core(TM) i7-8700B CPU @ 3.20GHz
-     BenchmarkFib20-12          43593             27136 ns/op
-     BenchmarkFib25-12           3936            304245 ns/op
+     cpu: Apple M4
+     BenchmarkFib20-10          70587             14431 ns/op
+     BenchmarkFib25-10           7587            158608 ns/op
      PASS
-     ok      demo    2.984s
+     ok      demo    2.660s
 
-[38;5;174m✢[39m [38;5;174mEnvisioning… [38;5;241m(7s)[39m
+[38;5;174m✳[39m [38;5;216mCoa[38;5;174mlescing… [38;5;241m(11s)[39m
 
 [38;5;245m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 [38;5;241m❯ [7m[39m [0m
