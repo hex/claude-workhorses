@@ -4,7 +4,7 @@
 
 <h1 align="center">workhorses</h1>
 
-<p align="center">Long jobs run on your spare Macs while this one stays free.</p>
+<p align="center">Long jobs run on your spare Macs and Linux machines while this one stays free.</p>
 
 A plugin for Claude Code, Codex, pi, OpenCode, Antigravity, GitHub Copilot CLI, Cursor, VS Code, Grok Build and Kimi Code that runs long jobs on your spare Macs, or on Linux machines, a Windows PC's
 Windows Subsystem for Linux (WSL2) included. `wh` copies the git repository you are in to a workhorse, brings the copy level with your machine (`.git` included), and runs the command
@@ -17,8 +17,8 @@ front of you.
 
 | Where | What you get |
 | --- | --- |
-| Claude Code on your Mac | `wh` on the path of every command Claude runs, the offload policy and your host table at the start of every session, the `workhorse` skill, and the badge and band. |
-| Codex, pi, OpenCode or Antigravity on your Mac | The offload policy and your host table in every session, which give `wh`'s full path, and the `workhorse` skill. No badge, band or `/workhorses:setup`: those are Claude Code's. |
+| Claude Code on your Mac | `wh` on the path of every command Claude runs, the offload policy and your host table at the start of every session, the `workhorse` skill, the badge and band, and the `/workhorses` pane. |
+| Codex, pi, OpenCode or Antigravity on your Mac | The offload policy and your host table in every session, which give `wh`'s full path, and the `workhorse` skill. No badge, band, pane or `/workhorses:setup`: those are Claude Code's. |
 | GitHub Copilot CLI on your Mac | The offload policy and your host table at the start of an interactive session, and the `workhorse` skill. |
 | Cursor or VS Code on your Mac | Verified npx installs include the skill and startup hook. Enable plugin hooks and, in Cursor, third-party imports. Live startup remains unverified in both. |
 | Grok Build or Kimi Code on your Mac | Grok listed the workhorse skill in a live session. Its installed startup hook runs, but Grok leaves the output out of model context. Kimi’s installed startup hook returned the policy in `additionalContext`, and its manifest registers the startup skill. The suspended account prevented a live session. |
