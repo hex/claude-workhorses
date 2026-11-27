@@ -248,6 +248,26 @@ for _ in $(seq 50); do [ -z "$(ls -A "$scratch/tmp")" ] || break; sleep 0.1; don
 kill -s TERM "$stopped"
 wait "$stopped" 2>/dev/null || true
 [ -z "$(ls -A "$scratch/tmp")" ] || fail "wh hosts left $(ls -A "$scratch/tmp") in TMPDIR when stopped"
-echo "ok   wh hosts removes its folder of answers when it reports, fails or is stopped"
+# A TERM can land while mktemp is making the folder, before the EXIT trap could know its name. A mktemp
+# that makes the folder and then waits a second holds that moment open.
+mkdir "$scratch/slow-mktemp"
+cat >"$scratch/slow-mktemp/mktemp" <<MKTEMP
+#!/bin/bash
+made=\$($(command -v mktemp) "\$@") || exit
+sleep 1
+printf '%s\n' "\$made"
+MKTEMP
+chmod +x "$scratch/slow-mktemp/mktemp"
+HOME=$laptop WORKHORSES_CONFIG_DIR=$config FAKE_HOSTS=$scratch/hosts TWICE_LOCK=$twice_lock TWICE_STALE=$twice_stale TMPDIR=$scratch/tmp PATH=$scratch/slow-mktemp:$scratch/bin:$PATH \
+  "$BASH" "$here/../bin/wh" hosts --json >/dev/null 2>&1 &
+stopped=$!
+for _ in $(seq 50); do [ -z "$(ls -A "$scratch/tmp")" ] || break; sleep 0.1; done
+[ -n "$(ls -A "$scratch/tmp")" ] || fail "wh hosts made no folder of answers to stop it in"
+kill -s TERM "$stopped"
+wait "$stopped" 2>/dev/null || true
+# The stand-in's own wait ends before the folder is looked at.
+sleep 1.5
+[ -z "$(ls -A "$scratch/tmp")" ] || fail "wh hosts left $(ls -A "$scratch/tmp") in TMPDIR when stopped while making it"
+echo "ok   wh hosts removes its folder of answers when it reports, fails or is stopped, even while making it"
 
 echo "wh hosts reports are right"

@@ -1069,9 +1069,12 @@ list_hosts() {
     jq -c --arg work "$(work_name "$(jq -r .dir <<<"$start")")" '.work = ($work | ltrimstr("work/"))' <<<"$start"
   done | jq -sc 'group_by(.pid) | map(max_by(.at))')
   # Global, not local: the EXIT trap removes the folder however this script ends, a failed report or a
-  # SIGTERM included, and runs after this function has returned.
+  # SIGTERM included, and runs after this function has returned. The traps come before mktemp: a TERM
+  # that lands while mktemp makes the folder waits for its name, then exits through the EXIT trap.
+  hosts_answers=
+  trap '[ -z "$hosts_answers" ] || rm -rf "$hosts_answers"' EXIT
+  trap 'exit 143' TERM
   hosts_answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-hosts.XXXX")
-  trap 'rm -rf "$hosts_answers"' EXIT
   probe_hosts 5 "$load_and_cores; wh_list=1; $count_runs" "$hosts_answers"
   reports=$(for host in "${all_hosts[@]}"; do host_report "$host" "$hosts_answers" "$(hostname -s)" "$mine" || exit 1; done)
   if [ $# = 1 ]; then printf '%s\n' "$reports"; else render_hosts <<<"$reports"; fi
