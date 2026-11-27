@@ -95,7 +95,7 @@ export function duration(seconds: number): string {
 
 // Control characters, C1 included, which a terminal would act on rather than show, and the characters that
 // reorder or hide text: bidi controls and zero-width characters.
-const UNPRINTABLE = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g
+const UNPRINTABLE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g
 
 function isBlocked(end: End): boolean {
   return end.exit === 3 && end.reason !== undefined

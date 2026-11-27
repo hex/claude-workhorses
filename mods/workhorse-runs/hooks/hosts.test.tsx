@@ -229,7 +229,7 @@ test('what a host sent reaches the pane as plain text', async ($, on) => {
   state.hosts = {
     stdout: jsonLines([
       { host: 'odd', state: 'unexpected', answer: 'Last login \u001b[1mtoday\u009b2J\u0007' },
-      { host: 'xur', state: 'ok', load: 1, cores: 6, runs: [run({ machine: 'other\u001b]0;x', pid: 1, since: '2026-11-26 15:00:00', command: 'make\u0000 \u001b[31m‮re​d﻿⁦‏' })] },
+      { host: 'xur', state: 'ok', load: 1, cores: 6, runs: [run({ machine: 'other\u001b]0;x', pid: 1, since: '2026-11-26 15:00:00', command: 'make\u0000 \u001b[31m\u202ere\u200bd\ufeff\u2066\u200f' })] },
     ]),
     stderr: '',
     exitCode: 0,
