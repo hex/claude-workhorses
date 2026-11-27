@@ -347,6 +347,11 @@ expect_run "a lock's owner reaches the refusal without control characters or cha
 [ "$(jq -r 'select(.event == "end") | .reason' "$laptop/.local/state/workhorse/runs.jsonl" | tail -n 1)" = \
   "alpha:~/work/$name is in use by another run still copying to it: $owner[2J lave" ] ||
   fail "the run log's end line carries the owner file as the host wrote it"
+# An owner file can be any size: the refusal shows its first 300 characters and marks the cut.
+pad=$(printf "%$((300 - ${#owner}))s" "" | tr ' ' y)
+{ printf '%s' "$owner$pad"; head -c 2500000 /dev/zero | tr '\0' x; echo; } >"$lock/owner"
+expect_run "a lock's owner file over 1 MB reaches the refusal cut to its first 300 characters" \
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it: $owner$pad [cut]" 3 env
 # With no pid file past its first hour, the run that took the lock may still be copying to the host.
 echo "$owner" >"$lock/owner"
 touch -t 202001010000 "$lock"

@@ -6,7 +6,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd -P)
 # bash 3.2 cannot source a process substitution, so the function's text is evaluated.
 mirror=$here/../scripts/mirror.sh
-eval "$(sed -n '/^stale_why=/p; /^no_pid_why=/p; /^plain_jq=/,/;.$/p; /^plain() {/p; /^probe_answer() {$/,/^}$/p;/^choose_host() {$/,/^}$/p' "$mirror")"
+eval "$(sed -n '/^stale_why=/p; /^no_pid_why=/p; /^plain_jq=/,/;.$/p; /^plain() {$/,/^}$/p; /^probe_answer() {$/,/^}$/p;/^choose_host() {$/,/^}$/p' "$mirror")"
 declare -F choose_host >/dev/null || { echo "FAIL: no choose_host function in $mirror" >&2; exit 1; }
 declare -F probe_answer >/dev/null || { echo "FAIL: no probe_answer function in $mirror" >&2; exit 1; }
 

@@ -160,7 +160,14 @@ narrow_hosts() {
 plain_jq='def plain: gsub("[\\t\\n\\r]"; " ")
   | gsub("[\\x{0}-\\x{1f}\\x{7f}-\\x{9f}\\x{200b}-\\x{200f}\\x{202a}-\\x{202e}\\x{2066}-\\x{2069}\\x{feff}]"; "")
   | sub("^ +"; "") | sub(" +$"; "");'
-plain() { jq -nr --arg text "$1" "$plain_jq"' $text | plain'; }
+# plain <max> prints the host's text on its stdin as plain text of at most <max> characters, with " [cut]"
+# after a cut. It reads the text from stdin, as a host's answer can be larger than a command's
+# arguments may be, and makes plain only its first 4 * <max> characters: gsub's time grows with the
+# square of the characters it removes.
+plain() {
+  jq -Rrs --argjson max "$1" "$plain_jq"' rtrimstr("\n") as $all | ($all[:4 * $max] | plain) as $text
+    | if ($all | length) > 4 * $max or ($text | length) > $max then $text[:$max] + " [cut]" else $text end'
+}
 
 # The reasons lock_state gives for a stale lock. A host's answer that names a stale lock is taken only
 # with one of these.
@@ -187,7 +194,7 @@ probe_answer() {
   if [[ $load =~ ^[0-9]+([.][0-9]+)?$ && $cores =~ ^[1-9][0-9]*$ && $runs =~ ^[0-9]+$ && $copy =~ ^(copy|busy|none|stale\ $stale_why)$ ]]; then
     echo "$host ok $load $cores $runs $copy"
   else
-    echo "$host unexpected $(plain "$answer")"
+    echo "$host unexpected $(plain 200 <<<"$answer")"
   fi
 }
 
@@ -716,7 +723,7 @@ $tracked"
   if ! prepared=$(remote "$target" /bin/bash -c "$prepare_work_copy" _ "$work" \
     "$run_owner: $*" "$seed" "$(printf '%s\n' "${names[@]}")" "${rsync_excludes[@]}"); then
     held=$(sed -n 1p <<<"$prepared")
-    holder=$(plain "$(sed -n '2,$p' <<<"$prepared")")
+    holder=$(sed -n '2,$p' <<<"$prepared" | plain 300)
     [[ $held =~ ^locked\ (running\ [1-9][0-9]*|preparing|stale\ $stale_why)$ ]] || held=""
     [ -z "$held" ] || phase=refused
     case "$held" in
@@ -814,7 +821,7 @@ $tracked"
     if ! refusal=$(remote "$target" /bin/sh -c "$take_refusal" _ "$work" "$run_owner"); then
       echo "mirror.sh run: could not reach $host to ask whether exit 3 is the job's own or the host's refusal to start it outside this run's lock" >&2
     elif [ "$(head -n 1 <<<"$refusal")" = refused ]; then
-      holder=$(plain "$(sed 1d <<<"$refusal")")
+      holder=$(sed 1d <<<"$refusal" | plain 300)
       [ -z "$holder" ] || blocked "the job did not start: $host:~/$work.lock is another run's: $holder"
       blocked "the job did not start: $host:~/$work.lock, which this run took, is gone"
     fi
