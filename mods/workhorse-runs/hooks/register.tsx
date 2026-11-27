@@ -43,6 +43,8 @@ const RULE = 'gray'
 type Start = { event: 'start'; id: string; at: number; host: string; dir: string; command: string; pid?: number; session?: string }
 // The copy on the workhorse matches the laptop and the job is starting.
 type Synced = { event: 'synced'; id: string; at: number }
+// reason: the first line of a BLOCKED message (exit 3), stopped, or one of UNSETTLED_ENDS' keys; absent when
+// the command's own exit code ended the run.
 type End = { event: 'end'; id: string; at: number; exit: number; reason?: string }
 type Entry = Start | Synced | End
 
@@ -95,23 +97,36 @@ function isBlocked(end: End): boolean {
   return end.exit === 3 && end.reason !== undefined
 }
 
+// The ends mirror.sh records when a stop or a dropped connection left the job's state on the host in
+// question, as the toast words them. A run stopped and confirmed says only "stopped".
+const UNSETTLED_ENDS: ReadonlyMap<string, string> = new Map([
+  ['stop-unconfirmed', 'stopped here, but the job may still be running on the host'],
+  ['lost', 'connection lost, and the job may still be running on the host'],
+  ['lost-stopped', 'connection lost, so wh stopped the job on the host'],
+])
+
+function unsettled(end: End): string | undefined {
+  return end.reason === undefined ? undefined : UNSETTLED_ENDS.get(end.reason)
+}
+
 export function deservesToast(start: Start | undefined, end: End): boolean {
-  return isBlocked(end) || (start !== undefined && end.at - start.at >= LONG_RUN_SECONDS)
+  return isBlocked(end) || unsettled(end) !== undefined || (start !== undefined && end.at - start.at >= LONG_RUN_SECONDS)
 }
 
 export function endToast(start: Start | undefined, end: End): string {
   const what = start === undefined ? `run ${end.id}` : describe(start)
   const took = start === undefined ? '' : ` after ${duration(end.at - start.at)}`
-  const result = isBlocked(end) ? `BLOCKED: ${end.reason}` : end.reason === 'stopped' ? 'stopped' : `exit ${end.exit}`
+  const result = isBlocked(end) ? `BLOCKED: ${end.reason}` : end.reason === 'stopped' ? 'stopped' : (unsettled(end) ?? `exit ${end.exit}`)
   return `wh ${what} ended${took}, ${result}`
 }
 
-// Reads `ps -o pid=,command=` output and returns the pids that still belong to a mirror.sh run.
+// Reads `ps -o pid=,command=` output and returns the pids that still belong to a mirror.sh run, by the
+// pattern wh ps uses (mirror.sh's live_runs), so a pid that a wh hosts or wh stop now holds is not a run.
 export function livePids(psOutput: string): Set<number> {
   const live = new Set<number>()
   for (const line of psOutput.split('\n')) {
     const [, pid, command] = /^\s*(\d+)\s+(.*)$/.exec(line) ?? []
-    if (pid !== undefined && command !== undefined && command.includes('mirror.sh')) live.add(Number(pid))
+    if (pid !== undefined && command !== undefined && /mirror\.sh run/.test(command)) live.add(Number(pid))
   }
   return live
 }

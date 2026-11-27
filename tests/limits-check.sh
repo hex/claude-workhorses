@@ -17,7 +17,7 @@ scratch=$(mktemp -d "${TMPDIR:-/tmp}/limits-check.XXXX")
 # A failing check can leave a job's processes behind; each writes its pid to a file in the copy.
 cleanup() {
   local pid
-  for pid in $(cat "$scratch"/work/demo/*.pid 2>/dev/null); do kill -9 "$pid" 2>/dev/null || true; done
+  for pid in $(cat "$scratch"/work/demo/*.pid "$scratch"/alpha/work/*/job.pid 2>/dev/null); do kill -9 "$pid" 2>/dev/null || true; done
   rm -rf "$scratch"
 }
 trap cleanup EXIT
@@ -204,20 +204,39 @@ git -C "$scratch/repo" add README
 git -C "$scratch/repo" -c user.name=check -c user.email=check@example.com commit -qm demo
 repo=$(cd "$scratch/repo" && pwd -P)
 name=$(printf 'repo-%s' "$(printf '%s' "$repo" | shasum | cut -c1-8)")
-# FAKE_SSH_DROP=1 runs the first command on the host, then fails as a dropped connection does.
+# The stand-in ssh joins the command's words as ssh does, for remote's one quoted word and for rsync's
+# several, and runs them in the host's home. Its modes stand in for a network that fails:
+#   FAKE_SSH_DROP=1        the first command runs, then the connection drops (exit 255)
+#   FAKE_SSH_DOWN=1        the host never answers
+#   FAKE_SSH_STOP_DOWN=1   the host never answers wh's stop (the script that can answer no-pid)
+#   FAKE_SSH_JOB_DROPS=1   the job's connection drops a second after it starts, and the job runs on
+# Watchman stands in as one that cannot answer, so every run walks the copy.
 cat >"$scratch/fake-bin/ssh" <<'SSH'
 #!/bin/bash
-for command; do :; done
-# ssh starts the command in the home folder.
+while [ $# -gt 0 ]; do case "$1" in -o | -l | -p) shift 2 ;; -*) shift ;; *) break ;; esac; done
+shift
+command=$*
 cd "$FAKE_HOST_HOME"
+export HOME=$FAKE_HOST_HOME SSH_CONNECTION="10.0.0.2 5000 10.0.0.9 22"
+[ "${FAKE_SSH_DOWN:-}" != 1 ] || exit 255
+case "$command" in *no-pid*) [ "${FAKE_SSH_STOP_DOWN:-}" != 1 ] || exit 255 ;; esac
 if [ "${FAKE_SSH_DROP:-}" = 1 ] && [ ! -e "$FAKE_SSH_STATE" ]; then
   : >"$FAKE_SSH_STATE"
-  HOME=$FAKE_HOST_HOME SSH_CONNECTION="10.0.0.2 5000 10.0.0.9 22" bash -c "$command" >/dev/null 2>&1
+  bash -c "$command" >/dev/null 2>&1
   exit 255
 fi
-HOME=$FAKE_HOST_HOME SSH_CONNECTION="10.0.0.2 5000 10.0.0.9 22" exec bash -c "$command"
+case "$command" in
+  *reap_job*)
+    if [ "${FAKE_SSH_JOB_DROPS:-}" = 1 ]; then
+      bash -c "$command" </dev/null >/dev/null 2>&1 &
+      sleep 1
+      exit 255
+    fi ;;
+esac
+exec bash -c "$command"
 SSH
-chmod +x "$scratch/fake-bin/ssh"
+printf '#!/bin/sh\nexit 1\n' >"$scratch/fake-bin/watchman"
+chmod +x "$scratch/fake-bin/ssh" "$scratch/fake-bin/watchman"
 # Runs wh alpha -- true from the repository and compares the last line of its stderr and its exit code.
 expect_run() {
   local label=$1 want=$2 want_exit=$3 code=0
@@ -253,6 +272,105 @@ rm -rf "$lock"
 expect_run "a run whose connection drops after the host took its lock frees the lock" \
   "mirror.sh run: BLOCKED: could not lock and refresh alpha:~/work/$name" 3 env FAKE_SSH_DROP=1
 [ ! -e "$lock" ] || fail "a run whose connection dropped after the host took its lock left it: $(cat "$lock/owner")"
+
+# A run's way out, as the run log, wh and wh stop tell it. Each job writes its pid to job.pid in the copy.
+runs=$laptop/.local/state/workhorse/runs.jsonl
+job_pid=$host_home/work/$name/job.pid
+# Starts wh alpha -- <command> in the background, with the stand-in modes set before it ($1, as env
+# arguments), and leaves its pid, which is its mirror.sh's, in run_pid.
+start_run() {
+  local modes=$1
+  shift
+  rm -f "$job_pid"
+  # shellcheck disable=SC2086 # one mode a word
+  (cd "$scratch/repo" && exec env "HOME=$laptop" "WORKHORSES_CONFIG_DIR=$scratch/config" "FAKE_HOST_HOME=$host_home" \
+    "FAKE_SSH_STATE=$scratch/ssh-state" "PATH=$scratch/fake-bin:$PATH" $modes "$BASH" "$here/../bin/wh" alpha -- "$@") \
+    >/dev/null 2>"$scratch/err" &
+  run_pid=$!
+  for _ in $(seq 100); do [ ! -s "$job_pid" ] || return 0; sleep 0.2; done
+  fail "the job never started: $(cat "$scratch/err")"
+}
+# The end line of the run whose pid is $1, without its id, time and event.
+end_of() {
+  local id
+  id=$(jq -r --argjson pid "$1" 'select(.event == "start" and .pid == $pid) | .id' "$runs" | tail -n 1)
+  jq -c --arg id "$id" 'select(.event == "end" and .id == $id) | del(.id, .at, .event)' "$runs"
+}
+wh_stop() {
+  HOME=$laptop WORKHORSES_CONFIG_DIR=$scratch/config FAKE_HOST_HOME=$host_home PATH=$scratch/fake-bin:$PATH \
+    "$BASH" "$here/../bin/wh" stop "$@"
+}
+
+start_run "" sh -c 'echo $$ >job.pid; exec sleep 30'
+code=0
+out=$(wh_stop "$run_pid" 2>&1) || code=$?
+[ "$code" = 0 ] && [ "$out" = "wh stop: stopped run $run_pid on alpha: sh -c echo \$\$ >job.pid; exec sleep 30" ] ||
+  fail "wh stop of a run it stopped on the host: exit $code: $out"
+wait "$run_pid" 2>/dev/null || true
+[ "$(end_of "$run_pid")" = '{"exit":143,"reason":"stopped"}' ] || fail "a run stopped on the host logged its end as '$(end_of "$run_pid")'"
+! kill -0 "$(cat "$job_pid")" 2>/dev/null || fail "wh stop said stopped while the job runs on"
+echo "ok   wh stop says stopped and exits 0 when the job stopped on the host"
+
+start_run FAKE_SSH_STOP_DOWN=1 sh -c 'echo $$ >job.pid; exec sleep 30'
+code=0
+out=$(wh_stop "$run_pid" 2>&1) || code=$?
+[ "$code" = 1 ] && [ "$out" = "wh stop: run $run_pid ended here, but could not confirm that its job stopped on alpha; it may still be running there: sh -c echo \$\$ >job.pid; exec sleep 30" ] ||
+  fail "wh stop of a run whose host did not answer the stop: exit $code: $out"
+wait "$run_pid" 2>/dev/null || true
+[ "$(end_of "$run_pid")" = '{"exit":143,"reason":"stop-unconfirmed"}' ] ||
+  fail "a run whose stop the host did not answer logged its end as '$(end_of "$run_pid")'"
+[ "$(tail -n 1 "$scratch/err")" = "mirror.sh run: could not reach alpha to stop the job; it may still be running in ~/work/$name" ] ||
+  fail "a run whose stop the host did not answer said: $(cat "$scratch/err")"
+echo "ok   wh stop says the job may still be running and exits 1 when the host did not confirm the stop, and the end line says so"
+
+start_run FAKE_SSH_JOB_DROPS=1 sh -c 'echo $$ >job.pid; exec sleep 30'
+code=0
+wait "$run_pid" || code=$?
+[ "$code" = 255 ] && [ "$(end_of "$run_pid")" = '{"exit":255,"reason":"lost-stopped"}' ] ||
+  fail "a run whose connection dropped while the host answered the stop: exit $code, end '$(end_of "$run_pid")': $(cat "$scratch/err")"
+sleep 0.5
+! kill -0 "$(cat "$job_pid")" 2>/dev/null || fail "a run whose connection dropped left its job running"
+[ "$(tail -n 2 "$scratch/err")" = "mirror.sh run: stopped the job on alpha
+mirror.sh run: the connection to alpha dropped while the job ran, so the run ends with ssh's exit 255" ] ||
+  fail "a run whose connection dropped said: $(cat "$scratch/err")"
+echo "ok   a run whose connection drops stops its job on the host, and its end says the connection was lost"
+
+start_run "FAKE_SSH_JOB_DROPS=1 FAKE_SSH_STOP_DOWN=1" sh -c 'echo $$ >job.pid; exec sleep 30'
+code=0
+wait "$run_pid" || code=$?
+[ "$code" = 255 ] && [ "$(end_of "$run_pid")" = '{"exit":255,"reason":"lost"}' ] ||
+  fail "a run whose connection dropped and whose host did not answer the stop: exit $code, end '$(end_of "$run_pid")'"
+kill -0 "$(cat "$job_pid")" 2>/dev/null || fail "the stand-in's job did not run on after the connection dropped"
+[ "$(tail -n 2 "$scratch/err")" = "mirror.sh run: could not reach alpha to stop the job; it may still be running in ~/work/$name
+mirror.sh run: the connection to alpha dropped while the job ran, so the run ends with ssh's exit 255" ] ||
+  fail "a run whose connection dropped and whose stop failed said: $(cat "$scratch/err")"
+kill -s TERM "$(cat "$host_home/work/$name.lock/pid")"
+for _ in $(seq 50); do [ -e "$host_home/work/$name.lock" ] || break; sleep 0.2; done
+echo "ok   a run whose connection drops and whose host does not answer the stop ends as lost: the job may still be running"
+
+start_run "" sh -c 'echo $$ >job.pid; exit 255'
+code=0
+wait "$run_pid" || code=$?
+[ "$code" = 255 ] && [ "$(end_of "$run_pid")" = '{"exit":255}' ] ||
+  fail "a job that exits 255 itself: exit $code, end '$(end_of "$run_pid")'"
+! grep -q 'stopped the job\|connection to alpha' "$scratch/err" || fail "a job that exits 255 itself read as a lost connection: $(cat "$scratch/err")"
+echo "ok   a job's own exit 255 comes back as it is"
+
+# With no host free, the run is BLOCKED before it starts: its start line and its end line reach the run
+# log together, and it is never a run going.
+code=0
+(cd "$scratch/repo" && HOME=$laptop WORKHORSES_CONFIG_DIR=$scratch/config FAKE_HOST_HOME=$host_home FAKE_SSH_DOWN=1 \
+  PATH=$scratch/fake-bin:$PATH "$BASH" "$here/../bin/wh" -- make test) >/dev/null 2>"$scratch/err" || code=$?
+[ "$code" = 3 ] && [ "$(cat "$scratch/err")" = "mirror.sh run: BLOCKED: no workhorse is free:
+alpha: unreachable" ] || fail "a run with no host free: exit $code: $(cat "$scratch/err")"
+got=$(tail -n 2 "$runs" | jq -c --arg repo "$repo" 'del(.id, .at, .pid, .session) | if .dir == $repo then .dir = "REPO" else . end')
+[ "$got" = '{"event":"start","host":"auto","dir":"REPO","sub":"","command":"make test"}
+{"event":"end","exit":3,"reason":"no workhorse is free:"}' ] || fail "a run with no host free logged:
+$got"
+[ "$(tail -n 2 "$runs" | jq -r .id | sort -u | wc -l | tr -d ' ')" = 1 ] || fail "a run with no host free logged two ids"
+[ "$(HOME=$laptop WORKHORSES_CONFIG_DIR=$scratch/config "$BASH" "$here/../bin/wh" ps)" = "no wh runs going" ] ||
+  fail "wh ps lists a run that never started"
+echo "ok   a run with no host free logs its start and its BLOCKED end, and wh ps never lists it"
 
 # Runs bin/wh from a folder inside this repository with an empty config folder, so it stops at the
 # missing hosts file at the latest and never reaches a host. Compares stderr and the exit code.

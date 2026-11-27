@@ -70,6 +70,8 @@ function world(on: On) {
   const state = {
     log: '',
     live: new Set<number>(),
+    // The command ps shows for a live pid, when it is not a mirror.sh run.
+    commands: new Map<number, string>(),
     toasts: [] as string[],
     status: undefined as string | undefined,
     whCalls: [] as string[][],
@@ -99,7 +101,10 @@ function world(on: On) {
       }
     }
     const asked = (e.argv[e.argv.length - 1] ?? '').split(',').map(Number)
-    const stdout = asked.filter(pid => state.live.has(pid)).map(pid => `${pid} /bin/bash mirror.sh run gamma\n`).join('')
+    const stdout = asked
+      .filter(pid => state.live.has(pid))
+      .map(pid => `${pid} ${state.commands.get(pid) ?? '/bin/bash mirror.sh run gamma'}\n`)
+      .join('')
     return {
       value: { stdout, stderr: '', exitCode: stdout === '' ? 1 : 0, isStdoutTruncated: false, isStderrTruncated: false },
     }
@@ -397,4 +402,39 @@ test("a run's Stop button runs wh stop for that run, and a stop that fails says 
   await band.unmount()
   expect(state.whCalls).toEqual([['stop', '4262'], ['stop', '4261']])
   expect(state.toasts).toEqual(['wh stop: no wh run going has the number 4261; wh ps lists the runs going'])
+})
+
+test('a run whose pid now belongs to another wh command, such as wh hosts, is dropped as gone', async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  const state = world(on)
+  state.log = `${start('reused', 4270, 990)}\n`
+  state.live.add(4270)
+
+  await $.session.start({ cwd: '/repo/demo', surface: 'terminal', isInteractive: true })
+  expect(await badgeNow($)).toBe('wh ⇄ gamma 0:10')
+
+  state.commands.set(4270, '/bin/bash /plugin/scripts/mirror.sh hosts --json')
+  await clock.advance(20_000)
+  await clock.advance(20_000)
+
+  expect(state.toasts).toEqual(['wh gamma: sleep 300 (demo) stopped without reporting how it ended'])
+  expect(await badgeNow($)).toBe(undefined)
+})
+
+test('a quick run whose stop the host did not confirm, or whose connection dropped, ends with a toast that says so', async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  const state = world(on)
+  for (const pid of [4271, 4272, 4273, 4274]) state.live.add(pid)
+  await $.session.start({ cwd: '/repo/demo', surface: 'terminal', isInteractive: true })
+
+  state.log = [start('a', 4271, 998), start('b', 4272, 998), start('c', 4273, 998), start('d', 4274, 998)].join('\n') + '\n'
+  await clock.advance(1_000)
+  state.log += [end('a', 1003, 143, 'stop-unconfirmed'), end('b', 1003, 255, 'lost'), end('c', 1003, 255, 'lost-stopped'), end('d', 1003, 143, 'stopped')].join('\n') + '\n'
+  await clock.advance(1_000)
+
+  expect(state.toasts).toEqual([
+    'wh gamma: sleep 300 (demo) ended after 5s, stopped here, but the job may still be running on the host',
+    'wh gamma: sleep 300 (demo) ended after 5s, connection lost, and the job may still be running on the host',
+    'wh gamma: sleep 300 (demo) ended after 5s, connection lost, so wh stopped the job on the host',
+  ])
 })

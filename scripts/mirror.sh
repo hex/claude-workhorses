@@ -93,27 +93,49 @@ run_id="" run_ended=0 end_reason=""
 # copy and this run's line in its lock's owner file, and the ssh that runs the job.
 phase="" run_host="" run_target="" run_work="" run_owner="" job_ssh=""
 
-log_start() {
+# Prints a run's start line and sets run_id.
+start_line() {
   local host=$1 dir=$2 sub=$3 session=""
   shift 3
   run_id="$(hostname -s)-$$-$(date +%s)"
   [[ ${CLAUDE_CODE_SESSION_ID:-} =~ ^[A-Za-z0-9-]{1,64}$ ]] && session=$CLAUDE_CODE_SESSION_ID
-  mkdir -p "$(dirname "$run_log")"
   jq -nc --arg id "$run_id" --argjson at "$(date +%s)" --arg host "$host" --arg dir "$dir" --arg sub "$sub" \
     --arg command "$*" --argjson pid "$$" --arg session "$session" \
     '{event: "start", id: $id, at: $at, host: $host, dir: $dir, sub: $sub, command: $command, pid: $pid}
-      + (if $session == "" then {} else {session: $session} end)' >>"$run_log"
+      + (if $session == "" then {} else {session: $session} end)'
+}
+
+log_start() {
+  mkdir -p "$(dirname "$run_log")"
+  start_line "$@" >>"$run_log"
 }
 
 log_synced() {
   jq -nc --arg id "$run_id" --argjson at "$(date +%s)" '{event: "synced", id: $id, at: $at}' >>"$run_log"
 }
 
-log_end() {
+# Prints the run's end line, exit $1 and end_reason, once: later calls print nothing.
+end_line() {
   [ -n "$run_id" ] && [ "$run_ended" = 0 ] || return 0
   run_ended=1
   jq -nc --arg id "$run_id" --argjson at "$(date +%s)" --argjson exit "$1" --arg reason "$end_reason" \
-    '{event: "end", id: $id, at: $at, exit: $exit} + (if $reason == "" then {} else {reason: $reason} end)' >>"$run_log"
+    '{event: "end", id: $id, at: $at, exit: $exit} + (if $reason == "" then {} else {reason: $reason} end)'
+}
+
+log_end() {
+  end_line "$1" >>"$run_log"
+}
+
+# BLOCKED before the run's start line was written (no workhorse free, say): the start line and its end
+# line go to the run log in one write, so the mod still toasts the end and no reader ever sees the run
+# going. Takes the host, the folder and subfolder, the message, then the command.
+blocked_unstarted() {
+  local host=$1 dir=$2 sub=$3 message=$4
+  shift 4
+  end_reason=$(head -n 1 <<<"$message")
+  mkdir -p "$(dirname "$run_log")"
+  { start_line "$host" "$dir" "$sub" "$@"; end_line 3; } >>"$run_log"
+  blocked "$message"
 }
 
 # Turns host $1's answer to pick_host's probe, from an ssh that exited $2, into one probe line for
@@ -243,9 +265,9 @@ probe_hosts() {
 
 # Asks every workhorse at once, for at most 2 seconds, for its load, its physical core count, its runs
 # going and whether it holds the copy $1 (a path under ~), lets choose_host pick, and names the choice
-# on stderr.
+# on stderr. When none is free, prints each host's reason instead and fails.
 pick_host() {
-  local work=$1 answers host answer load cores runs copy probes="" chosen reasons
+  local work=$1 answers host answer load cores runs copy probes="" chosen state why
   answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-pick.XXXX")
   probe_hosts 2 "$load_and_cores; $count_runs; $(copy_probe "$work")" "$answers"
   for host in "${all_hosts[@]}"; do
@@ -259,9 +281,8 @@ pick_host() {
     echo "mirror.sh run: passing over $host, whose lock on this copy is stale ($why); remove it with: ssh $(ssh_target "$host") 'rm -r ~/$work.lock'" >&2
   done <<<"$probes"
   if ! chosen=$(choose_host <<<"${probes%$'\n'}" 2>/dev/null); then
-    reasons=$(choose_host <<<"${probes%$'\n'}" 2>&1 >/dev/null || true)
-    blocked "no workhorse is free:
-$reasons"
+    choose_host <<<"${probes%$'\n'}" 2>&1 >/dev/null || true
+    return 1
   fi
   read -r _ _ load cores runs copy < <(grep "^$chosen " <<<"$probes")
   if [ "$copy" = copy ]; then copy="it holds the copy"; else copy="first copy there"; fi
@@ -607,14 +628,17 @@ run() {
 
   # The copy is of the whole repository; the job runs in the subfolder it was started from.
   git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
-    blocked "$dir is not inside a git work tree, so its files under ignored names cannot be checked"
+    blocked_unstarted "$host" "$dir" "" "$dir is not inside a git work tree, so its files under ignored names cannot be checked" "$@"
   sub=$(git -C "$dir" rev-parse --show-prefix)
   dir=$(git -C "$dir" rev-parse --show-toplevel)
   # A linked worktree's main checkout holds nearly the same files: its copy seeds a first copy.
   main=$(dirname "$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)")
   [ "$main" = "$dir" ] || seed=$(work_name "$main")
   work=$(work_name "$dir")
-  [ "$host" != auto ] || host=$(pick_host "$work")
+  if [ "$host" = auto ] && ! host=$(pick_host "$work"); then
+    blocked_unstarted auto "$dir" "${sub%/}" "no workhorse is free:
+$host" "$@"
+  fi
   target=$(ssh_target "$host")
   run_host=$host run_target=$target run_work=$work run_owner="$(hostname -s) pid $$ since $(date '+%F %T')"
 
@@ -720,6 +744,16 @@ $tracked"
   job_ssh=$!
   local status=0
   wait "$job_ssh" || status=$?
+  # ssh exits 255 when the connection drops, which leaves a quiet job running on the host; a job of
+  # its own exit 255 has freed its lock by then, which stop_job answers as gone.
+  if [ "$status" = 255 ]; then
+    if ! stop_job; then
+      end_reason=lost
+    elif [ "$job_stop" != gone ]; then
+      end_reason=lost-stopped
+    fi
+    [ "$job_stop" = gone ] || say "mirror.sh run: the connection to $host dropped while the job ran, so the run ends with ssh's exit 255"
+  fi
   return "$status"
 }
 
@@ -749,12 +783,14 @@ finish() {
 }
 
 # A signal stops the run and exits $1: wh stop sends SIGTERM, Ctrl-C SIGINT and a closed terminal
-# SIGHUP. Once the job runs, stop_job ends it on the host; before, the way out frees the lock.
+# SIGHUP. Once the job runs, stop_job ends it on the host; before, the way out frees the lock. The end
+# line says stopped only when the job is known not to run, and stop-unconfirmed when it may.
 on_signal() {
   trap '' TERM INT HUP PIPE
   end_reason=stopped
   if [ "$phase" = job ]; then
-    stop_job
+    stop_job || end_reason=stop-unconfirmed
+    [ "$job_stop" != gone ] || say "mirror.sh run: the job had already ended on $run_host"
   else
     say "mirror.sh run: stopped before the job started"
   fi
@@ -794,12 +830,14 @@ SCRIPT
 # process once its laptop side is gone. The job's ssh then gets 10 seconds to end, as a child the job
 # left holding its output, or a dead connection, can keep it open. When no job shell has written its
 # pid after 10 seconds, the ssh that starts the job never reached the host: once that ssh is ended no
-# job can start, so the lock goes too. Returns 0 when the job is known to have stopped or ended, and 1
-# when it may still be running: the host did not answer, or this run's lock there is stale.
+# job can start, so the lock goes too. Leaves stop_on_host's answer in job_stop (unreachable when the
+# host did not answer) and returns 0 when the job is known not to run: signalled, freed, or gone, which
+# means it had already ended and is left for the caller to word. Returns 1 when it may still be running.
+job_stop=""
 stop_job() {
-  local waited=0 said
-  said=$(remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 10 wait) || said=""
-  case "$said" in
+  local waited=0
+  job_stop=$(remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 10 wait) || job_stop=unreachable
+  case "$job_stop" in
     signalled | gone)
       while [ -n "$job_ssh" ] && kill -0 "$job_ssh" 2>/dev/null; do
         if [ $waited -ge 100 ]; then
@@ -809,29 +847,24 @@ stop_job() {
         fi
         sleep 0.1
         waited=$((waited + 1))
-      done
-      say "mirror.sh run: stopped the job on $run_host"
-      return 0 ;;
+      done ;;
+    "stale "*) ;;
+    *)
+      # shellcheck disable=SC2046 # one pid a word
+      kill -s TERM $(descendants $$) 2>/dev/null || true
+      job_stop=$(remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 1 free) || job_stop=unreachable ;;
+  esac
+  case "$job_stop" in
+    signalled) say "mirror.sh run: stopped the job on $run_host" ;;
+    gone) ;;
+    freed) say "mirror.sh run: the job never started on $run_host; its lock is freed" ;;
     "stale "*)
-      say "mirror.sh run: could not stop the job on $run_host: its lock there is stale (${said#stale }), so the job may still be running in ~/$run_work; remove the lock with: ssh $run_target 'rm -r ~/$run_work.lock'"
+      say "mirror.sh run: could not stop the job on $run_host: its lock there is stale (${job_stop#stale }), so the job may still be running in ~/$run_work; remove the lock with: ssh $run_target 'rm -r ~/$run_work.lock'"
+      return 1 ;;
+    *)
+      say "mirror.sh run: could not reach $run_host to stop the job; it may still be running in ~/$run_work"
       return 1 ;;
   esac
-  # shellcheck disable=SC2046 # one pid a word
-  kill -s TERM $(descendants $$) 2>/dev/null || true
-  said=$(remote "$run_target" /bin/sh -c "$stop_on_host" _ "$run_work.lock" "$run_owner" 1 free) || said=""
-  case "$said" in
-    freed | gone)
-      say "mirror.sh run: the job never started on $run_host; its lock is freed"
-      return 0 ;;
-    signalled)
-      say "mirror.sh run: stopped the job on $run_host"
-      return 0 ;;
-    "stale "*)
-      say "mirror.sh run: could not stop the job on $run_host: its lock there is stale (${said#stale }), so the job may still be running in ~/$run_work; remove the lock with: ssh $run_target 'rm -r ~/$run_work.lock'"
-      return 1 ;;
-  esac
-  say "mirror.sh run: could not reach $run_host to stop the job; it may still be running in ~/$run_work"
-  return 1
 }
 
 # The run log's runs still going: a start line with no end line whose mirror.sh still lives. Prints one
@@ -964,7 +997,8 @@ descendants() {
 }
 
 # Stops the run whose pid here is $1, as Ctrl-C in its terminal would: SIGTERM to its mirror.sh, whose
-# traps end the job on the host and free the lock. Waits up to 30 s for the run to end.
+# traps end the job on the host and free the lock. Waits up to 30 s for the run to end. Exits 0 when the
+# job stopped on the host, or the run had already ended; 1 when its job may still be running there.
 stop_run() {
   [ $# = 1 ] && [[ $1 =~ ^[1-9][0-9]{0,9}$ ]] || { echo "usage: wh stop <run>  (wh ps lists the runs going)" >&2; exit 2; }
   local pid=$1 start waited=0
@@ -983,7 +1017,20 @@ stop_run() {
     sleep 0.1
     waited=$((waited + 1))
   done
-  echo "wh stop: stopped run $pid on $(jq -r .host <<<"$start"): $(jq -r .command <<<"$start")"
+  # The run's end line says whether its job stopped on the host: wh stop has no other word from the run.
+  local host command end
+  host=$(jq -r .host <<<"$start") command=$(jq -r .command <<<"$start")
+  end=$(jq -c --arg id "$(jq -r .id <<<"$start")" 'select(.event == "end" and .id == $id)' "$run_log" | tail -n 1)
+  case "$(jq -r 'if .reason == null then "exit \(.exit)" else .reason end' <<<"$end")" in
+    stopped) echo "wh stop: stopped run $pid on $host: $command" ;;
+    "")
+      echo "wh stop: run $pid ended without logging how; its job may still be running on $host: $command" >&2
+      exit 1 ;;
+    stop-unconfirmed | lost)
+      echo "wh stop: run $pid ended here, but could not confirm that its job stopped on $host; it may still be running there: $command" >&2
+      exit 1 ;;
+    *) echo "wh stop: run $pid on $host had already ended ($(jq -r 'if .reason == null then "exit \(.exit)" else "exit \(.exit): \(.reason)" end' <<<"$end")): $command" ;;
+  esac
 }
 
 case "${1:-}" in

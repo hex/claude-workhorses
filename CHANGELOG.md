@@ -34,6 +34,17 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 - A run no longer leaves its lock on the host when the connection drops after the host took the lock:
   the host's side frees it when its answer meets the closed connection, under a Mac's bash 3.2 too, and
   the laptop frees it on the way out. A job's end frees the lock only while its run still owns it.
+- `wh stop` says stopped and exits 0 only when the job stopped on the host, or the run had already
+  ended. When the host did not answer the stop, or the run's lock there is stale, it says the job may
+  still be running and exits 1, and the run log's end line says `stop-unconfirmed`, not `stopped`.
+- A run whose connection drops while its job runs (ssh's exit 255) stops the job on the host before it
+  ends; its end line says `lost-stopped`, or `lost` when the host did not answer and the job may still
+  be running. A command's own exit 255 comes back as before.
+- A run `BLOCKED` before it starts, as when no workhorse is free, reaches the run log as a start line and
+  its end line together, so the session's toast reports it; `wh ps`, `wh hosts` and the Stop button
+  never see it as a run going.
+- The mod keeps a run going only while its pid belongs to a `mirror.sh run`, as `wh ps` does, and toasts
+  a run whose stop the host did not confirm or whose connection dropped.
 - A sync no longer ends with exit 0 while a tool it installs does not run. A recipe's step fails when its
   probe still reports the tool `missing` after the install, and `sync.sh status` names that step.
 - `rustup` installs stable again when an earlier install cut short left a `rustc` that does not run, and

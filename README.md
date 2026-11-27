@@ -152,8 +152,15 @@ started stop on the host, the copy's lock goes, and that run's `wh` exits 143. A
 it still copies leaves a partial copy, which the next run completes.
 
 `Ctrl-C` on a run's `wh`, or closing its terminal, stops the job on the host the same way, and `wh`
-exits 130 or 129. The run log records each of these as stopped. The band's Stop button runs
-`wh stop`.
+exits 130 or 129. The run log records each of these as `stopped` once the host confirms the job
+stopped, or as `stop-unconfirmed` when the host did not answer or this run's lock there is stale.
+`wh stop` reads that end: it exits 0 when the job stopped, or the run had already ended, and exits 1
+when the job may still be running on the host. The band's Stop button runs `wh stop`.
+
+When the connection to the host drops while the job runs, `wh` stops the job on the host before it
+exits 255, ssh's code for a dropped connection. The run log records `lost-stopped` when it stopped
+the job, and `lost` when the host did not answer, so the job may still be running. A command's own
+exit 255 comes back unchanged.
 
 ### Seeing every host
 
@@ -227,7 +234,9 @@ mod reads that log and shows the runs started from the session's folder:
   at most three, then a count of the rest. The time reads `copying 0:02` while the copy runs. Stop
   runs `wh stop` for that run; click it, or press ctrl+x tab to reach it and enter to press it. A
   stop that fails says why in a toast.
-- A run that took over 2 minutes, or ended `BLOCKED`, ends with a toast.
+- A run that took over 2 minutes, ended `BLOCKED` (no workhorse free included), or ended with its job
+  in doubt or stopped after a dropped connection (`stop-unconfirmed`, `lost`, `lost-stopped`) ends with
+  a toast.
 - `/workhorses` opens a pane with every host's load and the runs going on it, from `wh hosts --json`.
   A run this machine started shows the folder it started from and has a Stop button that runs
   `wh stop`. A run this Claude Code session started comes first, marked `this session`; the mark
