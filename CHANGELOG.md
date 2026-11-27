@@ -31,7 +31,9 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   and the pane list only the locks of runs going, so they leave a stale lock out. A lock is a run going
   while its process lives in the host's current boot, or for its first hour with no process
   yet. Any other lock is stale. A run refused by a stale lock ends `BLOCKED`, says why the lock is stale
-  and gives the `ssh ... 'rm -r ...'` command that removes it; `wh` never removes one itself. Host choice
+  and gives the `ssh ... 'rm -r ...'` command that removes it; `wh` never removes one itself. A lock that holds no pid
+  and is over an hour old can belong to a run still copying, so its message says so and asks for `wh ps` on
+  that run's machine before the `rm -r`. Host choice
   passes over a host whose lock on the copy is stale and names it the same way, and the refusal by a run
   going says whether that run's job runs or that run still copies.
 - What a host writes reaches this machine as plain text. A refusal, the run log and the session's toast

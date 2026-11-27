@@ -24,8 +24,9 @@ and say so. Lock ~/work/<repo>-<first 8 hex digits of SHA1 of the local absolute
 with mkdir before rsync -az --delete to the corresponding work directory. Record this
 machine, time and job in the lock's owner file, and the detached job's pid on the host in its pid
 file. An existing lock belongs to another run unless stale: its pid file names a dead
-process, or it has none and is over an hour old. Report a stale lock with its rm -r command;
-never remove it yourself.
+process. One with no pid file over an hour old may be a run still copying: report it, and
+count it stale only once the user says its run has ended. Report a stale lock with its rm -r
+command; never remove it yourself.
 Use wh's exclusions. Run detached with a time limit, write run.log and the exit code in
 run.status, and wait in the background. Release your lock at the end.
 

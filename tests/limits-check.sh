@@ -321,6 +321,11 @@ expect_run "a lock's owner reaches the refusal without control characters or cha
 [ "$(jq -r 'select(.event == "end") | .reason' "$laptop/.local/state/workhorse/runs.jsonl" | tail -n 1)" = \
   "alpha:~/work/$name is in use by another run still copying to it: $owner[2J lave" ] ||
   fail "the run log's end line carries the owner file as the host wrote it"
+# With no pid file past its first hour, the run that took the lock may still be copying to the host.
+echo "$owner" >"$lock/owner"
+touch -t 202001010000 "$lock"
+expect_run "a run refused by a lock with no pid over an hour old says its run may still be copying, and how to check before removing it" \
+  "mirror.sh run: BLOCKED: alpha:~/work/$name.lock is stale (it holds no pid and is over an hour old), left by $owner; its run may still be copying, so check that wh ps on that machine no longer lists it before you remove the lock with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'" 3 env
 rm -rf "$lock"
 expect_run "a run whose connection drops after the host took its lock frees the lock" \
   "mirror.sh run: BLOCKED: could not lock and refresh alpha:~/work/$name" 3 env FAKE_SSH_DROP=1
@@ -506,6 +511,15 @@ got=$(tail -n 2 "$runs" | jq -c --arg repo "$repo" 'del(.id, .at, .pid, .session
 {"event":"end","exit":3,"reason":"none of beta, gamma is free:"}' ] || fail "a list of hosts none of which is free logged:
 $got"
 echo "ok   with none of the listed hosts free, the run is BLOCKED with each one's reason, and logs its start and end"
+# Hosts whose lock on the copy is stale are passed over and named, with the command that removes the lock.
+printf '{ 0.10 1.00 1.00 }\n6\n0\nstale it holds no pid and is over an hour old\n' >"$scratch/probes/alpha@alpha.local"
+printf '{ 0.10 1.00 1.00 }\n6\n0\nstale its process 412 is gone\n' >"$scratch/probes/beta@beta.local"
+probe gamma 1.00
+wh_three -- true
+[ "$code" = 0 ] && [ "$(last_start_host)" = gamma ] && [ "$(head -n 2 "$scratch/err")" = "mirror.sh run: passing over alpha, whose lock on this copy is stale (it holds no pid and is over an hour old); its run may still be copying, so check that wh ps on the machine its owner file names (ssh alpha@alpha.local 'cat ~/work/$name.lock/owner') no longer lists it before you remove the lock with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'
+mirror.sh run: passing over beta, whose lock on this copy is stale (its process 412 is gone); remove it with: ssh beta@beta.local 'rm -r ~/work/$name.lock'" ] ||
+  fail "hosts whose lock is stale: exit $code, ran on '$(last_start_host)': $(cat "$scratch/err")"
+echo "ok   a host whose lock on the copy is stale is passed over with the command that removes it, after a check when its run may still be copying"
 for list in alpha,delta alpha, ,alpha alpha,,gamma; do
   wh_three "$list" -- true
   name=delta

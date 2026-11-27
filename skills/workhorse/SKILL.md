@@ -147,10 +147,14 @@ holding the worktree's branch and index. Lock files (`*.lock`) stay on this mach
 | 124 | The command ran past `--timeout`; `wh` stopped it and everything it started. |
 | 143, 130, 129 | `wh stop`, `Ctrl-C` or a closed terminal stopped the run, and the job with it, unless `wh` says the job may still be running: then the host did not confirm the stop. |
 | 255 | The connection to the host dropped while the job ran. `wh` stopped the job there, or says it may still be running. A command that exits 255 itself returns it with no such message. |
-| 3, with `BLOCKED` on stderr | The command did not run. The message says why: no host free or reachable, another run holds the lock, someone removed the lock this run took before its job started, the lock is stale (its run has ended; the message gives the command that removes it, which `wh` never runs itself), copying `.git` or the patch from this machine failed, git tracks files `wh` skips, or the repo's first copy on that host would send over 1 GB (`.git` and files together) through Tailscale (make it from a network that reaches the host without Tailscale, or name a host on this network). |
+| 3, with `BLOCKED` on stderr | The command did not run. The message says why: no host free or reachable, another run holds the lock, someone removed the lock this run took before its job started, the lock is stale (the message says why and gives the command that removes it, which `wh` never runs itself), copying `.git` or the patch from this machine failed, git tracks files `wh` skips, or the repo's first copy on that host would send over 1 GB (`.git` and files together) through Tailscale (make it from a network that reaches the host without Tailscale, or name a host on this network). |
 | 2 | With a usage or hosts-file message from `wh` on stderr: missing `--`, not inside a git repo, an unknown host, or a missing or bad hosts file. Without one, the command ran and exited 2 itself (`make` does when a build fails). |
 
-On 3, read the message and fix the cause. If no host is free or reachable, run the job locally and
+On 3, read the message and fix the cause. You may run a stale lock's `rm -r` command when the
+message says its process has ended, its pid file holds no process id, or the host restarted. When it
+says the lock holds no pid and is over an hour old, its run may still be copying: run the command
+only once `wh ps` on the machine its owner names no longer lists that run, and ask the user when
+that machine is not this one. If no host is free or reachable, run the job locally and
 tell the user. After a list of hosts, run it locally only when this machine qualifies for the job
 too; otherwise wait and retry.
 

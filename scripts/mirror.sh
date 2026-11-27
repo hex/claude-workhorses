@@ -164,6 +164,9 @@ plain() { jq -nr --arg text "$1" "$plain_jq"' $text | plain'; }
 # The reasons lock_state gives for a stale lock. A host's answer that names a stale lock is taken only
 # with one of these.
 stale_why='(the host has restarted since the lock was taken|its process [0-9]+ is gone|its pid file holds no process id|it holds no pid and is over an hour old)'
+# The one stale reason that does not mean the run has ended: a run copies before its job writes a pid, and
+# a first copy of a large repository can take over an hour. Every message that names it says so.
+no_pid_why='it holds no pid and is over an hour old'
 
 # Turns host $1's answer to pick_host's probe, from an ssh that exited $2, into one probe line for
 # choose_host. The answer's lines come joined by spaces: the load line, the physical core count, the
@@ -197,11 +200,11 @@ probe_answer() {
 # the one with the copy. Ties go to table order. Prints the host; when none is free, prints each host's
 # reason on stderr and fails.
 choose_host() {
-  awk '
+  awk -v no_pid_why="$no_pid_why" '
     $2 != "ok" { reasons[NR] = $1 ": " substr($0, length($1) + 2); next }
     !($3 < $4) { reasons[NR] = $1 ": load " $3 " of " $4 " cores"; next }
     $6 == "busy" { reasons[NR] = $1 ": another run holds its copy"; next }
-    $6 == "stale" { why = $0; sub(/^[^ ]+ [^ ]+ [^ ]+ [^ ]+ [^ ]+ [^ ]+ /, "", why); reasons[NR] = $1 ": its copy\047s lock is stale: " why; next }
+    $6 == "stale" { why = $0; sub(/^[^ ]+ [^ ]+ [^ ]+ [^ ]+ [^ ]+ [^ ]+ /, "", why); reasons[NR] = $1 ": its copy\047s lock is stale: " why (why == no_pid_why ? ", and its run may still be copying" : ""); next }
     {
       ratio = ($3 + $5) / $4
       rank = ($6 == "copy" && ratio < 0.5) ? 0 : 1
@@ -294,7 +297,7 @@ probe_hosts() {
 # going and whether it holds the copy $1 (a path under ~), lets choose_host pick, and names the choice
 # on stderr. When none is free, prints each host's reason instead and fails.
 pick_host() {
-  local work=$1 answers host answer load cores runs copy probes="" chosen state why
+  local work=$1 answers host answer load cores runs copy probes="" chosen state why target
   answers=$(mktemp -d "${TMPDIR:-/tmp}/wh-pick.XXXX")
   probe_hosts 2 "$load_and_cores; $count_runs; $(copy_probe "$work")" "$answers"
   for host in "${all_hosts[@]}"; do
@@ -305,7 +308,12 @@ pick_host() {
   # A stale lock bars the copy until someone removes it, so it is named whichever host runs the job.
   while read -r host state _ _ _ copy why; do
     [ "$state $copy" = "ok stale" ] || continue
-    echo "mirror.sh run: passing over $host, whose lock on this copy is stale ($why); remove it with: ssh $(ssh_target "$host") 'rm -r ~/$work.lock'" >&2
+    target=$(ssh_target "$host")
+    if [ "$why" = "$no_pid_why" ]; then
+      echo "mirror.sh run: passing over $host, whose lock on this copy is stale ($why); its run may still be copying, so check that wh ps on the machine its owner file names (ssh $target 'cat ~/$work.lock/owner') no longer lists it before you remove the lock with: ssh $target 'rm -r ~/$work.lock'" >&2
+    else
+      echo "mirror.sh run: passing over $host, whose lock on this copy is stale ($why); remove it with: ssh $target 'rm -r ~/$work.lock'" >&2
+    fi
   done <<<"$probes"
   if ! chosen=$(choose_host <<<"${probes%$'\n'}" 2>/dev/null); then
     choose_host <<<"${probes%$'\n'}" 2>&1 >/dev/null || true
@@ -712,6 +720,7 @@ $tracked"
     case "$held" in
       "locked running "*) blocked "$host:~/$work is in use by another run, its job running as pid ${held#locked running } there: $holder" ;;
       "locked preparing") blocked "$host:~/$work is in use by another run still copying to it: $holder" ;;
+      "locked stale $no_pid_why") blocked "$host:~/$work.lock is stale ($no_pid_why), left by $holder; its run may still be copying, so check that wh ps on that machine no longer lists it before you remove the lock with: ssh $target 'rm -r ~/$work.lock'" ;;
       "locked stale "*) blocked "$host:~/$work.lock is stale (${held#locked stale }), left by $holder; remove it with: ssh $target 'rm -r ~/$work.lock'" ;;
       *) blocked "could not lock and refresh $host:~/$work" ;;
     esac

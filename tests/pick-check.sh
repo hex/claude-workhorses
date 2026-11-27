@@ -6,7 +6,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd -P)
 # bash 3.2 cannot source a process substitution, so the function's text is evaluated.
 mirror=$here/../scripts/mirror.sh
-eval "$(sed -n '/^stale_why=/p; /^plain_jq=/,/;.$/p; /^plain() {/p; /^probe_answer() {$/,/^}$/p;/^choose_host() {$/,/^}$/p' "$mirror")"
+eval "$(sed -n '/^stale_why=/p; /^no_pid_why=/p; /^plain_jq=/,/;.$/p; /^plain() {/p; /^probe_answer() {$/,/^}$/p;/^choose_host() {$/,/^}$/p' "$mirror")"
 declare -F choose_host >/dev/null || { echo "FAIL: no choose_host function in $mirror" >&2; exit 1; }
 declare -F probe_answer >/dev/null || { echo "FAIL: no probe_answer function in $mirror" >&2; exit 1; }
 
@@ -106,11 +106,13 @@ expect "with none free, every host's reason is given" "" "gamma: load 7.00 of 6 
 beta: unexpected { 1.0 } six
 alpha: unreachable
 delta: another run holds its copy
-eta: its copy's lock is stale: the host has restarted since the lock was taken" 1 "gamma ok 7.00 6 0 copy
+eta: its copy's lock is stale: the host has restarted since the lock was taken
+theta: its copy's lock is stale: it holds no pid and is over an hour old, and its run may still be copying" 1 "gamma ok 7.00 6 0 copy
 beta unexpected { 1.0 } six
 alpha unreachable
 delta ok 0.10 6 1 busy
-eta ok 0.10 6 0 stale the host has restarted since the lock was taken"
+eta ok 0.10 6 0 stale the host has restarted since the lock was taken
+theta ok 0.10 6 0 stale it holds no pid and is over an hour old"
 
 # The host side, run in a scratch home under the shells hosts have: the login shell (bash, or zsh on a
 # Mac) runs the probe. A lock is a run going while its pid file names a live process and its boot file,

@@ -181,7 +181,7 @@ eris   unreachable
 
 A run is a lock in the host's `~/work` whose job runs in a live process, or one under an hour old
 that is still copying. A stale lock is not a run: its process has ended, the host has restarted since
-the run took it, or it has no process and is over an hour old. A run this machine started leads with the number `wh stop` takes and the folder it
+the run took it, or it has no process and is over an hour old, though a run still making a large first copy can hold such a lock. A run this machine started leads with the number `wh stop` takes and the folder it
 started from. A run from another machine names that machine and its pid there. A host that does not
 answer within 5 seconds is unreachable, and a host whose answer is not a probe's shows that answer.
 `wh hosts --json` prints one JSON object per host instead, which the [workhorses pane](#the-badge-and-band)
@@ -488,7 +488,7 @@ A Windows PC serves through WSL2, with Ubuntu say:
 | `BLOCKED: no workhorse is free`, or `none of alpha, beta is free` after a list of hosts | The message lists each host's reason. Every host, or every host listed, is at its core count or unreachable; run the job locally. After a list, run it locally only when this machine can run the job too; otherwise wait and retry. |
 | `... is in use by another run ...` | Another run holds that copy's lock: its job runs, or that run still copies. The owner it names, `<machine> pid <number>`, gives the number `wh stop <number>` takes on that machine. |
 | `BLOCKED: the job did not start: ...` | Someone removed the lock this run took on the host's copy while the run still copied, and the job did not run. When the message names another run's lock, that run took the copy since; `wh` leaves that lock alone. Run the job again. |
-| `... .lock is stale (...)` | The run that took the lock has ended: its process died, the host restarted, or it never started a job and the lock is over an hour old. `wh` never removes a stale lock itself; run the `ssh ... 'rm -r ...'` command the message gives. |
+| `... .lock is stale (...)` | The message says why. When the lock's process has ended, its pid file holds no process id, or the host restarted, the run that took it has ended: run the `ssh ... 'rm -r ...'` command the message gives. When the lock holds no pid and is over an hour old, its run may still be copying: run the command only once `wh ps` on the machine its owner names no longer lists that run. `wh` never removes a stale lock itself. |
 | A run must stop | `wh ps` lists the runs going; `wh stop <run>` ends one, its job on the host included. |
 | Every run says `full walk:` | Watchman is not installed, or it restarted since the last run. |
 | `git` fails on a new host | macOS's `git` stays a stub until the Command Line Tools arrive. Add the `command-line-tools` line. On Linux, install `git` (`apt git @os=linux`). |
