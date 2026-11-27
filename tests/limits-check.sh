@@ -178,7 +178,11 @@ echo "ok   a job does not start under another run's lock or with none: it exits 
 # prepare takes the lock, then its answer meets a connection the laptop has closed. It frees the lock on
 # the way out, under the Mac's bash 3.2 as under bash 5.
 eval "$(sed -n "/^lock_state=\$(cat <<'SCRIPT'\$/,/^)\$/p; /^prepare_work_copy=/,/^)\$/p; /^stop_on_host=/,/^)\$/p" "$mirror")"
-[ -n "${prepare_work_copy:-}" ] && [ -n "${stop_on_host:-}" ] || fail "no prepare_work_copy or stop_on_host script in $mirror"
+# The sed script sits in its own single-quoted variable: bash 3.2 misreads the quotes in it inside "$(...)".
+extract='/^take_refusal=/,/'"'"'$/p'
+eval "$(sed -n "$extract" "$mirror")"
+[ -n "${prepare_work_copy:-}" ] && [ -n "${stop_on_host:-}" ] && [ -n "${take_refusal:-}" ] ||
+  fail "no prepare_work_copy, stop_on_host or take_refusal script in $mirror"
 for shell in /bin/bash "$BASH"; do
   rm -rf "$scratch/work/fresh" "$scratch/work/fresh.lock"
   ( HOME=$scratch SSH_CONNECTION="10.0.0.2 5000 10.0.0.9 22" "$shell" -c "$prepare_work_copy" _ work/fresh "$owner" "" "" 2>/dev/null ) | true || :
@@ -220,6 +224,19 @@ for shell in /bin/sh dash; do
   got=$(stop 1 wait)
   [ "$got" = gone ] || fail "$shell: stop_on_host with no lock said '$got'"
   echo "ok   $shell: stop_on_host signals a run going in this boot, and names a lock from before a restart or with its process gone stale"
+  # take_refusal hands this run its own refusal, once, and leaves another run's.
+  refused=$scratch/work/stop.refused
+  printf '%s\n%s\n' "$run_owner" "$successor" >"$refused"
+  got=$(HOME=$scratch "$shell" -c "$take_refusal" _ work/stop "$run_owner")
+  [ "$got" = "refused
+$successor" ] && [ ! -e "$refused" ] || fail "$shell: take_refusal of this run's refusal said '$got'"
+  got=$(HOME=$scratch "$shell" -c "$take_refusal" _ work/stop "$run_owner")
+  [ "$got" = ran ] || fail "$shell: take_refusal with no refusal said '$got'"
+  printf '%s\n' "other pid 9 since 2026-11-27 09:00:00" >"$refused"
+  got=$(HOME=$scratch "$shell" -c "$take_refusal" _ work/stop "$run_owner")
+  [ "$got" = ran ] && [ -e "$refused" ] || fail "$shell: take_refusal of another run's refusal said '$got'"
+  rm -f "$refused"
+  echo "ok   $shell: take_refusal takes this run's refusal once, and leaves another run's"
 done
 
 # A run against a host whose copy is locked, with a stand-in ssh that runs the host's side in a scratch
@@ -525,7 +542,7 @@ printf '{ 0.10 1.00 1.00 }\n6\n0\nstale it holds no pid and is over an hour old\
 printf '{ 0.10 1.00 1.00 }\n6\n0\nstale its process 412 is gone\n' >"$scratch/probes/beta@beta.local"
 probe gamma 1.00
 wh_three -- true
-[ "$code" = 0 ] && [ "$(last_start_host)" = gamma ] && [ "$(head -n 2 "$scratch/err")" = "mirror.sh run: passing over alpha, whose lock on this copy is stale (it holds no pid and is over an hour old); its run may still be copying, so check that wh ps on the machine its owner file names (ssh alpha@alpha.local 'cat ~/work/$name.lock/owner') no longer lists it before you remove the lock with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'
+[ "$code" = 0 ] && [ "$(last_start_host)" = gamma ] && [ "$(head -n 2 "$scratch/err")" = "mirror.sh run: passing over alpha, whose lock on this copy is stale (it holds no pid and is over an hour old); its run may still be copying, so check that wh ps on the machine its owner file names (ssh alpha@alpha.local 'cat -v ~/work/$name.lock/owner') no longer lists it before you remove the lock with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'
 mirror.sh run: passing over beta, whose lock on this copy is stale (its process 412 is gone); remove it with: ssh beta@beta.local 'rm -r ~/work/$name.lock'" ] ||
   fail "hosts whose lock is stale: exit $code, ran on '$(last_start_host)': $(cat "$scratch/err")"
 echo "ok   a host whose lock on the copy is stale is passed over with the command that removes it, after a check when its run may still be copying"

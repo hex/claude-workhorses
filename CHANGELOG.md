@@ -36,8 +36,8 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   that run's machine before the `rm -r`. Host choice
   passes over a host whose lock on the copy is stale and names it the same way, and the refusal by a run
   going says whether that run's job runs or that run still copies.
-- What a host writes reaches this machine as plain text. A refusal, the run log and the session's toast
-  leave out the control characters and the characters that reorder or hide text in a lock's owner file,
+- A lock's owner file and a host's answers about its locks reach this machine as plain text. A refusal,
+  the run log and the session's toast leave out the control characters and the characters that reorder or hide text in a lock's owner file,
   as `wh hosts` does. A host's answer that names a lock stale counts only with a reason `wh` itself gives.
 - `wh stop` no longer signals a process whose pid a stale lock names, such as a pid used again after
   the host restarted.

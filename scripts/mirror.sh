@@ -311,7 +311,7 @@ pick_host() {
     [ "$state $copy" = "ok stale" ] || continue
     target=$(ssh_target "$host")
     if [ "$why" = "$no_pid_why" ]; then
-      echo "mirror.sh run: passing over $host, whose lock on this copy is stale ($why); its run may still be copying, so check that wh ps on the machine its owner file names (ssh $target 'cat ~/$work.lock/owner') no longer lists it before you remove the lock with: ssh $target 'rm -r ~/$work.lock'" >&2
+      echo "mirror.sh run: passing over $host, whose lock on this copy is stale ($why); its run may still be copying, so check that wh ps on the machine its owner file names (ssh $target 'cat -v ~/$work.lock/owner') no longer lists it before you remove the lock with: ssh $target 'rm -r ~/$work.lock'" >&2
     else
       echo "mirror.sh run: passing over $host, whose lock on this copy is stale ($why); remove it with: ssh $target 'rm -r ~/$work.lock'" >&2
     fi
