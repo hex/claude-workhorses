@@ -237,6 +237,7 @@ name=$(printf 'repo-%s' "$(printf '%s' "$repo" | shasum | cut -c1-8)")
 # several, and runs them in the host's home. Its modes stand in for a network that fails:
 #   FAKE_SSH_DROP=1        the first command runs, then the connection drops (exit 255)
 #   FAKE_SSH_DOWN=1        the host never answers
+#   FAKE_SSH_ONCE=1        the first command runs and answers, then the host never answers again
 #   FAKE_SSH_STOP_DOWN=1   the host never answers wh's stop (the script that can answer no-pid)
 #   FAKE_SSH_JOB_DROPS=1   the job's connection drops a second after it starts, and the job runs on
 #   FAKE_LOCK_BEFORE_JOB=taken|gone  just before the job starts, another run takes the lock over, or it is removed
@@ -252,6 +253,10 @@ command=$*
 cd "$FAKE_HOST_HOME"
 export HOME=$FAKE_HOST_HOME SSH_CONNECTION="10.0.0.2 5000 10.0.0.9 22"
 [ "${FAKE_SSH_DOWN:-}" != 1 ] || exit 255
+if [ "${FAKE_SSH_ONCE:-}" = 1 ]; then
+  [ ! -e "$FAKE_SSH_STATE" ] || exit 255
+  : >"$FAKE_SSH_STATE"
+fi
 case "$command" in
   *hw.physicalcpu*)
     if [ -n "${FAKE_PROBES:-}" ]; then
@@ -311,6 +316,10 @@ echo $$ >"$lock/pid"
 echo "$boot" >"$lock/boot"
 expect_run "a run refused by a run going says that run's job runs, with its pid" \
   "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run, its job running as pid $$ there: $owner" 3 env
+# A run refused by another run's lock took none, so it has none to free, whether or not the host answers.
+expect_run "a run refused by another run's lock says only that, when the host no longer answers" \
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run, its job running as pid $$ there: $owner" 3 env FAKE_SSH_ONCE=1
+[ "$(wc -l <"$scratch/err" | tr -d ' ')" = 1 ] || fail "a run refused by another run's lock said more: $(cat "$scratch/err")"
 rm "$lock/pid"
 expect_run "a run refused by a run still copying says so" \
   "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it: $owner" 3 env

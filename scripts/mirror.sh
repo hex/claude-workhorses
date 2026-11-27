@@ -89,8 +89,8 @@ blocked() {
 run_log=$HOME/.local/state/workhorse/runs.jsonl
 run_id="" run_ended=0 end_reason=""
 # What a signal or the way out acts on: the phase (prepare while the host takes the lock, copy while the
-# copy is made, then job), the host, the
-# copy and this run's line in its lock's owner file, and the ssh that runs the job.
+# copy is made, then job; refused when another run's lock turned this run away, so it holds none), the
+# host, the copy and this run's line in its lock's owner file, and the ssh that runs the job.
 phase="" run_host="" run_target="" run_work="" run_owner="" job_ssh=""
 
 # Prints a run's start line and sets run_id.
@@ -127,8 +127,9 @@ log_end() {
 }
 
 # BLOCKED before the run's start line was written (no workhorse free, say): the start line and its end
-# line go to the run log in one write, so the mod still toasts the end and no reader ever sees the run
-# going. Takes the host, the folder and subfolder, the message, then the command.
+# line go to the run log one right after the other, through one append, so the mod still toasts the end
+# and no reader ever sees the run going. Takes the host, the folder and subfolder, the message, then the
+# command.
 blocked_unstarted() {
   local host=$1 dir=$2 sub=$3 message=$4
   shift 4
@@ -717,6 +718,7 @@ $tracked"
     held=$(sed -n 1p <<<"$prepared")
     holder=$(plain "$(sed -n '2,$p' <<<"$prepared")")
     [[ $held =~ ^locked\ (running\ [1-9][0-9]*|preparing|stale\ $stale_why)$ ]] || held=""
+    [ -z "$held" ] || phase=refused
     case "$held" in
       "locked running "*) blocked "$host:~/$work is in use by another run, its job running as pid ${held#locked running } there: $holder" ;;
       "locked preparing") blocked "$host:~/$work is in use by another run still copying to it: $holder" ;;
@@ -839,9 +841,9 @@ free_lock() {
 # The way out of a run, however it ends: while the copy is made, the lock this run took goes (once the
 # job runs, the host frees it), then the end line. A prepare that failed may still have taken the lock:
 # the host can finish it after the connection that would carry its answer is gone. free_lock removes
-# only this run's, so a prepare refused by another run's lock leaves that one. Signals are ignored from
-# here, by this shell and the ssh it starts, so a second Ctrl-C or wh stop cannot cut the cleanup short,
-# nor a closed pipe end it.
+# only this run's; a prepare refused by another run's lock took none, so nothing is freed. Signals are
+# ignored from here, by this shell and the ssh it starts, so a second Ctrl-C or wh stop cannot cut the
+# cleanup short, nor a closed pipe end it.
 finish() {
   local status=$1
   trap '' TERM INT HUP PIPE
