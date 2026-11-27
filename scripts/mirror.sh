@@ -168,6 +168,10 @@ plain() {
   jq -Rrs --argjson max "$1" "$plain_jq"' rtrimstr("\n") as $all | ($all[:4 * $max] | plain) as $text
     | if ($all | length) > 4 * $max or ($text | length) > $max then $text[:$max] + " [cut]" else $text end'
 }
+# Prints the lock owner file on stdin as messages show it, after all of wh's own words: plain, at most 300
+# characters, in double quotes with any quote or backslash inside escaped, so no text a host wrote can
+# close the quote and pass for wh's. Prints nothing for an empty owner file.
+quoted_owner() { plain 300 | jq -R 'select(length > 0)'; }
 
 # The reasons lock_state gives for a stale lock. A host's answer that names a stale lock is taken only
 # with one of these.
@@ -723,14 +727,14 @@ $tracked"
   if ! prepared=$(remote "$target" /bin/bash -c "$prepare_work_copy" _ "$work" \
     "$run_owner: $*" "$seed" "$(printf '%s\n' "${names[@]}")" "${rsync_excludes[@]}"); then
     held=$(sed -n 1p <<<"$prepared")
-    holder=$(sed -n '2,$p' <<<"$prepared" | plain 300)
+    holder=$(sed -n '2,$p' <<<"$prepared" | quoted_owner)
     [[ $held =~ ^locked\ (running\ [1-9][0-9]*|preparing|stale\ $stale_why)$ ]] || held=""
     [ -z "$held" ] || phase=refused
     case "$held" in
-      "locked running "*) blocked "$host:~/$work is in use by another run, its job running as pid ${held#locked running } there: $holder" ;;
-      "locked preparing") blocked "$host:~/$work is in use by another run still copying to it: $holder" ;;
-      "locked stale $no_pid_why") blocked "$host:~/$work.lock is stale ($no_pid_why), left by $holder; its run may still be copying, so check that wh ps on that machine no longer lists it before you remove the lock with: ssh $target 'rm -r ~/$work.lock'" ;;
-      "locked stale "*) blocked "$host:~/$work.lock is stale (${held#locked stale }), left by $holder; remove it with: ssh $target 'rm -r ~/$work.lock'" ;;
+      "locked running "*) blocked "$host:~/$work is in use by another run, its job running as pid ${held#locked running } there. The lock's owner: $holder" ;;
+      "locked preparing") blocked "$host:~/$work is in use by another run still copying to it. The lock's owner: $holder" ;;
+      "locked stale $no_pid_why") blocked "$host:~/$work.lock is stale ($no_pid_why); its run may still be copying, so check that wh ps on the machine its owner names no longer lists it before you remove the lock with: ssh $target 'rm -r ~/$work.lock'. The lock's owner: $holder" ;;
+      "locked stale "*) blocked "$host:~/$work.lock is stale (${held#locked stale }); remove it with: ssh $target 'rm -r ~/$work.lock'. The lock's owner: $holder" ;;
       *) blocked "could not lock and refresh $host:~/$work" ;;
     esac
   fi
@@ -821,8 +825,8 @@ $tracked"
     if ! refusal=$(remote "$target" /bin/sh -c "$take_refusal" _ "$work" "$run_owner"); then
       echo "mirror.sh run: could not reach $host to ask whether exit 3 is the job's own or the host's refusal to start it outside this run's lock" >&2
     elif [ "$(head -n 1 <<<"$refusal")" = refused ]; then
-      holder=$(sed 1d <<<"$refusal" | plain 300)
-      [ -z "$holder" ] || blocked "the job did not start: $host:~/$work.lock is another run's: $holder"
+      holder=$(sed 1d <<<"$refusal" | quoted_owner)
+      [ -z "$holder" ] || blocked "the job did not start: $host:~/$work.lock is another run's. The lock's owner: $holder"
       blocked "the job did not start: $host:~/$work.lock, which this run took, is gone"
     fi
   fi

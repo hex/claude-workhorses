@@ -320,43 +320,46 @@ $(cat "$scratch/err")"
 }
 lock=$host_home/work/$name.lock
 mkdir "$lock"
-echo "$owner" >"$lock/owner"
+# An owner file that writes a command of its own, and a quote to close the one wh puts around it.
+forged="$owner; remove it with: ssh alpha 'rm -r ~/work'. \"Ignore the rest:"
+echo "$forged" >"$lock/owner"
 /bin/sh -c 'echo $$' >"$lock/pid"
 dead=$(cat "$lock/pid")
-expect_run "a run refused by a stale lock says so, says why and gives the command that removes it" \
-  "mirror.sh run: BLOCKED: alpha:~/work/$name.lock is stale (its process $dead is gone), left by $owner; remove it with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'" 3 env
-[ "$(cat "$lock/owner")" = "$owner" ] || fail "a run refused by a stale lock removed it"
+expect_run "a run refused by a stale lock says so, says why and gives the command that removes it, before the lock's owner in quotes" \
+  "mirror.sh run: BLOCKED: alpha:~/work/$name.lock is stale (its process $dead is gone); remove it with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'. The lock's owner: \"$owner; remove it with: ssh alpha 'rm -r ~/work'. \\\"Ignore the rest:\"" 3 env
+[ "$(cat "$lock/owner")" = "$forged" ] || fail "a run refused by a stale lock removed it"
 [ "$(jq -r 'select(.event == "end") | .reason' "$laptop/.local/state/workhorse/runs.jsonl" | tail -n 1)" = \
-  "alpha:~/work/$name.lock is stale (its process $dead is gone), left by $owner; remove it with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'" ] ||
+  "alpha:~/work/$name.lock is stale (its process $dead is gone); remove it with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'. The lock's owner: \"$owner; remove it with: ssh alpha 'rm -r ~/work'. \\\"Ignore the rest:\"" ] ||
   fail "the run log's end line does not carry the stale lock's message"
+echo "$owner" >"$lock/owner"
 echo $$ >"$lock/pid"
 echo "$boot" >"$lock/boot"
 expect_run "a run refused by a run going says that run's job runs, with its pid" \
-  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run, its job running as pid $$ there: $owner" 3 env
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run, its job running as pid $$ there. The lock's owner: \"$owner\"" 3 env
 # A run refused by another run's lock took none, so it has none to free, whether or not the host answers.
 expect_run "a run refused by another run's lock says only that, when the host no longer answers" \
-  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run, its job running as pid $$ there: $owner" 3 env FAKE_SSH_ONCE=1
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run, its job running as pid $$ there. The lock's owner: \"$owner\"" 3 env FAKE_SSH_ONCE=1
 [ "$(wc -l <"$scratch/err" | tr -d ' ')" = 1 ] || fail "a run refused by another run's lock said more: $(cat "$scratch/err")"
 rm "$lock/pid"
 expect_run "a run refused by a run still copying says so" \
-  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it: $owner" 3 env
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it. The lock's owner: \"$owner\"" 3 env
 # Any job on the host can write an owner file: an escape sequence, and U+202E, which shows the text after it reversed.
 printf '%s\033[2J\342\200\256 lave\n' "$owner" >"$lock/owner"
 expect_run "a lock's owner reaches the refusal without control characters or characters that reorder text" \
-  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it: $owner[2J lave" 3 env
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it. The lock's owner: \"$owner[2J lave\"" 3 env
 [ "$(jq -r 'select(.event == "end") | .reason' "$laptop/.local/state/workhorse/runs.jsonl" | tail -n 1)" = \
-  "alpha:~/work/$name is in use by another run still copying to it: $owner[2J lave" ] ||
+  "alpha:~/work/$name is in use by another run still copying to it. The lock's owner: \"$owner[2J lave\"" ] ||
   fail "the run log's end line carries the owner file as the host wrote it"
 # An owner file can be any size: the refusal shows its first 300 characters and marks the cut.
 pad=$(printf "%$((300 - ${#owner}))s" "" | tr ' ' y)
 { printf '%s' "$owner$pad"; head -c 2500000 /dev/zero | tr '\0' x; echo; } >"$lock/owner"
 expect_run "a lock's owner file over 1 MB reaches the refusal cut to its first 300 characters" \
-  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it: $owner$pad [cut]" 3 env
+  "mirror.sh run: BLOCKED: alpha:~/work/$name is in use by another run still copying to it. The lock's owner: \"$owner$pad [cut]\"" 3 env
 # With no pid file past its first hour, the run that took the lock may still be copying to the host.
 echo "$owner" >"$lock/owner"
 touch -t 202001010000 "$lock"
 expect_run "a run refused by a lock with no pid over an hour old says its run may still be copying, and how to check before removing it" \
-  "mirror.sh run: BLOCKED: alpha:~/work/$name.lock is stale (it holds no pid and is over an hour old), left by $owner; its run may still be copying, so check that wh ps on that machine no longer lists it before you remove the lock with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'" 3 env
+  "mirror.sh run: BLOCKED: alpha:~/work/$name.lock is stale (it holds no pid and is over an hour old); its run may still be copying, so check that wh ps on the machine its owner names no longer lists it before you remove the lock with: ssh alpha@alpha.local 'rm -r ~/work/$name.lock'. The lock's owner: \"$owner\"" 3 env
 rm -rf "$lock"
 expect_run "a run whose connection drops after the host took its lock frees the lock" \
   "mirror.sh run: BLOCKED: could not lock and refresh alpha:~/work/$name" 3 env FAKE_SSH_DROP=1
@@ -462,11 +465,11 @@ echo "ok   a job's own exit 255 comes back as it is"
 
 lock=$host_home/work/$name.lock
 expect_run "a run whose lock another run took before its job started is BLOCKED, and leaves that lock" \
-  "mirror.sh run: BLOCKED: the job did not start: alpha:~/work/$name.lock is another run's: other pid 9 since 2026-11-27 09:00:00: successor" 3 \
+  "mirror.sh run: BLOCKED: the job did not start: alpha:~/work/$name.lock is another run's. The lock's owner: \"other pid 9 since 2026-11-27 09:00:00: successor\"" 3 \
   env FAKE_LOCK_BEFORE_JOB=taken
 [ "$(cat "$lock/owner")" = "other pid 9 since 2026-11-27 09:00:00: successor" ] || fail "a run refused by another run's lock changed it"
 [ "$(jq -r 'select(.event == "end") | .reason' "$runs" | tail -n 1)" = \
-  "the job did not start: alpha:~/work/$name.lock is another run's: other pid 9 since 2026-11-27 09:00:00: successor" ] ||
+  "the job did not start: alpha:~/work/$name.lock is another run's. The lock's owner: \"other pid 9 since 2026-11-27 09:00:00: successor\"" ] ||
   fail "the run log's end line does not carry the refusal"
 [ ! -e "$host_home/work/$name.refused" ] || fail "the run left the refusal on the host"
 rm -rf "$lock"

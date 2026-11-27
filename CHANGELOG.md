@@ -39,8 +39,9 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 - A lock's owner file and a host's answers about its locks reach this machine as plain text. A refusal,
   the run log and the session's toast leave out the control characters and the characters that reorder or hide text in a lock's owner file,
   as `wh hosts` does. A host's answer that names a lock stale counts only with a reason `wh` itself gives.
-  A refusal shows the first 300 characters of an owner file and marks the cut, so a large owner file
-  still ends the run `BLOCKED` with exit 3.
+  A refusal names the lock's owner last, after its reason and any `rm -r` command, in double quotes that
+  the owner file's text cannot close. It shows the first 300 characters of an owner file and marks the
+  cut, so a large owner file still ends the run `BLOCKED` with exit 3.
 - `wh stop` no longer signals a process whose pid a stale lock names, such as a pid used again after
   the host restarted.
 - A run no longer leaves its lock on the host when the connection drops after the host took the lock:
