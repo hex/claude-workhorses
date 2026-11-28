@@ -55,7 +55,7 @@ done
 echo "ok   a start line names the session from CLAUDE_CODE_SESSION_ID only when it is an id"
 
 # wh hosts end to end, with a fake ssh first on PATH. For cayde, xur and ikora it runs the probe in a
-# scratch home of that host, under bash and zsh; eris refuses the connection, slow never answers, and odd and
+# scratch home of that host, under bash and (xur, where zsh is installed) zsh; eris refuses the connection, slow never answers, and odd and
 # mangled answer something that is not a probe's answer, and linuxy gives a Linux host's answer. The laptop's home is a scratch one too, its
 # run log naming the runs going, each one's mirror.sh a sleeping stand-in: two from the same folder
 # started by different Claude Code sessions (on xur and ikora, since a folder has one lock a host), one
@@ -65,7 +65,9 @@ echo "ok   a start line names the session from CLAUDE_CODE_SESSION_ID only when 
 # xur run's and names the same pid, as when a pid is used again: that start is the stale one.
 me=$(hostname -s)
 work_of() { printf '%s-%s' "${1##*/}" "$(printf '%s' "$1" | shasum | cut -c1-8)"; }
-cores=$(/usr/sbin/sysctl -n hw.physicalcpu)
+# The fake hosts run the probe on this machine, so they answer with its physical cores.
+if [ "$(uname -s)" = Darwin ]; then cores=$(/usr/sbin/sysctl -n hw.physicalcpu)
+else cores=$(grep -E '^(physical id|core id)' /proc/cpuinfo | paste - - | sort -u | wc -l | tr -d ' '); fi
 laptop=$scratch/laptop
 config=$scratch/config
 mkdir -p "$scratch/bin" "$scratch/hosts/cayde/work" "$scratch/hosts/xur/work" "$scratch/hosts/ikora/work" \
@@ -86,7 +88,7 @@ cat >"$scratch/bin/ssh" <<'SSH'
 for script; do :; done
 case "$5" in
   cayde-wsl) HOME=$FAKE_HOSTS/cayde exec bash -c "$script" ;;
-  xur@Xurs-Mac-mini.local) HOME=$FAKE_HOSTS/xur exec zsh -c "$script" ;;
+  xur@Xurs-Mac-mini.local) shell=bash; command -v zsh >/dev/null && shell=zsh; HOME=$FAKE_HOSTS/xur exec "$shell" -c "$script" ;;
   ikora@Ikoras-Mac-mini.local) HOME=$FAKE_HOSTS/ikora exec bash -c "$script" ;;
   eris@192.168.1.98) exit 255 ;;
   slow@slow.local) exec sleep 30 ;;
