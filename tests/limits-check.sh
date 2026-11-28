@@ -374,6 +374,9 @@ start_run() {
   local modes=$1
   shift
   rm -f "$job_pid"
+  # The host's side of the run before runs here, and its shell frees the lock a moment after that run's
+  # wh exits, so this run waits up to 10 s for it.
+  for _ in $(seq 50); do [ -e "$host_home/work/$name.lock" ] || break; sleep 0.2; done
   # shellcheck disable=SC2086 # one mode a word
   (cd "$scratch/repo" && exec env "HOME=$laptop" "WORKHORSES_CONFIG_DIR=$scratch/config" "FAKE_HOST_HOME=$host_home" \
     "FAKE_SSH_STATE=$scratch/ssh-state" "PATH=$scratch/fake-bin:$PATH" $modes "$BASH" "$here/../bin/wh" alpha -- "$@") \

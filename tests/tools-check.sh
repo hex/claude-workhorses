@@ -169,7 +169,7 @@ expect_tools "a user recipe that is a symlink is refused" \
 "workhorses: $file line 1: recipe $config/recipes/leak is a symlink; put the file itself there" \
 "leak"
 rm "$config/recipes/leak"
-mkdir "$config/recipes/folder"
+mkdir -m 700 "$config/recipes/folder"
 expect_tools "a user recipe that is a folder is refused" \
 "workhorses: $file line 1: recipe $config/recipes/folder is not an executable file" \
 "folder"
