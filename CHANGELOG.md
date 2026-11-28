@@ -14,6 +14,9 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
   when `wh` picked it, that host's load, cores and runs going then. Its synced line says how `wh` made
   the copy (`patch`, `walk` with why, or `first`) and how many paths rsync changed in it.
 
+### Changed
+- `stats` is a `wh` command, so the hosts file refuses it as a host name, as it refuses `ps`, `stop` and `hosts`.
+
 ## 2026.11.16
 
 ### Changed
