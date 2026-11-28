@@ -4,7 +4,7 @@ This file lists the notable changes to workhorses, called claude-workhorses befo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `YYYY.M.BUILD`, where `BUILD` resets each month.
 
-## Unreleased
+## 2026.11.17
 
 ### Added
 - `wh stats` reports each host's finished runs from this machine's run log: how many passed, failed,
