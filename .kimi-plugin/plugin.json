@@ -1,6 +1,6 @@
 {
   "name": "workhorses",
-  "version": "2026.11.16",
+  "version": "2026.11.17",
   "description": "Run jobs on the Macs and Linux machines in your workhorses hosts file.",
   "skills": "./skills",
   "sessionStart": {

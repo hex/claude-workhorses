@@ -1,7 +1,7 @@
 {
   "name": "workhorses",
   "displayName": "Workhorses",
-  "version": "2026.11.16",
+  "version": "2026.11.17",
   "description": "Runs long jobs on your spare Macs and Linux machines. wh copies the current git repository to a workhorse, .git included, and runs the command there. The agent reads an offload policy, a table of your hosts and each host's tools at session start, and sync.sh installs the tools you list on each workhorse.",
   "logo": "assets/icon.png",
   "author": {
